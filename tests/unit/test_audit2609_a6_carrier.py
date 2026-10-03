@@ -1122,30 +1122,31 @@ class TestC5SmallerItems:
             assert np.array_equal(a, C.carrier_referenced_focus_readout(
                 env, -rmag, rmag, LAM, dx, gap_kernel='auto', **kw))
 
-    def test_mutating_a_built_carrier_field_is_announced(self):
-        """``CarrierField`` is the one MUTABLE dataclass among frozen siblings
-        (``CarrierSpec``, ``FieldGrid``), so an assignment bypasses every
+    def test_mutating_a_built_carrier_field_raises(self):
+        """``CarrierField`` was the one MUTABLE dataclass among frozen siblings
+        (``CarrierSpec``, ``FieldGrid``), so an assignment bypassed every
         ``__post_init__`` invariant.  Pre-fix each of these was SILENT and
         could leave a field whose grid no longer described its array.
 
-        The hard freeze the audit asks for is scheduled rather than taken in
-        one step because a live consumer accumulates in place through the
-        attribute (``validation/pipeline/driver.py``): this is the
-        announcement half, so the assignment still works and the invariant
-        bypass is no longer silent.  ``dataclasses.FrozenInstanceError`` is
-        what it becomes at ``_CARRIER_FIELD_FROZEN_IN``."""
+        The hard freeze the audit asked for was scheduled rather than taken in
+        one step because a live consumer accumulated in place through the
+        attribute (``validation/pipeline/driver.py``, since moved to
+        ``np.add(..., out=...)``): v5.46 announced it with a
+        ``DeprecationWarning``, the 5.48 horizon slipped once, and v5.50
+        executed it -- assignment now raises
+        ``dataclasses.FrozenInstanceError``, the same as the siblings."""
         n, dx = 32, 2e-6
         f = CarrierField(_gauss(n, dx, 8e-6).astype(complex),
                          FieldGrid((n, n), dx), CarrierSpec(R=-1e-2), LAM)
-        with pytest.warns(DeprecationWarning, match='built CarrierField'):
+        with pytest.raises(dataclasses.FrozenInstanceError):
             f.wavelength = 1.55e-6
-        assert f.wavelength == 1.55e-6          # ... and it still takes effect
+        assert f.wavelength == LAM              # ... and nothing took effect
         # construction itself must be silent, or every caller drowns
         with warnings.catch_warnings():
             warnings.simplefilter('error', DeprecationWarning)
             CarrierField(_gauss(n, dx, 8e-6).astype(complex),
                          FieldGrid((n, n), dx), CarrierSpec(R=-1e-2), LAM)
-        # the siblings ARE already hard-frozen -- the convention this joins
+        # the siblings were already hard-frozen -- the convention this joined
         for sib in (CarrierSpec(R=-1e-2), FieldGrid((n, n), dx)):
             assert dataclasses.fields(sib)
             with pytest.raises(dataclasses.FrozenInstanceError):

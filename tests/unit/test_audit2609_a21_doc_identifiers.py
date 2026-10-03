@@ -53,7 +53,13 @@ _DENOMINATOR_FLOOR = 450
 #: MEASURED 2026-09-12: 51 hand-triaged entries.  May shrink, never grow
 #: without a reason written at the entry -- the list is the one place the
 #: gate can be weakened silently.
-_CURATED_CEILING = 51
+#:
+#: RAISED 2026-10-03 (5.50.0) from 51 to 53: the list stood at 50, and the
+#: 5.50.0 removal of ``gbd_asm_gouy_phase`` / ``gbd_field_to_asm`` /
+#: ``asm_field_to_gbd`` adds three entries in the existing "removed API,
+#: documented as removed" category -- the Migration Guide has to be able to
+#: name what it tells a caller to delete.  50 + 3 = 53 exactly, no headroom.
+_CURATED_CEILING = 53
 
 #: Networking modules.  The gate must run offline on any CI runner.
 _NETWORK_MODULES = {

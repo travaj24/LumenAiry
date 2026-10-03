@@ -61,7 +61,6 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-from .._deprecation import warn_deprecated_alias
 from ..backend import array_namespace, is_jax_array
 
 # v5.21: default amplitude-1/e-radius window for the windowed (bounded-support)
@@ -688,9 +687,13 @@ def converge_gbd_sampling(
     exact scalar Helmholtz, the trusted free-space oracle -- returning the
     overlap with the smallest error plus the full error curve.
 
-    The score reconciles the known GBD<->ASM global beamlet-Gouy phase
-    convention first (via :func:`match_global_phase`), so it measures true
-    shape/decomposition accuracy, not the width-dependent global-phase offset.
+    The score reconciles the GLOBAL phase of the reconstruction against the
+    reference first (via :func:`match_global_phase`), so it measures true
+    shape/decomposition accuracy, not a constant phase offset.  Against the
+    ASM oracle that offset is negligible since audit S5 (measured 3e-07 rad);
+    it matters for a supplied ``reference`` from another solver, which may
+    carry any absolute phase (on a 64x64 Gaussian test field, a 1 rad offset
+    scores 0.95 instead of 0.027 without the reconciliation).
 
     Parameters
     ----------
@@ -747,10 +750,10 @@ def converge_gbd_sampling(
         b = propagate_beamlets_freespace(b, test_distance, wavelength)
         F = reconstruct_field_from_beamlets(
             b, Ny=Ny, Nx=Nx, dx=dx, dy=dy, wavelength=wavelength, window=window)
-        # GBD and ASM share coordinates/direction but differ by the global
-        # beamlet-Gouy phase convention (2*arctan(z/zR_b), zR_b depends on
-        # width) -- a convention, not a decomposition error.  Reconcile it so
-        # the score measures true SHAPE accuracy, not the global-phase offset.
+        # Reconcile the GLOBAL phase so the score measures SHAPE accuracy.
+        # Against the ASM oracle this is near-identity since audit S5 fixed
+        # the beamlet Gouy sign; a supplied ``reference`` (another solver)
+        # may carry any absolute phase, and there it is load-bearing.
         F = match_global_phase(F, ref)
         err = float(xp.sqrt(xp.sum(xp.abs(F - ref) ** 2)) / ref_norm)
         errors[float(ov)] = err
@@ -2242,83 +2245,13 @@ def propagate_gbd_freespace(
 # GBD <-> ASM interoperability
 # ============================================================================
 
-def gbd_asm_gouy_phase(z: float, wavelength: float, dx: float,
-                       waist_factor: float = 1.0) -> float:
-    """DEPRECATED, returns ``0.0``: there is no GBD-vs-ASM Gouy offset.
-
-    .. deprecated:: 5.46
-       The offset this function returned was a BUG in
-       :func:`propagate_beamlets_freespace`, not a convention.  It is fixed
-       (audit S5); this function, :func:`gbd_field_to_asm` and
-       :func:`asm_field_to_gbd` are now no-ops and will be removed.  Delete
-       the call -- a GBD free-space field already matches
-       :func:`~lumenairy.propagators.asm.angular_spectrum_propagate` in
-       absolute phase.  For the general, propagator-agnostic case use
-       :func:`match_global_phase`.
-
-    A Gabor frame of exact Gaussian-beam solutions, propagated exactly and
-    summed, reproduces the ASM field with NO residual phase -- free-space
-    propagation is linear and every beamlet is an exact solution.  The
-    ``2 arctan(z / zR_beamlet)`` this used to return was the beamlet Gouy
-    phase applied with the WRONG SIGN by the amplitude update
-    (``Q_new/Q_old`` where the engineering-``Q`` convention needs
-    ``conj(Q_new/Q_old)``), which is why it depended on ``waist_factor`` --
-    a purely numerical knob, which is the definition of an error.  Measured
-    after the fix: residual global phase +5e-06 rad (was +3.13 rad) and
-    relL2 vs ASM 1.76e-03 / 7.02e-03 / 1.57e-02 at waist_factor 1 / 2 / 3
-    with no phase fit at all.
-
-    Returns
-    -------
-    float
-        ``0.0``, always.
-    """
-    warn_deprecated_alias(
-        'gbd_asm_gouy_phase',
-        'match_global_phase (only if a global-phase reconciliation against '
-        'some other field is still wanted)',
-        version_added='5.46', version_removed='5.48',
-    )
-    return 0.0
-
-
-def gbd_field_to_asm(E: np.ndarray, *, z: float, wavelength: float, dx: float,
-                     waist_factor: float = 1.0) -> np.ndarray:
-    """DEPRECATED no-op: returns ``E`` unchanged.
-
-    .. deprecated:: 5.46
-       GBD and ASM free-space fields already agree in absolute phase -- audit
-       S5 fixed the conjugated Gouy / Collins amplitude that made them
-       differ, so this conversion is the identity.  Delete the call.  The
-       arguments are still accepted and ``E`` is still validated, so an
-       existing pipeline keeps running unchanged apart from the warning.
-    """
-    from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'gbd_field_to_asm', input_kind='field')
-    warn_deprecated_alias(
-        'gbd_field_to_asm',
-        'nothing (GBD and ASM agree in absolute phase; this is the identity)',
-        version_added='5.46', version_removed='5.48',
-    )
-    return E
-
-
-def asm_field_to_gbd(E: np.ndarray, *, z: float, wavelength: float, dx: float,
-                     waist_factor: float = 1.0) -> np.ndarray:
-    """DEPRECATED no-op: returns ``E`` unchanged.
-
-    .. deprecated:: 5.46
-       The inverse of :func:`gbd_field_to_asm`, and equally unnecessary since
-       audit S5 -- the two "conventions" are one convention.
-    """
-    from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(E, 'asm_field_to_gbd', input_kind='field')
-    warn_deprecated_alias(
-        'asm_field_to_gbd',
-        'nothing (GBD and ASM agree in absolute phase; this is the identity)',
-        version_added='5.46', version_removed='5.48',
-    )
-    return E
+# A GBD free-space field matches
+# :func:`~lumenairy.propagators.asm.angular_spectrum_propagate` in absolute
+# phase, so there is no GBD <-> ASM converter.  :func:`match_global_phase`
+# below reconciles the GLOBAL phase of any two fields of the same beam on the
+# same grid (for example against another solver's output).  The converter
+# functions that used to live here are recorded in
+# docs/history/lumenairy.propagators.gbd.md.
 
 
 def match_global_phase(E: np.ndarray, reference: np.ndarray) -> np.ndarray:
@@ -2336,9 +2269,9 @@ def match_global_phase(E: np.ndarray, reference: np.ndarray) -> np.ndarray:
     comparison); intensity and further linear propagation are unaffected.
 
     .. note::
-       This removes only the GLOBAL phase.  It is EXACT for the GBD-free-space
-       vs ASM difference (which is purely global -- and there the closed-form
-       :func:`gbd_asm_gouy_phase` needs no reference).  It does NOT reconcile the
+       This removes only the GLOBAL phase, which is all that separates two
+       fields that differ by a constant phase factor (for GBD free space vs
+       ASM that factor is 1 since audit S5).  It does NOT reconcile the
        higher-order (wavefront) difference between fields produced by
        *different-order approximations* of the same beam -- e.g. the phase-space
        ``apply_real_lens_maslov`` (default ``normalize_output='power'`` gives a

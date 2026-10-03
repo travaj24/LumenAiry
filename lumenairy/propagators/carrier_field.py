@@ -115,13 +115,11 @@ from __future__ import annotations
 
 import json
 import math
-import warnings
 from dataclasses import dataclass, field as _dc_field
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
 import numpy as np
 
-from ..elements._lens_kernels import caller_stacklevel as _caller_stacklevel
 from ._bluestein import _mft_route_kwargs
 from .carrier import (
     _check_guard_action,
@@ -643,16 +641,11 @@ class FieldGrid:
 # ---------------------------------------------------------------------------
 # The field
 # ---------------------------------------------------------------------------
-#: Version in which :class:`CarrierField` attribute assignment became
-#: deprecated, and the horizon at which the class becomes hard-``frozen``
-#: like its :class:`CarrierSpec` and :class:`FieldGrid` members.  The horizon
-#: is resolved through ``_deprecation.resolve_removal_version``, so it can
-#: never advertise a version the running library has already passed.
-_CARRIER_FIELD_FROZEN_SINCE = '5.46'
-_CARRIER_FIELD_FROZEN_IN = '5.48'
+# The assignment-warning shim this class carried before it was frozen is
+# recorded in docs/history/carrier_field.md.
 
 
-@dataclass
+@dataclass(frozen=True)
 class CarrierField:
     """An ENVELOPE, the grid it lives on, the CARRIER it is referenced to,
     the wavelength, and provenance.
@@ -666,25 +659,23 @@ class CarrierField:
     Nothing here propagates.  A :class:`CarrierField` is a value; the verbs
     are :func:`re_reference` and :func:`aggregate`.
 
-    BECOMING FROZEN, like its :class:`CarrierSpec` and :class:`FieldGrid`
-    members.  Every invariant this class has -- envelope 2-D and complex,
-    shape matched to the grid, wavelength finite and positive, provenance
-    canonicalised and JSON round-trippable -- is established once in
-    ``__post_init__`` and is the object's identity for the storage round
-    trip, and a plain ``field.envelope = <anything>`` bypasses all of them,
-    leaving a field whose grid no longer describes its array.  Since v5.46
-    assigning to a field of a BUILT ``CarrierField`` emits a
-    ``DeprecationWarning`` and the class becomes hard-``frozen`` at the
-    horizon :data:`_CARRIER_FIELD_FROZEN_IN`; the assignment still takes
-    effect until then, so no caller breaks on the announcement.
+    FROZEN, like its :class:`CarrierSpec` and :class:`FieldGrid` members.
+    Every invariant this class has -- envelope 2-D and complex, shape matched
+    to the grid, wavelength finite and positive, provenance canonicalised and
+    JSON round-trippable -- is established once in ``__post_init__`` and is
+    the object's identity for the storage round trip, and a plain
+    ``field.envelope = <anything>`` would bypass all of them, leaving a field
+    whose grid no longer describes its array.  Assigning to a field of a
+    ``CarrierField`` therefore raises ``dataclasses.FrozenInstanceError``.
 
-    Migration: build a changed field instead of mutating one --
-    ``with_provenance(...)``, :func:`re_reference`, ``dataclasses.replace``,
+    To change a field, build a changed one --
+    ``with_provenance(...)``, :func:`re_reference`, ``dataclasses.replace``
+    (which re-runs ``__post_init__``, so every invariant is checked again),
     or a fresh ``CarrierField(...)``.  For the in-place ACCUMULATION idiom
     (``acc.envelope += other``, which mutates the array and then rebinds the
     attribute for no reason) write ``np.add(acc.envelope, other,
-    out=acc.envelope)``: it does the same arithmetic, bit for bit, and is
-    already frozen-safe.  The freeze is shallow, as it is for every frozen
+    out=acc.envelope)``: it does the same arithmetic, bit for bit, and needs
+    no rebind.  The freeze is shallow, as it is for every frozen
     dataclass -- the envelope ARRAY stays writable in place, which is what
     the band-limited in-place screens in :func:`re_reference` rely on."""
 
@@ -693,6 +684,12 @@ class CarrierField:
     carrier: CarrierSpec
     wavelength: float
     provenance: Dict[str, Any] = _dc_field(default_factory=dict)
+
+    # Unhashable, as it was while the class was mutable: ``frozen=True`` with
+    # the default ``eq=True`` would otherwise generate a field-tuple hash, and
+    # a value whose envelope ARRAY stays writable in place (the freeze is
+    # shallow) must not be usable as a dict key or set member.
+    __hash__ = None  # type: ignore[assignment]
 
     def __post_init__(self):
         env = np.asarray(self.envelope)
@@ -703,11 +700,8 @@ class CarrierField:
         if not np.iscomplexobj(env):
             env = env.astype(np.complex128)
         # ``object.__setattr__`` throughout ``__post_init__``: these are this
-        # object's OWN canonicalisations, not a caller mutating a built field,
-        # so they must not trip the deprecation gate below -- and they are
-        # already written the way the hard freeze at
-        # :data:`_CARRIER_FIELD_FROZEN_IN` will require, so that step is a
-        # one-word change to the decorator.
+        # object's OWN canonicalisations, which the frozen dataclass's
+        # ``__setattr__`` would otherwise refuse.
         object.__setattr__(self, 'envelope', env)
         if not isinstance(self.grid, FieldGrid):
             raise TypeError(
@@ -730,34 +724,6 @@ class CarrierField:
                 f"got {self.wavelength!r}.")
         object.__setattr__(self, 'provenance',
                            _canonical_provenance(self.provenance))
-        # Arm the deprecation gate LAST: everything above is this object's
-        # own canonicalisation, not a caller mutating a built field.
-        object.__setattr__(self, '_built', True)
-
-    def __setattr__(self, name, value):
-        """Announce a post-construction field assignment (deprecated).
-
-        The assignment still happens -- this is the announcement half of the
-        cycle, not the removal.  See the class docstring for the migration
-        and :data:`_CARRIER_FIELD_FROZEN_IN` for the horizon."""
-        if getattr(self, '_built', False):
-            from .._deprecation import resolve_removal_version
-            warnings.warn(
-                f"CarrierField.{name}: assigning to a built CarrierField is "
-                f"deprecated since v{_CARRIER_FIELD_FROZEN_SINCE} and will "
-                f"raise in v"
-                f"{resolve_removal_version(_CARRIER_FIELD_FROZEN_IN)} (the "
-                f"class becomes frozen, like CarrierSpec and FieldGrid).  It "
-                f"bypasses every __post_init__ invariant -- envelope shape vs "
-                f"the grid, complexity, wavelength, provenance "
-                f"canonicalisation -- so it can leave a field whose grid no "
-                f"longer describes its array.  Build a changed field instead "
-                f"(with_provenance, re_reference, dataclasses.replace, or a "
-                f"fresh CarrierField); for in-place accumulation use "
-                f"np.add(acc.envelope, other, out=acc.envelope), which is the "
-                f"same arithmetic bit for bit and needs no rebind.",
-                DeprecationWarning, stacklevel=_caller_stacklevel())
-        object.__setattr__(self, name, value)
 
     # -- basic accessors --------------------------------------------------
     @property

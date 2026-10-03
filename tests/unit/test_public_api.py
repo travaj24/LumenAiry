@@ -184,8 +184,12 @@ def test_phantom_name_in_dunder_all_would_be_caught():
 #: a scheduled future, not a claimed shipping history.
 _FORWARD_VERSION_CONTEXTS = (
     'version_removed', 'version_added', 'NEXT_REMOVAL_VERSION',
-    '_FROZEN_IN', 'resolve_removal_version', 'removal', 'horizon',
+    'resolve_removal_version', 'removal', 'horizon',
 )
+# ``'_FROZEN_IN'`` was a context here while ``carrier_field.py`` carried
+# ``_CARRIER_FIELD_FROZEN_IN``; the 5.50.0 removal deleted that constant (and
+# the CarrierField freeze it scheduled is executed), so the exemption was
+# dropped with it rather than left matching nothing.
 
 #: Files whose whole job is versioning.
 _VERSION_OWNING_FILES = ('__init__.py', '_deprecation.py')
@@ -244,9 +248,11 @@ def test_no_shipped_source_claims_a_version_the_package_has_not_reached():
     at the commit that makes it true.
 
     DEPRECATION HORIZONS ARE EXEMPT, and that is the whole reason the check is
-    contextual rather than a grep: ``version_removed='5.48'`` and
-    ``_CARRIER_FIELD_FROZEN_IN = '5.48'`` are scheduled futures that the
-    deprecation machinery reads, not claims about what has shipped.
+    contextual rather than a grep: a ``version_removed='6.0'`` argument is a
+    scheduled future that the deprecation machinery reads, not a claim about
+    what has shipped.  (The two examples this docstring first named,
+    ``version_removed='5.48'`` and ``_CARRIER_FIELD_FROZEN_IN = '5.48'``,
+    were removed in 5.50.0 with the deprecations they scheduled.)
     """
     root = pathlib.Path(la.__file__).parent
     here = _version_tuple(la.__version__)

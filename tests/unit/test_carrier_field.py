@@ -558,40 +558,59 @@ def test_aggregate_ledger_is_clean_when_the_window_contains_the_beam():
 def test_aggregate_refuses_mixed_wavelengths():
     a = _gauss_field(64, 1e-6, 10e-6, -1e-3)
     b0 = _gauss_field(64, 1e-6, 10e-6, -1e-3)
-    # Assigning to a built CarrierField is deprecated (C5), so the second
-    # wavelength is CONSTRUCTED rather than assigned -- which is also the only
-    # form that will still work once the class is frozen.
+    # CarrierField is frozen (C5; deprecated v5.46, executed v5.50), so the
+    # second wavelength is CONSTRUCTED rather than assigned.
     b = CarrierField(b0.envelope, b0.grid, b0.carrier, 1.55e-6)
     with pytest.raises(ValueError, match='different wavelengths'):
         aggregate([a, b], a.carrier, a.grid)
 
 
-def test_mutating_a_built_carrier_field_is_deprecated():
-    """C5: ``CarrierField`` is the one MUTABLE dataclass among frozen siblings
-    (``CarrierSpec``, ``FieldGrid``), so ``field.envelope = ...`` bypasses
+def test_mutating_a_built_carrier_field_raises():
+    """C5: ``CarrierField`` was the one MUTABLE dataclass among frozen siblings
+    (``CarrierSpec``, ``FieldGrid``), so ``field.envelope = ...`` bypassed
     every ``__post_init__`` invariant -- shape-vs-grid, complexity, wavelength,
-    provenance canonicalisation -- and can leave a field whose grid no longer
-    describes its array.  Pre-fix each assignment below was SILENT.
+    provenance canonicalisation -- and could leave a field whose grid no longer
+    described its array.  Before v5.46 each assignment below was SILENT; v5.46
+    to v5.49 warned and let it through; since v5.50 (the slipped 5.48 horizon,
+    executed) the class is ``frozen=True`` and every assignment RAISES and
+    leaves the field unchanged.
 
-    The announcement half of the cycle: the assignment still takes effect
-    (nothing breaks on the warning) and the class freezes at
-    ``_CARRIER_FIELD_FROZEN_IN``."""
+    Two-sided: the refusal is pinned together with the routes the migration
+    note prescribes, which must keep working, warn nothing, and (for
+    ``dataclasses.replace``) still re-run the invariants."""
     f = _gauss_field(16, 1e-6, 4e-6, -1e-3)
+    before = (f.envelope.copy(), f.grid, f.carrier, f.wavelength,
+              dict(f.provenance))
     for name, value in (('envelope', np.zeros((3, 3), complex)),
                         ('grid', FieldGrid((3, 3), 1e-6)),
                         ('carrier', CarrierSpec(R=1.0)),
                         ('wavelength', 1.55e-6),
                         ('provenance', {'x': 1})):
-        with pytest.warns(DeprecationWarning, match='built CarrierField'):
+        with pytest.raises(dataclasses.FrozenInstanceError):
             setattr(f, name, value)
-    # ... and CONSTRUCTION is silent: the gate arms only after __post_init__.
+    assert np.array_equal(f.envelope, before[0])
+    assert (f.grid, f.carrier, f.wavelength, f.provenance) == before[1:]
+    assert type(f).__dataclass_params__.frozen
+    with pytest.raises(TypeError):     # unhashable, as when it was mutable
+        hash(f)
+    # ... the replacement routes work, warn nothing, and do what they say.
     with warnings.catch_warnings():
         warnings.simplefilter('error', DeprecationWarning)
         g = _gauss_field(16, 1e-6, 4e-6, -1e-3)
-        g.with_provenance(tag='x')
-        dataclasses.replace(g, wavelength=1.55e-6)
+        tagged = g.with_provenance(tag='x')
+        moved = dataclasses.replace(g, wavelength=1.55e-6)
+    assert tagged.provenance['tag'] == 'x' and 'tag' not in g.provenance
+    assert tagged.envelope is g.envelope               # shallow, as documented
+    assert moved.wavelength == 1.55e-6 and g.wavelength == LAM
+    assert np.array_equal(moved.envelope, g.envelope)
+    # ``replace`` goes through __init__, so the invariants are re-checked --
+    # the property the freeze exists to protect.
+    with pytest.raises(ValueError, match='does not match the grid'):
+        dataclasses.replace(g, envelope=np.zeros((3, 3), complex))
+    with pytest.raises(ValueError, match='finite and positive'):
+        dataclasses.replace(g, wavelength=-1.0)
     # ... and the in-place accumulate idiom the migration note prescribes is
-    # already frozen-safe AND bit-identical to the rebinding one.
+    # frozen-safe AND bit-identical to the rebinding one.
     a = _gauss_field(16, 1e-6, 4e-6, -1e-3)
     b = _gauss_field(16, 1e-6, 4e-6, -1e-3)
     want = a.envelope + b.envelope
@@ -599,10 +618,9 @@ def test_mutating_a_built_carrier_field_is_deprecated():
         warnings.simplefilter('error', DeprecationWarning)
         np.add(a.envelope, b.envelope, out=a.envelope)
     assert np.array_equal(a.envelope, want)
-    # ... and the horizon it advertises is in the future.
-    from lumenairy._deprecation import resolve_removal_version
-    from lumenairy.propagators.carrier_field import _CARRIER_FIELD_FROZEN_IN
-    assert resolve_removal_version(_CARRIER_FIELD_FROZEN_IN)
+    # ... and the deprecation scaffolding is gone with the shim.
+    assert not hasattr(_carrier_field, '_CARRIER_FIELD_FROZEN_IN')
+    assert not hasattr(_carrier_field, '_CARRIER_FIELD_FROZEN_SINCE')
 
 
 # ---------------------------------------------------------------------------

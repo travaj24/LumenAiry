@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/gbd.py
-ast_sha256: ee20958ffc1aba838e7888fbf195243fd70958db7bc8f7f6d5f26329750bd0a8
-token_sha256: 38e5856cbc1cc8598c0ab691883c04d429e399ed6a39677e941f85e73431c231
+ast_sha256: 5f233321abd71e9be009651baef00ac64081c2b24cce7945d545336c44a34093
+token_sha256: cd73a62eda27f2b6cdf434f911307f110915c5152f59bc397f6675c9d0dec3c5
 pre_relocation_lines: 3845
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -13,6 +13,7 @@ re_recorded: 2026-09-19 -- merge of the WP-B12b chain into wave5/audit-leftovers
 re_recorded: 2026-09-19 -- VERIFY-WP-B12b D-5/D-4 round 2: the local branch of apply_prescription_persurface_to_beamlets now refuses an immersed exit medium (through the shared fga._require_non_immersed_exit, one tolerance definition) and a mirror-terminated prescription (_require_forward_going_local_exit, with _last_optical_surface); two new module-level helpers and two guard statements at the local branch.  No served prescription changes: shipped fields are byte-identical archive-to-archive.
 re_recorded: 2026-09-19 -- VERIFY-WP-B12b D-5/D-4 round 2: the local branch of apply_prescription_persurface_to_beamlets refuses an immersed exit medium (through the shared fga._require_non_immersed_exit, one tolerance definition) and a mirror-terminated prescription (_require_forward_going_local_exit, with _last_optical_surface).  The mirror refusal's message quotes the round-2 re-measurement (validation/probe_wp_b12b_round2/probe_r5_mirror.py) rather than a single quadrature-dependent ratio.  No served prescription changes: shipped fields are byte-identical archive-to-archive.
 re_recorded: 2026-09-20 -- WP-C5 item 2 (ledger 1.8): DENSE_MEM_BUDGET_ACCOUNTING defaults to 'measured'; _DENSE_FIXED_CELL_BYTES = 48.0 and _dense_budget_floor_bytes(Ny, Nx) are added beside the two chunk constants (both derived by fitting the loop's tracemalloc peak against the chunk, fixed 48.551 B/cell and c 96.000 B/cell-col, worst deviation 5.8e-07 at N = 512); the dense path validates the mode instead of falling through to 'legacy', and warns with the floor and both mitigations where the budget cannot be met at all.  'legacy' stays byte-identical to 5.48.x (24 of 24 explicit-mode digests identical archive-to-archive on both builds)
+re_recorded: 2026-10-03 -- 5.50.0 removal: gbd_asm_gouy_phase, gbd_field_to_asm and asm_field_to_gbd (no-op converters deprecated in 5.46, audit S5; horizon 5.48 slipped once to 5.50) are deleted with the now-unused warn_deprecated_alias import; match_global_phase was never deprecated and is unchanged; converge_gbd_sampling's comment and docstring no longer describe the pre-S5 Gouy convention.  converge_gbd_sampling and match_global_phase outputs byte-identical before/after on both builds
 -->
 
 # Version history -- `lumenairy/propagators/gbd.py`
@@ -222,4 +223,69 @@ below as *Left in the source*.
     # by the surrounding bare ``except Exception`` and ``axial_opl``
     # always defaulted to None.  Switched to attribute access on the
     # Surface dataclass.  Caught by AUDIT_ROUND3_2026_05_16.md (CRIT-8).
+```
+
+## Removed in 5.50.0 -- the three GBD <-> ASM converters (deprecated 5.46, audit S5)
+
+*Not a relocation block: a record of code that was DELETED.*  The functions
+`gbd_asm_gouy_phase`, `gbd_field_to_asm` and `asm_field_to_gbd` existed to
+compensate a global phase between a GBD free-space field and the
+angular-spectrum field of the same beam.  Audit S5 (5.46.0) showed that phase
+was the beamlet Gouy phase applied with the wrong sign by
+`propagate_beamlets_freespace` (`Q_new/Q_old` where the engineering-`Q`
+convention needs `conj(Q_new/Q_old)`), fixed it, and turned the three functions
+into warned no-ops (`0.0` and the identity) with `version_removed='5.48'`.  The
+5.48.0 release slipped the horizon once to 5.50 through
+`_deprecation.REMOVAL_SCHEDULE = {'5.48': '5.50'}`; 5.50.0 deleted the three
+functions, their re-exports from `lumenairy.propagators` and `lumenairy`, the
+now-unused `warn_deprecated_alias` import, and the registry entry.
+
+`match_global_phase` was NOT part of the deprecation (the 5.48.0 slip text
+misnamed it in place of `gbd_asm_gouy_phase`).  It is the replacement the 5.46
+notes point to and stays public and unchanged, including its internal use in
+`converge_gbd_sampling`.  That internal call is load-bearing for a supplied
+`reference=` (MEASURED 2026-10-03 on a 64x64 Gaussian test field: with a 1 rad
+global offset on the reference, the overlap-1.0 score is 2.75e-02 with the
+reconciliation and 0.95 without it; against the ASM oracle the residual global
+phase is 3.0e-07 rad and the scores agree to 4 digits).
+`converge_gbd_sampling`'s comment and docstring were reworded in the same change
+because they still described the pre-S5 width-dependent Gouy "convention".
+
+*Left in the source:* a present-tense comment at the old site stating that a
+GBD free-space field matches ASM in absolute phase and that
+`match_global_phase` is the global-phase primitive.
+
+The signatures and deprecation notes as they stood in 5.49.0 (excerpted: bodies and the rest of each docstring omitted):
+
+```text
+def gbd_asm_gouy_phase(z: float, wavelength: float, dx: float,
+                       waist_factor: float = 1.0) -> float:
+    """DEPRECATED, returns ``0.0``: there is no GBD-vs-ASM Gouy offset.
+
+    .. deprecated:: 5.46
+       The offset this function returned was a BUG in
+       :func:`propagate_beamlets_freespace`, not a convention.  It is fixed
+       (audit S5); this function, :func:`gbd_field_to_asm` and
+       :func:`asm_field_to_gbd` are now no-ops and will be removed.  Delete
+       the call -- a GBD free-space field already matches
+       :func:`~lumenairy.propagators.asm.angular_spectrum_propagate` in
+       absolute phase.  For the general, propagator-agnostic case use
+       :func:`match_global_phase`.
+
+def gbd_field_to_asm(E: np.ndarray, *, z: float, wavelength: float, dx: float,
+                     waist_factor: float = 1.0) -> np.ndarray:
+    """DEPRECATED no-op: returns ``E`` unchanged.
+
+    .. deprecated:: 5.46
+       GBD and ASM free-space fields already agree in absolute phase -- audit
+       S5 fixed the conjugated Gouy / Collins amplitude that made them
+       differ, so this conversion is the identity.  Delete the call.
+
+def asm_field_to_gbd(E: np.ndarray, *, z: float, wavelength: float, dx: float,
+                     waist_factor: float = 1.0) -> np.ndarray:
+    """DEPRECATED no-op: returns ``E`` unchanged.
+
+    .. deprecated:: 5.46
+       The inverse of :func:`gbd_field_to_asm`, and equally unnecessary since
+       audit S5 -- the two "conventions" are one convention.
 ```
