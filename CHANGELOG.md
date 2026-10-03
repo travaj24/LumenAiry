@@ -47,9 +47,13 @@ finite difference of the same solve to 2.3e-8 relative at `n_modes = 6`,
 and the finite difference of the ordinary NumPy solver (whose grid moves
 with the radius) to 7.8e-8; a rectangle's width gradient matches the NumPy
 solver to 1.3e-9.  Forward results agree with NumPy to 1e-14 .. 5e-13 on 22
-fixtures (the round-off of the eigen-solver stage itself).  A compiled
+fixtures (the round-off of the eigen-solver stage itself) -- at normal
+incidence for every fixture, and at oblique / conical incidence for every
+fixture except a rectangles-only `shapes=` stack, where the two routes differ
+at the discretisation level and converge with `n_modes` (see the limits).  A compiled
 gradient re-runs in 1-5 s on a 3 x 3 grid at `n_modes = 5 .. 6`, faster than
-one NumPy solve of the same cell; the first compilation takes 15-130 s.
+one NumPy solve of the same cell (3 - 5x that on a symmetric cell, see the
+degenerate-mode limit below); the first compilation takes 15-130 s.
 The NumPy path is unchanged byte for byte (156 of 156 hashes).
 
 Known limits:
@@ -70,10 +74,45 @@ Known limits:
   `layer_grids='per-layer'` raise, naming Phases E1 / E2 of the curved-cell
   plan; `retain_internal` / `layer_absorption` stay NumPy-only.
 * x64 required (`jax.config.update("jax_enable_x64", True)`); CPU only
-  (`jnp.linalg.eig`); `LUMENAIRY_DISABLE_JAX` turns the backend off.
-* Gradients of a symmetry-BREAKING parameter at a symmetric configuration
-  pass through exactly degenerate Bloch modes; the library's regularised
-  eigen-derivative returns the correct (zero) gradient there, measured.
+  (`jnp.linalg.eig`); `LUMENAIRY_DISABLE_JAX` turns the backend off (the
+  stack and `pmm_jones_2d_staggered(backend='jax')` raise `ImportError`,
+  each naming itself).
+* A symmetric cell (a square or circular pillar, centred) has exactly
+  degenerate Bloch-mode pairs.  A parameter that BREAKS the symmetry there
+  (a square pillar's width alone, a circle deformed into an ellipse, a
+  square fillet's width) splits them to first order, and the eigenvector
+  derivative alone cannot see that splitting (it gave 0.3 - 75 % errors,
+  different on different BLAS builds, before this release's round 2).  The
+  twin therefore differentiates its eigen-solves TOGETHER with everything
+  downstream of them: where eigenvalues coincide to 1e-6 of the spectrum,
+  the reverse pass evaluates the derivative at slightly separated copies of
+  the cluster and combines them (a fourth-order rule).  Measured against
+  finite differences at `n_modes = 3`: square width 1.9e-10, ellipse 8.6e-11,
+  square fillet 4.1e-9 relative (WSL 4.4e-10 / 1.8e-11 / 4.0e-9); the
+  gradient no longer depends on how the eigen-solver happened to pick its
+  basis inside a degenerate pair; forward values are unchanged byte for
+  byte.  Cost: a gradient through a degenerate cluster (any centred
+  symmetric pillar, the circle included) takes 2.9 - 5.0x the time it took
+  before (`n_modes = 3 .. 5`; four lifted eigen-solves and downstream
+  passes) and about twice the compile time; a cell without one pays
+  nothing.
+  The library's OTHER JAX twins do not use this rule yet: the RCWA JAX path
+  returns a symmetry-breaking gradient at a symmetric cell 23 - 47 % wrong,
+  and the 1-D PMM twin `d / d(angle)` at EXACTLY normal incidence 28 - 590 %
+  wrong (measured and pinned in the build record's round 2; evaluate those
+  off the symmetric point, or use the pure staggered stack).
+* Reverse mode only (`jax.grad`, `jax.jacrev`, `jax.vjp`): forward mode
+  (`jax.jvp`, `jax.jacfwd`, `jax.hessian`) raises `TypeError` and a second
+  derivative (nested `jax.grad`) raises `NotImplementedError` -- the
+  eigen-solves carry a first-order custom VJP.
+* At oblique / conical incidence a rectangles-only `shapes=` stack is solved
+  by the twin on an identity coordinate map (the curved-cell incident
+  projection), not on the NumPy stack's unmapped route: the two differ by
+  the incident representation error (2.5e-4 at `n_modes = 3`, 3.8e-5 /
+  6.5e-7 / 6.9e-9 at 4 / 5 / 6 on T, 0.3 rad), converging with `n_modes`;
+  at normal incidence they agree to round-off.
+  `jax_twin(geometry='static')` reproduces the NumPy route exactly (no traced
+  walls).
 * Call it under `jax.jit`: the eager (un-jitted) twin dispatches ~3 200
   small operations one by one and is 13-54x slower than NumPy.
 

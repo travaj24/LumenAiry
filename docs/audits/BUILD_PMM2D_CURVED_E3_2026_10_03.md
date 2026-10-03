@@ -110,8 +110,8 @@ by their `(u, v)` area.  Measured at `M = 4`: the twin frozen at `r0 = 0.36`
 and evaluated at `r = 0.33` differs from NumPy built at `0.33` by 5.5e-6 on
 T (`f8_frozen_vs_moving.json`); the derivative offset falls from 1.5e-6 (`M = 5`)
 to 7.8e-8 (`M = 6`), with the incident representation error.  For the
-rectangle (affine cells, an exactly representable incident) the two
-discretisations coincide to round-off at every width (3.5e-15 at `w = 0.47`
+rectangle (affine cells at normal incidence, an exactly representable
+incident) the two discretisations coincide to round-off at every width (3.5e-15 at `w = 0.47`
 with the twin frozen at `0.5`), and FD(numpy) agrees with AD to 1e-9.
 
 ### 1.3 Compile and run times (jit; the box loaded, four probes in parallel)
@@ -319,19 +319,25 @@ the twin.  `M = 4` (max over every order of R / T and over the Jones matrix):
 | circle_magnetic | 6.0e-15 / 3.8e-14 / 3.3e-14 | 2.6e-15 / 4.4e-14 / 4.8e-14 | 3.9e-14 |
 
 At `M = 3`: max twin - NumPy 3.4e-14, max reach 5.1e-14, max operator
-difference 2.1e-14 (`f2_parity_M3.json`).  The twin sits within 2.9x of
-the eig stage's own round-off on every fixture: its differences from NumPy
-ARE that stage's round-off plus the summation order of the vectorised
-quadrature (operators <= 6.1e-14 relative).  Unit bar **5e-12**: two decades
-above the `M = 3` maximum, 8x above the largest `M = 4` reach; the
-cofactor mutation (E3-9) moves the mapped T by 6.6e-2.
+difference 2.1e-14 (`f2_parity_M3.json`).  On these 22 fixtures the
+twin's largest difference over R, T and J sits within 2.9x (`M = 3`) / 2.0x
+(`M = 4`) of the eig stage's reach on the same fixture (up to 3.8x per
+quantity) -- an observation, not a bound (the verifier's fixtures: 4.0x,
+6.9x per quantity): its differences from NumPy are that stage's round-off
+plus the summation order of the vectorised quadrature (operators <= 6.1e-14
+relative).  The E3 unit gate was one global bar **5e-12** (two decades above
+the `M = 3` maximum, 8x above the largest `M = 4` reach; the cofactor
+mutation, E3-9, moves the mapped T by 6.6e-2); round 2 restates it PER
+FIXTURE (section 9.6).  Rectangles-only `shapes=` stacks at OBLIQUE
+incidence are not round-off parity (V-E3-2, section 9.4).
 
 ### 3.3 E3-3 -- gradients against converged central differences, both builds
 
 `f3_grads.py CASE M [numpy]` through the public API (traced shape objects
 in `params`).  FD(twin) on the ladder `h / P = 3e-3 .. 3e-5`; the
-rung-to-rung changes fall by 8.8, 11.4, 8.8 for every case (the `h^2` law at
-a step ratio of 3 is 9) -- the PREMISE that the FD is in its asymptotic
+rung-to-rung changes fall by 8.8, 11.4, 8.8 for every case except eps at
+`M = 4` (8.8, 12.6, 5.5) and the conical circle at `M = 4` (below) (the
+`h^2` law at a step ratio of 3 is 9) -- the PREMISE that the FD is in its asymptotic
 range -- and the converged value is the Richardson extrapolation of the
 last two rungs.  Max relative AD-vs-FD over the case's quantities
 (`f3_summary.json`):
@@ -434,7 +440,12 @@ gradients here as well (d T00 / d cx -2.6e-14, d T00 / d r equal to the
 regularised to 1.7e-13, `f9_mutations_M4.json`): the outputs are
 gauge-invariant functions of the operator and LAPACK splits the degenerate
 pairs at round-off, so the regularisation is a safety margin on this
-fixture rather than a correction (finding F-E3-4).
+fixture rather than a correction (finding F-E3-4) -- not in general: with
+`tau = 0` a NON-degenerate rectangle's width gradient is off by 0.117
+(round-off-split pairs of the homogeneous geometric eig), and no
+regularisation recovers a symmetry-BREAKING gradient at a symmetric cell
+(verifier V-E3-1, 0.3 - 29 %; this section's d / d cx is zero by mirror
+parity, so it could not see that).  Fixed in round 2 (section 9.1).
 
 ### 3.6 E3-6 -- jit compiles once
 
@@ -513,19 +524,25 @@ invisible to that function; every mutation arm builds a fresh function.
   at the incident representation level (5.5e-6 on T at `M = 4` for a 0.03 P
   radius change; the derivative offset 9.1e-5 -> 1.9e-6 -> 7.8e-8 at
   `M = 4, 5, 6`); for the rectangle 1.3e-14 at a width change of 0.03.  For affine cells
-  (rectangles) the two coincide to round-off.  Not a defect; documented in
-  the CHANGELOG's limits.
+  (rectangles) at NORMAL incidence the two coincide to round-off (at
+  oblique incidence they differ at the incident representation level,
+  verifier V-E3-2, section 9.4).  Not a defect; documented in the
+  CHANGELOG's limits.
 * **F-E3-2 -- compile size.**  2.3: 19 076 -> 3 194 traced operations,
   gradient compile 213.8 s -> 28.3 s at `M = 4`.
 * **F-E3-3 -- a `jnp.where` NaN guard returns a silent zero gradient.**
   3.4: fixed with a multiplicative poison.
 * **F-E3-4 -- the eig regularisation is a margin here, not a correction.**
-  3.5.
+  3.5 -- on THAT fixture; not in general (tau = 0 breaks a non-degenerate
+  rectangle by 0.117), and it cannot carry a symmetry-breaking gradient at
+  a symmetric cell (V-E3-1; round 2 replaced it there by the
+  degenerate-cluster rule, section 9.1).
 * **F-E3-5 -- paired convergence steps of the staggered basis on a 1-D
   stripe** (NumPy solver property, measured): `M = 5 / 6` give the same TE
   R00 to 1e-14 and `M = 6 / 7` the same TM R00, at 0.7 % / 0.4 % from the
   1-D solver; the next rung jumps to 4e-5 / 2.5e-3.  Recorded for the
   maintainer -- the plan's convergence ladders step `M` by one.
+  EXPLAINED by the verifier (section 9.7): a parity selection rule.
 * **F-E3-6 -- jit caches per function object** (3.9).
 * **F-E3-7 -- eager is slow.**  3.6: 40-70 s for one eager forward at
   `M = 4 / 5`; every documented use and every test uses `jax.jit`.
@@ -613,3 +630,438 @@ Test tails:
   checks passed!`
 * The API examples (CHANGELOG and 2.5) run as written at `n_modes = 3`:
   `f11_api_examples.json`.
+
+---
+
+## 9. Round 2 (VERIFY-E3), 2026-10-03
+
+Builder: Claude Opus 5.5 (model ID `claude-opus-5-5`).  Object: the
+verifier's report `docs/audits/VERIFY_PMM2D_CURVED_E3_2026_10_03.md`
+(branch `verify/pmm2d-curved-e3`, tip `51aa1fdf`), whose recommendation was
+"do not ship as is" because of one P1 (V-E3-1).  Worktree
+`C:/tmp/lum_curved_e3b`, branch `feat/pmm2d-curved-e3-round2` from
+`51aa1fdf`.  PRE trees: `git archive eae470d9` (NumPy bytes) and
+`git archive d4e92eb5` (the E3 build, forward bytes of the twin).  Builds:
+Windows 11 (CPython 3.14.6, numpy 2.4.4, jax 0.11.0) and WSL Ubuntu
+(CPython 3.12.3, numpy 2.4.6, jax 0.10.2); BLAS threads 1 on every command
+line, `lumenairy.__file__` asserted under the tree in every probe.
+Evidence: `validation/probe_pmm2d_curved/build_e3r2/` (suffix `_win` /
+`_wsl` = build).  Words: AD, FD(twin), FD(numpy) and the `h^2` premise as in
+section 0 and the verifier's section 0; "rule on / off" = the
+degenerate-cluster rule of 9.1 switched on (default) or off
+(`_E3_EIG_CLUSTER_GAP_REL = 0`, which is exactly the E3 build's adjoint).
+
+### 9.0 What round 2 changed
+
+| item | verdict of round 2 | where |
+|---|---|---|
+| V-E3-1 (P1), wrong gradient for a symmetry-breaking parameter at a symmetric cell | FIXED: a reverse-mode rule for degenerate eigenvalue clusters that wraps the eigen-solves AND everything downstream of them; forward values byte-identical | 9.1, 9.2 |
+| the same defect class in the library's other JAX twins | MEASURED: the RCWA JAX path and the 1-D PMM twin are affected (pre-existing), the hybrid 2-D PMM twin is not; recorded as maintainer items, pinned by two strict xfails | 9.3 |
+| V-E3-3 (P3), the inside-the-cell contract not replayed in the trace | FIXED: the verifier's guard, plus a trace-safe `Ellipse.bbox` it needed | 9.5 |
+| V-E3-2 (P2), rectangles at oblique incidence | DOCUMENTED (not changed, as advised); the convergence rate of the route difference is pinned | 9.4 |
+| V-E3-4 (P3, documentation) | APPLIED; the convenience entry names itself when JAX is off | 9.8 |
+| the global 5e-12 parity bar | RESTATED per fixture | 9.6 |
+| F-E3-5 | EXPLAINED (a parity selection rule), campaign note in the plan's section 3 | 9.7 |
+| O-1 (pre-existing, the unmapped route's gauge-dependent incident split) | RECORDED for the maintainers, not changed | 9.9 |
+
+### 9.1 V-E3-1: why no rule at the eig boundary can be right, and the rule that is
+
+**The derivation.**  Write the solve as `L(A) = h(eig(A))`: `A = G^-1 L` is a
+pencil, `h` is everything downstream of its eigenpairs `(lam, V)`, and `h`
+is invariant under a change of basis inside a degenerate cluster (the
+S-matrix cascade is).  In eigen-coordinates the first-order change is
+`dL = sum_ij (V^-1 dA V)_ij B_ji`, with `B` the consumer's sensitivity.  The
+cotangent that `h` hands to `eig` carries `lam_bar_i = B_ii` and, because
+`h` is basis-invariant inside the cluster, NOTHING of the off-diagonal
+`B_ij` for `i != j` in one cluster: those entries enter `h` only through its
+response to a SPLITTING of the cluster.  A parameter that keeps the symmetry
+has `(V^-1 dA V)` proportional to the identity on the cluster, so the
+missing entries do not matter; a parameter that breaks it does not, and the
+gradient is then wrong by a term that depends on the basis LAPACK happened
+to pick (hence build-dependent).  Degenerate perturbation theory says the
+same: the in-cluster coupling `V_c^-1 dA V_c` must be diagonalised and `h`
+evaluated in that basis, which depends on `dA`.  Proof by example
+(`test_e3r2_no_eig_level_rule_can_see_the_in_cluster_block`): for
+`A = diag(1, 1, 2)` the consumers `Re tr(V e^Lam V^-1 X)` with `X = E_12`
+and with `X = 0` hand `eig` the SAME (zero) cotangent, yet their true
+gradients (`jax.scipy.linalg.expm`) differ by `e`.  So the rule the round-2
+brief asked for -- a cluster-aware VJP written inside `_jax_eig_stable` or
+the twin's eig wrapper, from `(lam_bar, V_bar)` alone -- cannot exist; the
+rule has to see the consumer.
+
+**The rule** (`rcwa._core._jax_eig_cluster_adjoint`, used by
+`StagJaxTwin.solve`, whose solve is now split into its eig PROBLEMS -- the
+shared geometric pencil when the map is traced, one per distinct patterned
+layer -- and their CONSUMER, a closure over everything else):
+
+* forward: the plain composition `consumer(eig(A_1), eig(A_2), ...)`;
+* reverse, when no eigenvalue gap is below `gap_rel = 1e-6` of `max|lam|`:
+  the standard VJP of the consumer at the eigenpairs, then
+  `_jax_eig_stable`'s (the E3 build's gradient);
+* reverse, with a cluster: the standard VJP of eig + consumer at LIFTED
+  matrices `A + t d N`, `t = -+1, -+2`, combined by Richardson
+  (`(4/3) avg(+-1) - (1/3) avg(+-2)`, error `O(d^4)`), with
+  `N = sum_c Q_c Y_c Q_c^H G P_c` -- `P_c` the cluster's spectral projector,
+  `Q_c` a `G`-orthonormal basis of the cluster, `Y_c` the traceless,
+  unit-RMS compression of a fixed random Hermitian matrix -- and
+  `d = 1e-7 max|lam|`, shortened near the consumer's branch points (below).
+  The cotangents of the consumer's other inputs come from the exact point.
+
+What each ingredient is for (each was found necessary by a measurement,
+9.11): `N` maps into the cluster and annihilates every other eigenvector,
+so the eigenpairs outside the clusters are EXACTLY unchanged; it is built
+from projectors, so it does not depend on the basis inside a cluster
+(gauge invariance, 9.2); its cluster block is similar to the Hermitian
+`Y_c`, so the lift moves eigenvalues along the REAL axis and the
+forward-branch selector downstream (`sqrt(g2)` onto the forward branch,
+decided from the sign of `Im`) picks the same branch at every lifted point;
+`G`-orthonormality keeps that true for a cluster of a Hermitian pencil that
+merges several distinct eigenvalues; traceless unit RMS splits a pair into
+exactly `-+ d` and moves no member of a `k`-cluster more than `sqrt(k) d`
+(far below `gap_rel`); clusters are the CONNECTED COMPONENTS of the pairwise
+relation (transitive closure in the trace); a lift that comes out
+non-finite is dropped (the stencil's weights sum to one, so that eig then
+gets the plain VJP).
+
+**The constants.**  `gap_rel = 1e-6`: the W9 envelope of the plain VJP is
+2.5e-9 at a relative splitting of 1e-6 (and 4.9e-6 at 1e-9), so a pair
+closer than that is treated as a cluster.  `d = split_rel max|lam|` with
+`split_rel = 1e-7` and the order-4 stencil (`r2_dev_*_scan*.json`): the
+order-2 average showed the expected `d^2` truncation on the square
+(2.4e-5 / 2.4e-7 / 2.3e-9 at `d` = 1e-5 / 1e-6 / 1e-7, M = 3); with order 4
+the error is flat at the FD's floor from `3e-8` to `3e-7` at M = 3 .. 6 and
+rises as `eps_mach / d` below it (5.0e-8 at `1e-8`, M = 5); `1e-7` sits in
+the flat range and keeps `2 sqrt(4) d = 4e-7` below `gap_rel` (`3e-7` would
+not).  The
+anchors: a cluster at distance `a` from the nearest branch point of its
+consumer (`g2 = 0` for a patterned layer, `g2_geo = -eps` of every
+homogeneous region for the geometric pencil) is lifted by at most
+`0.25 a (eps_mach max|lam| / a)^(1/5)`, the order-4 balance of truncation
+`(d / a)^4` against round-off; the square fillet's exactly degenerate pair
+sits at `2e-5 max|lam|` from the layer cutoff at `M = 3` and `2e-6` at
+`M = 5` (`r1c_branch_M*.json`), where the uncapped lift cost 2.8e-7.
+
+### 9.2 Before and after, both builds
+
+AD vs FD at the symmetric reference, max relative over R00, T00 E_x,
+T00 E_y (`r2_dev_<case>_M<M>_final_{win,wsl}.json`; FD(numpy) and FD(twin)
+are the verifier's premise-checked ladders where they exist, else the twin's
+own Richardson FD with its premise recorded; rule off = the E3 build):
+
+| case | M | before (rule off) win / wsl | after (rule on) win / wsl | vs FD(numpy), after, win |
+|---|---|---|---|---|
+| square pillar d / d w | 3 | 3.1e-3 / 3.8e-2 | 1.9e-10 / 4.4e-10 | 1.9e-10 |
+| | 4 | 2.5e-1 / 6.9e-2 | 4.9e-10 / 1.3e-9 | 4.2e-10 |
+| | 5 | 1.4e-1 / -- | 1.6e-9 / -- | 1.1e-9 |
+| | 6 | -- | 2.1e-9 (own FD) / -- | -- |
+| circle -> ellipse d / d a | 3 | 6.5e-3 / 2.8e-2 | 8.6e-11 / 1.8e-11 | 5.1e-4 (frozen-grid offset) |
+| | 4 | 3.0e-3 / -- | 5.1e-11 / -- | 7.9e-5 (frozen-grid offset) |
+| square fillet d / d w | 3 | 2.9e-1 / 7.5e-1 | 4.1e-9 / 4.0e-9 | 2.0e-5 (frozen-grid offset) |
+| | 4 | -- | 6.3e-10 (own FD) / -- | -- |
+| | 5 | -- | 1.0e-8 (own FD, premise 10.4) / -- | -- |
+| control: square, w and h together | 3 | 4.1e-11 / 4.3e-11 | 4.1e-11 / 4.3e-11 | 1.3e-11 |
+| control: non-square pillar d / d w | 3 | 3.4e-11 / 3.4e-11 | 3.4e-11 / 3.4e-11 | 3.0e-11 |
+
+For the curved cells FD(numpy) differs from FD(twin) by the frozen-grid
+offset the verifier characterised (its section 2), and the twin's AD sits on
+FD(twin) to the FD's own floor.  The gate is therefore AD vs FD(twin) for
+curved cells and AD vs FD(numpy) for the rectangle (whose offset is zero at
+normal incidence); the verifier's strict xfail on the square pillar
+(`< 1e-6` vs FD(numpy)) now passes with five decades to spare.
+
+The near-symmetric sweep (ellipse `b = a (1 + delta)`, d / d a,
+`r6_offsym_M3_{win,wsl}.json`), rule off -> rule on:
+
+| delta | 0 | 1e-14 | 1e-13 | 1e-12 | 1e-11 | 1e-10 | 1e-9 .. 1e-4 |
+|---|---|---|---|---|---|---|---|
+| win | 1.8e-3 -> 4.5e-11 | 1.9e-2 -> 2.4e-11 | 5.3e-2 -> 6.7e-11 | 2.7e-4 -> 6.6e-11 | 3.2e-6 -> 9.2e-11 | 2.5e-9 -> 8.1e-11 | <= 1.2e-10 both |
+| wsl | 3.5e-3 -> 7.0e-11 | 2.3e-3 -> 3.6e-11 | 5.6e-3 -> 5.5e-11 | 8.2e-5 -> 6.0e-11 | 2.3e-7 -> 1.1e-10 | 8.2e-10 -> 1.9e-11 | <= 7.4e-11 both |
+
+**Gauge invariance** (`r5_gauge_<case>_M<M>_{win,wsl}.json`): the
+eigen-solver is replaced by one whose basis inside every EXACT cluster
+(gap <= 1e-12) is a random unitary rotation of LAPACK's, with a random phase
+on every mode (two seeds).  Relative change of the gradient:
+
+| case | rule off win / wsl | rule on win / wsl | forward change |
+|---|---|---|---|
+| square, M = 3 | 0.23, 0.17 / 0.24, 0.11 | 1.6e-10, 3.3e-10 / 4.3e-10, 3.4e-10 | <= 2.6e-15 |
+| square, M = 4 | 0.27, 0.35 / -- | 7.8e-10, 2.1e-9 / -- | <= 5.1e-15 |
+| ellipse, M = 3 | 2.7e-2, 0.24 / 7.0e-3, 0.28 | 6.6e-11, 7.3e-11 / 5.7e-11, 3.3e-11 | <= 2.7e-15 |
+| square fillet, M = 3 | 0.52, 2.8 / 0.23, 0.30 | 9.6e-10, 1.0e-9 / 8.5e-11, 1.2e-10 | <= 2.7e-13 |
+
+That V-E3-1 WAS this dependence is the reading of the left column; the
+right column is the rule's own round-off.  On the matrix-function oracle
+(`r9_matrix_oracle_{win,wsl}.json`, a random similarity of
+`diag(1, 1, 2, 3)`, `Re tr(expm(A + t B) X)`): the rule 2.2e-9 / 1.6e-10,
+the plain VJP 0.30 / 1.01 (win / wsl).
+
+**Forward bytes** (`r3_fwd_bytes_*`, `r3_compare.py`): R, T and the Jones
+matrix of 14 fixtures (the E3-2 set, a uniform-only stack, the square
+pillar, the symmetric ellipse, the oblique rectangle), each eager at the
+reference, eager with a JAX shape parameter and under `jax.jit`: 84 / 84
+SHA-256 equal to `d4e92eb5` at M = 3 on both builds and at M = 4 on
+Windows.  NumPy bytes: the round-2 diff touches the NumPy modules only in
+`Ellipse.bbox` (an `xp` switch that is `numpy` for concrete values) and in
+the `backend='jax'` branch of `pmm_jones_2d_staggered`.
+
+### 9.3 The library's other JAX twins
+
+One symmetry-breaking gradient at a symmetric configuration per twin, AD vs
+a premise-checked NumPy Richardson FD (`r4_other_twins_<case>_{win,wsl}.json`).
+The round-2 rule is NOT used by these twins (it needs each twin's
+eig consumer as a function), so their gradients are unchanged by round 2 --
+these readings are the same before and after.
+
+| twin (entry) | parameter at the symmetric point | win | wsl | symmetry-keeping control |
+|---|---|---|---|---|
+| RCWA JAX path (`rcwa_efficiency_2d`, JAX `eps_cell`) | 15 x 15 pixels: centre 4, sides 1.5, corners 1; t added to the two x-side blocks | **23 % (TE) / 39 % (TM)** | **28 % / 47 %** | 1.5e-10 .. 6.9e-10 (t on all four side blocks) |
+| 1-D PMM twin (`pmm_efficiency_1d`, JAX) | d / d(angle) at EXACTLY 0 (no wall position is traced in this twin), R and T of the +-1 orders, duty 0.5 | **28 % (TE) / 590 % (TM)** | **28 % / 590 %** | -- |
+| hybrid 2-D PMM twin, cell path (`pmm_efficiency_2d_cell`, JAX `eps_cell` + `region_layout`) | 3 x 3 regions, same cell, x-side regions | 3.8e-11 / 8.5e-11 | 4.2e-10 / 3.0e-10 | 1.4e-10 .. 7.3e-10 |
+| hybrid 2-D PMM twin, pillar entry (`pmm_efficiency_2d`) | d / d theta at 0, (+-1, 0) orders, centred square | 3.3e-10 / 3.5e-10 | 3.4e-11 / 1.0e-10 | -- |
+
+The RCWA JAX path is the V-E3-1 class (pre-existing, P1 for a user who
+differentiates a symmetric pixel cell in a symmetry-breaking direction) and
+build-dependent; the 1-D twin's is the "exactly 0.0 stays unrecoverable"
+case the W9 note of `_jax_eig_stable` documents.  The hybrid 2-D twin is
+correct in both directions measured.  Since the fix is local to the
+staggered twin, these are MAINTAINER ITEMS (9.9), pinned by
+`test_e3r2_rcwa_jax_symmetry_breaking_gradient_at_a_symmetric_cell` and
+`test_e3r2_pmm1d_jax_angle_gradient_at_normal_incidence` (`xfail(strict=True,
+raises=AssertionError)`: they flip loudly when a maintainer routes those
+twins through the rule), and stated in the CHANGELOG's limits.  The
+library's other users of `_jax_eig_stable` (BOR, BOR-SEM, EME modes,
+Berreman, the PMM stack twins) were not measured.
+
+### 9.4 V-E3-2 -- rectangles at oblique incidence (documented, rate pinned)
+
+Not changed, as the verifier advised (copying the unmapped least-squares
+route would import its gauge dependence, O-1).  CHANGELOG: the parity claim
+is qualified ("at normal incidence for every fixture, and at oblique /
+conical incidence for every fixture except a rectangles-only `shapes=`
+stack ... converge with `n_modes`") and the verifier's limits bullet is
+added; F-E3-1 and 1.2 carry the at-normal-incidence qualifier; the module
+docstring's "to round-off at normal incidence" for curved cells is replaced
+by the measured 5.5e-6.  Gate
+`test_e3r2_oblique_rectangles_converge_at_the_measured_rate`: the
+difference at M = 3 must lie in [1e-5, 1e-3] (2.5e-4) and fall at least 3x
+from M = 3 to 4 (measured 6.6x) and 10x from 4 to 5 (measured 58x);
+`geometry='static'` reproduces the NumPy route to 1e-12 (8.5e-15).
+
+### 9.5 V-E3-3 -- the traced inside-the-cell guard
+
+The verifier's 15-line guard is applied verbatim in
+`_traced_shape_merge`.  It calls `bbox()` on the traced shapes, and
+`Ellipse.bbox` was NumPy-only (`np.hypot` on a tracer raised); it is now
+array-module generic (NumPy for concrete values, so the NumPy statements are
+the shipped ones).  The verifier's event probe re-run on this tree
+(`verify_e3/v5_events_M3_r2_{win,wsl}.json`): all eight cases NaN at the
+event (value, sum, d / dx, d / d eps) and finite at the control; its strict
+xfail flips; `test_e3r2_an_ellipse_inside_the_sliver_margin_is_poisoned_when_traced`
+covers the ellipse.
+
+OBSERVED ONCE, not reproduced (WSL, jax 0.10.2): the first WSL run of the
+event probe on this tree (before the connected-components fix) completed the
+first seven cases and then the interpreter DUMPED CORE (`timeout: the
+monitored command dumped core`, no Python traceback) during or right after
+the eighth case, `two_rects_reorder` (two rectangles, the second's centre
+traced from 0.8; control 0.62, event 0.45 where the walls reorder).  The
+Windows suites were running at `-n 8` at the time.  Not reproduced in three
+later runs: the eighth case alone, rule on and rule off, twice
+(`r12_rects_crash.py`, `r12_rects_crash_wsl.json`: control value 0.895467,
+d T00 / dx 0.224934 with both rules, event NaN, the NumPy stack ACCEPTS the
+event at T00 0.880131 -- a new topology, as the verifier recorded), and the
+full probe once more under `python -X faulthandler` (all eight cases, exit 0,
+no fault, `logs/v5_r2_wsl_run1.log`).  No attribution is possible from one
+uncaught native crash: it is a crash below Python (XLA, LAPACK or the
+allocator), not an exception of the twin; a memory exhaustion would have
+been an OOM kill, not a core dump, and the host had 76 GB free when checked
+minutes later.  Recorded as observed; a recurrence should be re-run under
+`faulthandler` (`run_wsl_v5.sh`).
+
+### 9.6 Per-fixture parity bars
+
+The E3-2 unit gate is restated per fixture (`_PAR_BAR` in the test file):
+30x the fixture's eig-stage round-off REACH (the NumPy stack with its QZ
+replaced by the standard eig of `G^-1 L`, minus the shipped stack, max over
+R, T, J), the larger of the two builds, rounded up
+(`r7_parity_reach_{win,wsl}.json`).  The twin's difference sits at 0.25 ..
+2.9x the reach on every fixture, both builds, so the factor leaves >= 10x;
+bars 4e-14 (sinusoid) .. 3e-12 (fillet).
+
+### 9.7 F-E3-5 explained
+
+The verifier's section 5: on a cell whose sub-cells are centred on mirror
+planes, at normal incidence, the excited `E_x` and `E_y` are even about
+those planes; raising `M` by one adds one polynomial per cell of
+alternating parity, which is orthogonal to the excited sector every other
+step -- a selection rule, not convergence (TE pairs 3/4, 5/6, ...; TM pairs
+4/5, 6/7, ... to <= 1e-13; oblique incidence in the mirrored direction
+breaks the pairing).  Recorded as a campaign-wide note at the head of the
+plan's section 3: judge M-ladders on pairs of rungs (`M -> M + 2`).
+
+### 9.8 V-E3-4 -- the documentation corrections
+
+CHANGELOG "Known limits": reverse mode only (`jvp` / `jacfwd` / `hessian`
+raise `TypeError`, nested `grad` `NotImplementedError`); the degenerate-mode
+bullet (which claimed the correct gradient) is replaced by the measured
+rule, its cost and the other twins' readings; the oblique-rectangle bullet;
+`LUMENAIRY_DISABLE_JAX` makes both the stack and
+`pmm_jones_2d_staggered(backend='jax')` raise naming themselves (the entry
+now checks before delegating; gated in
+`test_e3_disable_jax_switch_and_x64_are_honoured`).  This record: 1.2 and
+F-E3-1 (affine at normal incidence), 3.2 (the "2.9x" is an observation, not
+a bound -- the verifier reached 4.0x, 6.9x per quantity -- and the global
+bar is restated, 9.6), 3.3 (the `h^2` law held for every case except eps at
+M = 4 and the conical circle at M = 4), 3.5 and F-E3-4 (the regularisation
+is a margin on that fixture only: tau = 0 breaks a non-degenerate rectangle
+by 0.117, and no regularisation carries a symmetry-breaking gradient).  The
+twin module's docstring: the frozen-grid paragraph (the verifier's text)
+and a paragraph on the reverse pass through degenerate eigenvalues.
+
+### 9.9 Maintainer items
+
+No "mode-pick" item exists in the curved-cell records; this list is new.
+
+* **O-1 (pre-existing on `eae470d9`, not changed).**  The UNMAPPED route
+  decomposes the incident wave by a minimum-norm least squares on an
+  underdetermined Rayleigh system, which depends on the per-mode
+  normalisation of `W0`: rescaling its columns moves R / T by 3.5e-5 /
+  4.2e-6 / 9.9e-8 at M = 3 / 4 / 5 (0.3 rad; 1e-15 at normal incidence), so
+  a 1e-12 width change moves R / T by up to 7.6e-7 and breaks FD ladders on
+  that route (verifier `o1_gauge_*.json`).  The mapped route is gauge-free.
+* **The degenerate-cluster rule for the other JAX twins.**  The RCWA JAX
+  path (23 - 47 %) and the 1-D PMM twin at exactly normal incidence
+  (28 - 590 %) return wrong symmetry-breaking gradients (9.3); routing
+  their eig problems and consumers through
+  `rcwa._core._jax_eig_cluster_adjoint` is the fix measured here, and the
+  two strict xfails flip with it.  The other `_jax_eig_stable` users were
+  not measured.
+* **F-E3-5**: M-ladders on pairs of rungs (9.7).
+
+### 9.10 What the rule costs
+
+Compiled wall times, best of 5 after the compile, run SERIALLY on Windows
+(`r11_timing_M{3,4,5}_win.json`; the box was shared, so these are upper
+bounds).  The circle's d / d r keeps the symmetry, but its eigs carry exact
+clusters, so the lifted branch runs there too:
+
+| case | M | gradient, rule off | rule on | ratio | compile off / on | forward ratio |
+|---|---|---|---|---|---|---|
+| square d / d w | 3 | 0.033 s | 0.106 s | 3.2 | 5.9 / 12.6 s | 0.98 |
+| | 4 | 0.091 s | 0.359 s | 4.0 | 6.2 / 13.5 s | 1.04 |
+| | 5 | 0.302 s | 1.513 s | 5.0 | 6.6 / 15.7 s | 1.05 |
+| circle d / d r | 3 | 0.038 s | 0.110 s | 2.9 | 7.5 / 14.2 s | 1.02 |
+| | 4 | 0.110 s | 0.363 s | 3.3 | 8.7 / 15.8 s | 0.87 |
+| | 5 | 0.374 s | 1.401 s | 3.8 | 8.3 / 17.8 s | 1.01 |
+
+The reverse pass with a cluster evaluates eig + consumer + its VJP at four
+lifted points (the order-4 stencil), hence 3 - 5x; the forward pass is
+unchanged; a cell without any cluster pays nothing (the plain branch runs
+from the forward pass's residuals; under `jax.vmap` both branches of the
+`lax.cond` run).  An order-2 stencil would halve the cost at the price of
+the fillet's near-cutoff truncation (2.8e-7 instead of 4e-9).
+
+### 9.11 Development record (what each ingredient of the rule answers)
+
+Each of these was a measured failure of an earlier draft, kept so the
+design is not re-derived:
+
+1. A complex random lift (`R` Gaussian) moved real eigenvalues off the axis;
+   the forward-branch selector flipped modes at the lifted points -> a
+   relative error of 6.6e2 on the square (`r2_dev_square_w_M3_win.json`, first run).  Hence
+   real shifts.
+2. A Hermitian `H` does not give real shifts for the patterned layer, whose
+   pencil is NOT Hermitian (anti-Hermitian part 0.33 relative,
+   `r1b_herm_M3_win.json`) -> the fillet broke (0.14 .. 71).  Hence the
+   compression `Q_c^H H Q_c` in an orthonormal basis of the cluster.
+3. An unnormalised compression moved members by up to `2 sqrt(n) d` and
+   collided them with eigenvalues outside the cluster at M = 5 (errors 5 -
+   20).  Hence traceless unit RMS.
+4. With the Euclidean Gram, a cluster that merges two distinct exact pairs
+   (the geometric pencil at M = 5) got complex shifts of 1e-9 max|lam|,
+   inside the branch selector's band (`r1d_clusters_M5_1e-07_win.json`).
+   Hence the `G`-Gram.
+5. The fillet's near-cutoff exact pair (2e-5 max|lam| from `g2 = 0` at
+   M = 3) set the stencil's truncation (2.8e-7 at the uncapped lift).  Hence
+   the order-4 stencil and the anchors.
+6. Re-running the verifier's event probe found a NaN gradient at a fillet
+   far from its reference: chains of near-degenerate eigenvalues made a
+   pairwise mask non-transitive and a masked Gram indefinite.  Hence the
+   connected components and the finite guard
+   (`r10_fillet_far_from_reference_win.json`, commit `81f3019a`).
+
+### 9.12 Tests, tails, commits
+
+Logs in `validation/probe_pmm2d_curved/build_e3r2/logs/`.
+
+* Windows, SERIAL (durations): `test_pmm2d_staggered_curved_e3.py` +
+  `test_verify_pmm2d_curved_e3.py`: `47 passed, 2 xfailed in 777.59s`
+  (`serial_e3_win.log`; the two xfails are the maintainer pins of 9.3); the
+  durations of both files spliced into `.test_durations` (37 entries
+  replaced by 49, order and format kept).
+* Windows, `-n 8`, half A (the verifier's list -- E3, curved A-D, every
+  `verify_pmm2d*` file, every `*jax*` file -- plus the W9 eig-VJP and W6
+  Berreman audits): `802 passed, 8 skipped, 2 xfailed, 41 warnings in
+  785.01s` (`suite_A_win.log`).
+* Windows, `-n 8`, half B (the verifier's: every other `*pmm2d*` /
+  `*stack2d*` / `*stagger*` file, census, public API, walkers,
+  doc-consistency, doc identifiers, except budget, re-exports, history
+  lint / relocation / fingerprint tool, kernel consistency): `1548 passed,
+  8 skipped, 88 warnings in 625.75s` (`suite_B_win.log`).  Its documentation,
+  CHANGELOG, history, census, walker and re-export files re-run after the
+  final documents, `-n 4`: `924 passed, 7 skipped in 169.16s`.
+* WSL, `-n 4` (E3, the verifier's file, curved A-D, `pmm_jones_2d` JAX, the
+  JAX stacks, disable-JAX, the PMM-JAX guards, W9, the RCWA 2-D OOP JAX
+  file): `2 failed, 199 passed, 2 xfailed in 510.84s` (`suite_wsl.log`):
+  (a) `test_e3r2_near_symmetric_cells_are_inside_the_rule`, its FAIL-BEFORE
+  arm: the E3 build's adjoint read 1.1e-4 under the old bar `> 1e-3` (the
+  probes had read 5.6e-3 on WSL, 5.3e-2 on Windows) -- that size is
+  arbitrary by the nature of the defect, so the bar was re-derived to
+  `> 1e-5` (the rule's arm passed); (b) the xdist worker running
+  `test_v5_20_2_pmm_jones_2d_jax.py::test_pmm_jones_2d_jax_li_formulation_and_three_regions`
+  CRASHED inside XLA's `backend_compile_and_load` (compiling a subtraction
+  in `_jax_twod_jones._kz_fwd`, a path round 2 does not touch) -- the second
+  native crash of jax 0.10.2 on WSL this day (9.5).  Both re-run serially
+  on WSL: `15 passed in 51.81s`; the re-derived gate on Windows: `1
+  passed`.
+* `python -m mypy` (configured strict list): `Success: no issues found in
+  33 source files`.  WSL ruff 0.15.16 on `lumenairy/ tests/ scripts/` and
+  `build_e3r2/`: `All checks passed!`
+* `scripts/record_history_fingerprints.py --check`: `OK: every history
+  document matches its module.` -- nothing re-recorded (the only history
+  document among the touched modules' neighbours, `stack2d_pure`, is
+  untouched by round 2).  No forward version token.
+
+Commits (branch `feat/pmm2d-curved-e3-round2`, not pushed): `9acb0850`
+(the degenerate-cluster adjoint, V-E3-1), `f8bbbbc4` (the traced
+inside-the-cell guard, V-E3-3), `81f3019a` (clusters are connected
+components), `94c5ac9c` (per-fixture parity bars, the oblique-rate pin, the
+entry names itself), and the documentation commit carrying this section.
+
+### 9.13 Not measured
+
+* The rule on the second build above M = 4 (WSL ran M = 3 / 4 for the
+  square, M = 3 for the ellipse and the fillet).
+* FD(numpy) for the fillet's symmetry-breaking gradient above M = 3 and for
+  the square above M = 5 (the twin's own FD was used at M = 4 .. 6).
+* A degenerate cluster AT (or within round-off of) a consumer branch
+  point: its anchor cap shrinks the lift to round-off, so that cluster gets
+  in effect the plain VJP; such a point is a cutoff of the discretisation
+  (the Wood nudge keeps the half-spaces off it) and was not constructed.
+* The other `_jax_eig_stable` users (BOR, BOR-SEM, EME, Berreman, the PMM
+  stack twins).
+* GPU; idle-box timings.
+
+### 9.14 Reproduction
+
+```
+cd /c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONPATH=C:/tmp/lum_curved_e3b
+python r1_spectrum.py M ; python r1b_herm.py M ; python r1c_branch.py M ; python r1d_clusters.py M SPLIT
+R2_NAME=_final ./runjobs.sh jobs_win_final.txt 6        # r2_dev, r5_gauge, r6_offsym, r3, r9
+python r2_dev.py M CASE GAP SPLIT [GAP SPLIT ...]        # the scans: R2_ORDER=2|4, R2_NAME=_scan*
+python r3_fwd_bytes.py M post ; (LUM_TREE=<git archive d4e92eb5> ...) r3_fwd_bytes.py M preE3 ; python r3_compare.py preE3 post M
+python r4_other_twins.py rcwa2d|pmm2d|pmm1d|pmm2d_theta
+python r7_parity_reach.py ; python r10_nan_debug.py ; python r11_timing.py M
+wsl bash run_wsl.sh jobs_wsl_final.txt 5 [TREE]         # second build
+```

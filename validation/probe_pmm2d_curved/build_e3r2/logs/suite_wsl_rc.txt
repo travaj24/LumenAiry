@@ -1,0 +1,5 @@
+/mnt/c/tmp/lum_curved_e3b/lumenairy/__init__.py
+rc=1
+2 failed, 199 passed, 2 xfailed, 12 warnings in 510.84s (0:08:30)
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3r2_near_symmetric_cells_are_inside_the_rule
+FAILED tests/unit/test_v5_20_2_pmm_jones_2d_jax.py::test_pmm_jones_2d_jax_li_formulation_and_three_regions

@@ -1,0 +1,27 @@
+{
+ "on_control": {
+  "value": 0.8954674257162448,
+  "grad": 0.224933530072995
+ },
+ "on_event": {
+  "value": NaN,
+  "grad": NaN
+ },
+ "off_control": {
+  "value": 0.8954674257162448,
+  "grad": 0.22493353007256117
+ },
+ "off_event": {
+  "value": NaN,
+  "grad": NaN
+ },
+ "numpy_event_T00": 0.8801307628688844,
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_curved_e3b/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

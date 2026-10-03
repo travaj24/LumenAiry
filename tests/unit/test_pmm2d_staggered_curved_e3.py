@@ -918,9 +918,14 @@ def test_e3r2_symmetry_breaking_gradient_at_a_symmetric_cell(case):
 
 def test_e3r2_near_symmetric_cells_are_inside_the_rule():
     """The NEAR-degenerate zone: an ellipse 1e-13 (relative) off the circle,
-    d / d a.  The E3 build's adjoint reads 5.3e-2 (win) here and was still
-    3.3e-6 at 1e-11; the rule 6.7e-11 / 1.9e-11 (win / wsl) over the whole
-    sweep 0 .. 1e-4 (``r6_offsym_M3_{win,wsl}.json``).  Bars 1e-7 / > 1e-3."""
+    d / d a.  The rule: 6.7e-11 / 5.5e-11 (win / wsl) here and <= 1.2e-10
+    over the whole sweep 0 .. 1e-4 (``r6_offsym_M3_{win,wsl}.json``); bar
+    1e-7.  The E3 build's adjoint (the fail-before arm) is wrong by an
+    ARBITRARY amount here -- it depends on the basis LAPACK lands on inside
+    the near-degenerate pair, which is the defect: 5.3e-2 (win probe),
+    5.6e-3 (wsl probe), 1.1e-4 (wsl, this test's graph, 2026-10-03); bar
+    > 1e-5, a decade under the smallest reading and two above the rule's
+    bar."""
     import jax
     import jax.numpy as jnp
     st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.45,
@@ -939,7 +944,7 @@ def test_e3r2_near_symmetric_cells_are_inside_the_rule():
     fd = _fdv(jax.jit(g), 0.33)
     sc = np.max(np.abs(fd))
     assert np.max(np.abs(_jac(g, 0.33) - fd)) / sc < 1e-7
-    assert np.max(np.abs(_jac(g, 0.33, gap=0.0) - fd)) / sc > 1e-3
+    assert np.max(np.abs(_jac(g, 0.33, gap=0.0) - fd)) / sc > 1e-5
 
 
 def _rotating_eig(orig, seed):
