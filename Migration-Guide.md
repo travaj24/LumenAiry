@@ -7,13 +7,14 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 ## Versions covered
 
-v4.13 through v5.49.  Sections are in version order; the newest, 5.49.0, is at
+v4.13 through v5.50.  Sections are in version order; the newest, 5.50.0, is at
 the end of this file.  The 5.46.0 section is the largest single batch of
 behaviour changes the library has shipped, 5.47.0 is the wave that implemented
 what it deferred, 5.48.0 finished that audit's handoff (two answers move from
 wrong to right, several silent wrong answers become refusals), and 5.49.0 is the
 release that turns the settings those waves shipped switchable into the defaults
-their measurements supported.
+their measurements supported.  5.50.0 executes the removals that 5.46.0
+deprecated.
 
 Only behavior shifts that **require user code changes** or **change
 numerical answers** are listed.  Pure additions (new functions, new
@@ -1900,8 +1901,9 @@ paying.  At the natural MFT grids the budget is of order 1e4, so shipped callers
 
 `lumenairy._deprecation.NEXT_REMOVAL_VERSION` moves from `'5.48'` to `'5.50'` and
 `REMOVAL_SCHEDULE` gains `{'5.48': '5.50'}`.  Nothing is removed in this release.  The three GBD
-aliases `gbd_field_to_asm`, `asm_field_to_gbd` and `match_global_phase` (deprecated in 5.46) keep
-working until 5.50, and the `CarrierField` attribute-assignment freeze resolves to 5.50 through the
+aliases `gbd_asm_gouy_phase`, `gbd_field_to_asm` and `asm_field_to_gbd` (deprecated in 5.46) keep
+working until 5.50 (corrected in 5.50.0: this sentence first named `match_global_phase` in place
+of `gbd_asm_gouy_phase`; `match_global_phase` was never deprecated and is the replacement), and the `CarrierField` attribute-assignment freeze resolves to 5.50 through the
 same registry.  Code that reads a removal version through `resolve_removal_version` gets the live
 horizon; code that pinned the literal `'5.48'` must update.
 
@@ -3089,3 +3091,60 @@ fallback, and it is the one the Sziklas transport could never evaluate at
 all: `A == 0` exactly, the carrier's own focus.  A flat output reference is
 still RESOLVED and still returned where the chirp-Z can represent it.
 
+---
+
+## 5.50.0 -- the 5.46 deprecations are removed
+
+Three GBD functions and one `CarrierField` behaviour were deprecated in 5.46.0,
+scheduled for removal in 5.48 and slipped once to 5.50.  This release executes
+those removals.  Code that ran on 5.49 without a `DeprecationWarning` from them
+is not affected.
+
+### GBD: `gbd_asm_gouy_phase`, `gbd_field_to_asm`, `asm_field_to_gbd` are gone
+
+These three functions compensated a global phase between the Gaussian-beam
+decomposition (GBD) and the angular spectrum method (ASM) that turned out to be
+a sign error in the beamlet Gouy phase (audit S5, fixed in 5.46.0).  Since
+5.46.0 they returned `0.0` and their input unchanged, and warned.  Importing
+any of them now raises `ImportError`, and calling one through a module
+attribute raises `AttributeError`.
+
+```python
+# 5.46 - 5.49 (no-op, warned):
+E_asm = gbd_field_to_asm(E_gbd, z=z, wavelength=lam, dx=dx)
+# 5.50: delete the call -- E_gbd already matches ASM in absolute phase
+E_asm = E_gbd
+```
+
+To line up the global phase of a field from any propagator against a reference
+field of the same beam (for example a field from another solver), use
+`match_global_phase(E, reference)`.  It was never deprecated and is unchanged.
+
+### `CarrierField` is frozen
+
+Assigning to an attribute of a `CarrierField` (`field.envelope = ...`,
+`field.wavelength = ...`, and so on) raised a `DeprecationWarning` from 5.46.0
+and still took effect.  It now raises `dataclasses.FrozenInstanceError` and
+changes nothing, the same as its `CarrierSpec` and `FieldGrid` members.
+
+```python
+import dataclasses
+# 5.46 - 5.49 (warned):
+field.wavelength = 1.55e-6
+# 5.50: build a changed field; replace() re-runs every construction check
+field = dataclasses.replace(field, wavelength=1.55e-6)
+# provenance only: field = field.with_provenance(stage='relay')
+# in-place accumulation (no rebind needed, bit-identical to `acc.envelope += other`):
+np.add(acc.envelope, other, out=acc.envelope)
+```
+
+The freeze is shallow: the envelope ARRAY can still be modified in place, which
+is what the accumulation line above relies on.  A `CarrierField` stays
+unhashable, as it was while it was mutable.
+
+### Removal horizon
+
+`lumenairy._deprecation.REMOVAL_SCHEDULE` is empty again and
+`NEXT_REMOVAL_VERSION` (and `API_TRANSITION_VERSION`, which is bound to it)
+moves from `'5.50'` to `'5.52'`.  No live deprecation targets 5.52; the value is
+the backstop horizon for the next deprecation cycle.

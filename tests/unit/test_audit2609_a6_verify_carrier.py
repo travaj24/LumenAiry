@@ -1360,11 +1360,19 @@ class TestVerifyC5:
         assert float(np.abs(np.abs(np.exp(rows)) - 1.0).max()) < 1e-15
 
     def test_the_carrier_field_deprecation_cycle_is_complete(self):
-        """The announcement half of the C5 freeze, checked on every route a
-        caller actually uses: construction, one warning PER assignment,
-        ``dataclasses.replace``, ``with_provenance``, ``deepcopy`` and
-        ``pickle`` (the multi orchestrator ships fields to workers), and the
-        accumulation idiom the pipeline driver was changed to."""
+        """The C5 freeze, EXECUTED in v5.50 (announced v5.46, 5.48 horizon
+        slipped once), checked on every route a caller actually uses:
+        construction, ``dataclasses.replace``, ``with_provenance``,
+        ``deepcopy`` and ``pickle`` (the multi orchestrator ships fields to
+        workers) and the accumulation idiom the pipeline driver was changed
+        to must all keep working with no warning; EVERY assignment must now
+        raise and change nothing.
+
+        RESTATED 2026-10-03 (5.50.0): this pin used to assert one warning per
+        assignment, that the assignment still took effect, and that the
+        horizon ``_CARRIER_FIELD_FROZEN_IN`` resolved after the running
+        version.  The removal deleted the shim and both constants, so the
+        cycle is complete in the literal sense the name always claimed."""
         import copy
         import pickle
         lam, n, dx = self.LAM, 32, 2e-6
@@ -1374,37 +1382,30 @@ class TestVerifyC5:
         with warnings.catch_warnings():
             warnings.simplefilter('error', DeprecationWarning)
             f = CarrierField(env, grid, spec, lam)
-            copy.deepcopy(f)
-            pickle.loads(pickle.dumps(f))
-            dataclasses.replace(f, wavelength=1.55e-6)
+            dc = copy.deepcopy(f)
+            pk = pickle.loads(pickle.dumps(f))
+            rp = dataclasses.replace(f, wavelength=1.55e-6)
             f.with_provenance(note='verify')
             np.add(f.envelope, env, out=f.envelope)     # the driver's idiom
+        # the copies are full, frozen values taken BEFORE the accumulation
+        for g in (dc, pk):
+            assert np.array_equal(2.0 * g.envelope, f.envelope)
+            assert (g.grid, g.carrier, g.wavelength) == (grid, spec, lam)
+            with pytest.raises(dataclasses.FrozenInstanceError):
+                g.wavelength = 1.60e-6
+        assert rp.wavelength == 1.55e-6
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
-            f.wavelength = 1.55e-6
-            f.wavelength = 1.60e-6
-        assert len(w) == 2 and all(x.category is DeprecationWarning for x in w)
-        assert f.wavelength == 1.60e-6              # still takes effect
-        # the horizon must be ahead of the running library, via the shared
-        # resolver rather than a literal
-        from lumenairy import __version__ as _running
-        from lumenairy._deprecation import (
-            NEXT_REMOVAL_VERSION, _version_tuple, resolve_removal_version)
-        # RESTATED 2026-09-20 (5.48.0): the first draft asserted the resolver
-        # returns the STATED horizon, which is only true while that horizon
-        # has not shipped.  The contract is: the live horizon is always after
-        # the running version; it equals the stated one until that ships,
-        # and NEXT_REMOVAL_VERSION (the recorded slip) from then on.  5.48.0
-        # shipped the stated '5.48' with the removal not executed, so the
-        # freeze now resolves to the slipped horizon.
-        _stated = CF._CARRIER_FIELD_FROZEN_IN
-        _live = resolve_removal_version(_stated)
-        assert _version_tuple(_live) > _version_tuple(_running), (
-            _stated, _live, _running)
-        _expected = (_stated if _version_tuple(_stated) > _version_tuple(_running)
-                     else NEXT_REMOVAL_VERSION)
-        assert _live == _expected, (_stated, _live, _expected, _running)
-        # '_built' is a gate, not a field: it must not reach the dataclass API
+            for value in (1.55e-6, 1.60e-6):
+                with pytest.raises(dataclasses.FrozenInstanceError):
+                    f.wavelength = value
+        assert f.wavelength == lam                  # nothing took effect
+        assert not [x for x in w if x.category is DeprecationWarning], w
+        # the shim's scaffolding went with it: no horizon constants, no gate
+        assert not hasattr(CF, '_CARRIER_FIELD_FROZEN_IN')
+        assert not hasattr(CF, '_CARRIER_FIELD_FROZEN_SINCE')
+        assert CarrierField.__dataclass_params__.frozen
+        assert not hasattr(f, '_built')
         assert '_built' not in [fl.name for fl in dataclasses.fields(f)]
         assert '_built' not in repr(f)
 

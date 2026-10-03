@@ -418,20 +418,20 @@ def test_s5_single_beamlet_reproduces_the_analytic_gaussian():
             f'discrepancy was exp(+2 i psi), psi = {psi:.6f})')
 
 
-def test_s5_gouy_compensator_api_is_a_deprecated_no_op():
-    """The three functions that existed to compensate the S5 sign error."""
-    from lumenairy.propagators.gbd import asm_field_to_gbd, gbd_asm_gouy_phase, gbd_field_to_asm
-    E = np.ones((4, 4), dtype=np.complex128)
-    kw = dict(z=1e-3, wavelength=1e-6, dx=4e-6, waist_factor=1.5)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter('always')
-        assert gbd_asm_gouy_phase(kw['z'], kw['wavelength'], kw['dx'],
-                                  kw['waist_factor']) == 0.0
-        assert np.array_equal(gbd_field_to_asm(E, **kw), E)
-        assert np.array_equal(asm_field_to_gbd(E, **kw), E)
-    cats = [c.category for c in caught]
-    assert sum(issubclass(c, DeprecationWarning) for c in cats) >= 3, (
-        f'all three compensators must warn; got {cats}')
+@pytest.mark.parametrize('name', ['gbd_asm_gouy_phase', 'gbd_field_to_asm',
+                                  'asm_field_to_gbd'])
+def test_s5_gouy_compensator_api_is_removed(name):
+    """The three functions that existed to compensate the S5 sign error.
+
+    Deprecated no-ops from v5.46 (this audit's fix made them ``0.0`` and the
+    identity), scheduled for v5.48, slipped once, REMOVED in v5.50.  The
+    pin used to assert that they warn and do nothing; it now asserts that
+    importing one fails, which is what a caller who never deleted the call
+    sees.  The fix itself is pinned by the exact-Gaussian test above."""
+    import lumenairy.propagators.gbd as gbd
+    assert not hasattr(gbd, name)
+    with pytest.raises(ImportError):
+        exec(f'from lumenairy.propagators.gbd import {name}', {})
 
 
 # ===========================================================================

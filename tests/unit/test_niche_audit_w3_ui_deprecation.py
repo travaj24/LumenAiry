@@ -558,37 +558,62 @@ class TestDeprecationRemovalSchedule:
         # A future horizon is passed through untouched.
         assert dep.resolve_removal_version('6.0') == '6.0'
 
+    @staticmethod
+    def _entry_problems(stated, live, stated_at_sites, cur):
+        """The registry-entry invariant, as a list of violations."""
+        out = []
+        if dep._version_tuple(stated) > cur:
+            out.append(f'REMOVAL_SCHEDULE[{stated!r}] re-schedules a horizon '
+                       f'that has not shipped (running {la.__version__})')
+        if dep._version_tuple(live) <= cur:
+            out.append(f'REMOVAL_SCHEDULE[{stated!r}]={live!r} is not in the '
+                       f'future (running {la.__version__})')
+        if stated not in stated_at_sites:
+            out.append(f'REMOVAL_SCHEDULE[{stated!r}] has no live '
+                       f'version_removed= call site -- a completed removal '
+                       f'must delete its entry')
+        return out
+
     def test_executed_removals_leave_no_registry_entry(self):
-        """v5.30 (W5) removal-bookkeeping invariant, RESTATED 2026-09-19 (5.48.0).
+        """v5.30 (W5) removal-bookkeeping invariant, RESTATED 2026-09-19 (5.48.0)
+        and again 2026-10-03 (5.50.0).
 
         ``check_removal_schedule`` requires every ``REMOVAL_SCHEDULE`` VALUE to
         lie in the future (invariant 2), so an entry for a COMPLETED removal
         can never be satisfied; the registry's convention is to DELETE the
-        entry and tombstone it in a comment.  The first draft of this pin
-        asserted the registry EMPTY -- the state after v5.30 executed its only
-        entry -- which also forbade the registry's documented use: a
-        deliberate slip of a horizon whose removals were NOT executed.  5.48.0
-        is exactly that (``{'5.48': '5.50'}`` for the three GBD aliases and
-        the ``CarrierField`` freeze).  The invariant, stated as itself: every
-        entry's STATED version has shipped, its LIVE version lies in the
+        entry and tombstone it in a comment.  The invariant, stated as itself:
+        every entry's STATED version has shipped, its LIVE version lies in the
         future, and at least one reachable ``version_removed=`` call site
         still advertises the stated version -- an entry whose call sites are
-        gone is a completed removal and must be deleted.  Two-sided: a
-        tombstone-shaped entry (``{'5.27': '5.32'}``, no call site) fails
-        the call-site clause; a not-yet-shipped key fails the first."""
+        gone is a completed removal and must be deleted.
+
+        History of the registry this pin has seen: empty after v5.30 executed
+        ``{'5.27': '5.32'}``; ``{'5.48': '5.50'}`` from 5.48.0 (the three GBD
+        no-op aliases and the ``CarrierField`` freeze, slipped once); EMPTY
+        again from 5.50.0, which executed that slip.  An empty registry makes
+        the loop over the live entries vacuous, so the invariant is ALSO run
+        on two simulated entries (not written to the registry) to keep the
+        pin two-sided: the retired ``{'5.48': NEXT_REMOVAL_VERSION}`` -- a
+        completed removal, no call site left -- must fail the call-site
+        clause, and a not-yet-shipped key must fail the first clause."""
         cur = dep._version_tuple(la.__version__)
         stated_at_sites = {ver for _rel, _line, ver in _version_removed_sites()}
         for stated, live in dep.REMOVAL_SCHEDULE.items():
-            assert dep._version_tuple(stated) <= cur, (
-                f'REMOVAL_SCHEDULE[{stated!r}] re-schedules a horizon that has '
-                f'not shipped (running {la.__version__})')
-            assert dep._version_tuple(live) > cur, (
-                f'REMOVAL_SCHEDULE[{stated!r}]={live!r} is not in the future '
-                f'(running {la.__version__})')
-            assert stated in stated_at_sites, (
-                f'REMOVAL_SCHEDULE[{stated!r}] has no live version_removed= '
-                f'call site -- a completed removal must delete its entry')
+            problems = self._entry_problems(stated, live, stated_at_sites, cur)
+            assert not problems, problems
         assert dep.check_removal_schedule() == []
+        # 5.50.0 executed the 5.48 slip: the entry is gone AND no call site
+        # still states the 5.48 horizon (the second half is what licenses the
+        # first).
+        assert '5.48' not in dep.REMOVAL_SCHEDULE, dep.REMOVAL_SCHEDULE
+        assert '5.48' not in stated_at_sites, stated_at_sites
+        # Two-sided on simulated entries.
+        retired = self._entry_problems('5.48', dep.NEXT_REMOVAL_VERSION,
+                                       stated_at_sites, cur)
+        assert len(retired) == 1 and 'no live version_removed=' in retired[0], (
+            retired)
+        future_key = self._entry_problems('99.0', '99.2', stated_at_sites, cur)
+        assert any('has not shipped' in m for m in future_key), future_key
 
     def test_the_module_itself_stays_fully_functional(self):
         """Removing the shims must not gut the registry: the next

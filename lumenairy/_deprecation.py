@@ -99,8 +99,8 @@ __all__ = [
 #     returns no violations, so a shipped release cannot carry a horizon it
 #     has already passed.
 #
-# The API-transition registry is EMPTY today; the removal registry carries
-# one slip (5.48 -> 5.50, see REMOVAL_SCHEDULE).  Every earlier scheduled removal and the one API
+# Both registries are EMPTY today (v5.50).  Every scheduled removal -- the
+# last being the 5.48 -> 5.50 slip, executed in v5.50 -- and the one API
 # transition have been executed, and the entries are retired with them.
 # The module stays fully functional -- the next deprecation cycle, or the
 # next API transition, registers here as before.
@@ -108,16 +108,31 @@ __all__ = [
 #: Removal horizon for deprecations whose stated version has shipped.  Set
 #: it to a version the project can realistically hit; bumping it is a
 #: deliberate one-line slip, recorded in the CHANGELOG.
-NEXT_REMOVAL_VERSION = '5.50'
+#:
+#: ``'5.52'`` since v5.50: the v5.50 release executed every removal that was
+#: scheduled for ``'5.50'``, and :func:`check_removal_schedule` invariant 1
+#: requires this horizon to lie AFTER the running version, so it cannot stay
+#: at ``'5.50'``.  ``'5.52'`` is one two-minor cycle ahead (the cadence of the
+#: 5.46 -> 5.48 -> 5.50 horizons), which also covers a 5.51 release and every
+#: 5.50.x / 5.51.x patch without another bump.  No live deprecation targets
+#: it today; it is the backstop horizon and the value
+#: :data:`API_TRANSITION_VERSION` is bound to.
+NEXT_REMOVAL_VERSION = '5.52'
 
 #: Re-scheduled horizons: ``{version as written at the shim call site:
 #: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule
 #: so the message can name both; values must lie in the future.
 #:
-#: **One entry (5.48.0)**: ``'5.48' -> '5.50'``, the three GBD aliases
-#: (``gbd_field_to_asm``, ``asm_field_to_gbd``, ``match_global_phase``,
-#: deprecated in 5.46 with ``version_removed='5.48'``) and the ``CarrierField``
-#: freeze, whose removal was not executed in the 5.48.0 wave.  (Earlier
+#: **Currently EMPTY.**  Tombstone, v5.50: the ``'5.48' -> '5.50'`` entry
+#: (added in 5.48.0) was removed with the items it scheduled -- the three GBD
+#: no-op aliases ``gbd_asm_gouy_phase``, ``gbd_field_to_asm`` and
+#: ``asm_field_to_gbd`` (deprecated in 5.46 with ``version_removed='5.48'``)
+#: were deleted, and ``CarrierField`` became ``frozen=True`` with its
+#: assignment-warning shim and ``_CARRIER_FIELD_FROZEN_SINCE`` /
+#: ``_CARRIER_FIELD_FROZEN_IN`` deleted.  The 5.48.0 text named
+#: ``match_global_phase`` in place of ``gbd_asm_gouy_phase``; that was a
+#: misnaming -- ``match_global_phase`` was never deprecated, is the
+#: replacement the 5.46 notes point to, and stays public.  (Earlier
 #: tombstone, v5.30: the ``'5.27' -> '5.32'`` source-factory kwarg entry was
 #: removed with the kwargs it scheduled.)
 #:
@@ -132,7 +147,7 @@ NEXT_REMOVAL_VERSION = '5.50'
 #: ``version_removed='5.27'`` (or any other already-shipped horizon) to
 #: :data:`NEXT_REMOVAL_VERSION`, so deleting an entry cannot resurrect a
 #: past-horizon banner.
-REMOVAL_SCHEDULE: dict[str, str] = {'5.48': '5.50'}
+REMOVAL_SCHEDULE: dict[str, str] = {}
 
 #: Version at which any scheduled **API-contract transition** lands -- the
 #: default-flip counterpart to :data:`NEXT_REMOVAL_VERSION` (which schedules

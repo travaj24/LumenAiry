@@ -4,6 +4,56 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Removed -- the 5.46 deprecations: three GBD no-op converters and the `CarrierField` assignment warning
+
+Both items were deprecated in 5.46.0, scheduled for removal in 5.48, and
+slipped once to 5.50 by the 5.48.0 release.  This release executes the
+removals.  Code that ran on 5.49 without a `DeprecationWarning` from them is not
+affected.
+
+* **`gbd_asm_gouy_phase`, `gbd_field_to_asm`, `asm_field_to_gbd`** are deleted
+  from `lumenairy.propagators.gbd` and from the `lumenairy.propagators` and
+  `lumenairy` namespaces.  They compensated a GBD-vs-ASM global phase that
+  audit S5 (5.46.0) showed was a sign error in the beamlet Gouy phase; since
+  5.46.0 they returned `0.0` and their input unchanged.  **Way forward:**
+  delete the call.  A GBD free-space field already matches
+  `angular_spectrum_propagate` in absolute phase.  To line up the global phase
+  of any field against a reference field of the same beam (for example from
+  another solver), use `match_global_phase(E, reference)`, which was never
+  deprecated and is unchanged.  The 5.48.0 notes below listed
+  `match_global_phase` among the deprecated aliases in place of
+  `gbd_asm_gouy_phase`; that was a misnaming.
+* **`CarrierField` is a frozen dataclass**, like its `CarrierSpec` and
+  `FieldGrid` members.  Assigning to an attribute of a built field
+  (`field.envelope = ...`, `field.wavelength = ...`) warned from 5.46.0 and
+  still took effect; it now raises `dataclasses.FrozenInstanceError` and
+  changes nothing.  The warning shim and the private constants
+  `_CARRIER_FIELD_FROZEN_SINCE` / `_CARRIER_FIELD_FROZEN_IN` are deleted.  The
+  class stays unhashable, as it was while mutable.  **Way forward:** build a
+  changed field with `dataclasses.replace(field, wavelength=...)` (which re-runs
+  every construction check), `field.with_provenance(...)`, `re_reference`, or
+  a new `CarrierField(...)`; for in-place accumulation write
+  `np.add(acc.envelope, other, out=acc.envelope)`, which is bit-identical to
+  `acc.envelope += other` and needs no rebind (the freeze is shallow, so the
+  envelope array stays writable).
+
+No numerical output moves.  Measured before and after on the Windows py3.14
+and WSL py3.12 builds: `converge_gbd_sampling` (which calls
+`match_global_phase` internally) and `match_global_phase` return byte-identical
+results on two fixtures, and `re_reference`, `aggregate`, `full_field`,
+`dataclasses.replace` and a pickle round trip of a `CarrierField` return
+byte-identical envelopes.  Record:
+`docs/audits/BUILD_REMOVALS_5_50_0_2026_10_03.md`.
+
+### Changed -- the deprecation horizon moves from 5.50 to 5.52, and the removal registry is empty
+
+`lumenairy._deprecation.REMOVAL_SCHEDULE` loses its only entry,
+`{'5.48': '5.50'}`, because the removals it scheduled are done (the registry
+deletes an executed entry rather than keeping it).  `NEXT_REMOVAL_VERSION`
+moves from `'5.50'` to `'5.52'`, because `check_removal_schedule()` requires it
+to lie after the running version; `API_TRANSITION_VERSION` stays bound to it.
+No live deprecation states 5.52.
+
 ### Added -- pure 2-D PMM (curved cells, Phase E1): out-of-plane tensors and slanted walls inside curved cells
 
 Curved cells (circles, ellipses, rounded corners, sinusoidal walls) of the

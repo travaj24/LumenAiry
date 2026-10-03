@@ -1006,34 +1006,29 @@ def test_s3_exit_vertex_prices_the_sag_leg_at_the_exit_medium_index():
 
 
 # ===========================================================================
-# S5 -- the deprecated compensator API.
+# S5 -- the compensator API, removed in v5.50.
 # ===========================================================================
 
-def test_s5_compensator_api_is_a_warned_no_op_that_still_validates():
-    """S5: the three compensating functions must be no-ops, must warn
-    through ``_deprecation``, and must keep validating their field argument
-    so an existing pipeline fails the same way it used to.  All three
-    properties are exact (identity / warning count / raised type), so there
-    is no numeric bar to derive.
-    """
-    from lumenairy.propagators.gbd import (
-        asm_field_to_gbd,
-        gbd_asm_gouy_phase,
-        gbd_field_to_asm,
-    )
-    E = np.ones((8, 8), dtype=np.complex128)
-    with warnings.catch_warnings(record=True) as rec:
-        warnings.simplefilter('always')
-        phase = gbd_asm_gouy_phase(1e-3, 1e-6, 5e-6)
-        a = gbd_field_to_asm(E, z=1e-3, wavelength=1e-6, dx=5e-6)
-        b = asm_field_to_gbd(E, z=1e-3, wavelength=1e-6, dx=5e-6)
-    msgs = [str(w.message).lower() for w in rec]
-    assert phase == 0.0
-    assert np.array_equal(a, E) and np.array_equal(b, E)
-    assert sum('deprecat' in m for m in msgs) == 3, (
-        f'all three must warn as deprecated; got {msgs}')
-    with pytest.raises(ValueError):
-        gbd_field_to_asm(np.ones(4), z=1e-3, wavelength=1e-6, dx=5e-6)
+def test_s5_compensator_api_is_removed_and_its_horizon_is_retired():
+    """S5: the three compensating functions were deprecated no-ops from
+    v5.46 (scheduled for v5.48, slipped once) and were REMOVED in v5.50.
+    This pin used to assert the no-op, the warning and the validation; it
+    now asserts the removal, which is exact (attribute present or not, a
+    source string present or not), so there is no numeric bar to derive.
+
+    Two sides: none of the three names survives in the module, AND the
+    module no longer carries a ``version_removed='5.48'`` call site -- the
+    state that lets the ``{'5.48': '5.50'}`` registry entry be retired
+    without leaving a banner that would re-advertise a shipped horizon."""
+    import inspect
+
+    import lumenairy.propagators.gbd as gbd
+    for name in ('gbd_asm_gouy_phase', 'gbd_field_to_asm',
+                 'asm_field_to_gbd'):
+        assert not hasattr(gbd, name), name
+    src = inspect.getsource(gbd)
+    assert "version_removed='5.48'" not in src
+    assert 'warn_deprecated_alias(' not in src
 
 
 def test_ruling1_merit_warns_when_the_reference_optic_collapses():

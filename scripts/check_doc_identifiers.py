@@ -171,6 +171,11 @@ CURATED: Dict[str, str] = {
     'width_x': 'removed kwarg, documented as removed',
     'RCWADock': 'renamed class, documented as renamed',
     '_paraxial_trace': 'removed private helper, documented as removed',
+    # 5.50.0: the three GBD no-op converters deprecated in 5.46 (audit S5)
+    # were removed; the Migration Guide's 5.46.0 and 5.50.0 sections name them
+    'gbd_asm_gouy_phase': 'removed API, documented as removed',
+    'gbd_field_to_asm': 'removed API, documented as removed',
+    'asm_field_to_gbd': 'removed API, documented as removed',
     # local variables / expressions inside an illustrative snippet
     'E.dtype': 'local expression in an example',
     'phase_exp.dtype': 'local expression in an example',

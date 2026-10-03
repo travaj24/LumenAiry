@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/_deprecation.py
-ast_sha256: d4acc2085a13fdd88674facc3828e5f5394dc0805da18cdcb58b0b5fae317d4e
-token_sha256: 68a9f5a6c710d9929f5c6a555080aa57acf181c833af2e4fa7acf3ac2055ce32
+ast_sha256: a0d5d5a9c3e1a0171b48f9f0bbb734928d1c9f7d046bdd4135b1e5f3dec99fba
+token_sha256: 4db42d74685d9a1ed76c31aa9267ca911ed94965c9905e0b71e967e251461fcb
 pre_relocation_lines: 688
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-09-20 -- 5.48.0: NEXT_REMOVAL_VERSION 5.48 -> 5.50 and REMOVAL_SCHEDULE gains the slip entry; the three GBD aliases and the CarrierField freeze were not removed in the Wave 5 release
+re_recorded: 2026-10-03 -- 5.50.0: the 5.48 -> 5.50 slip was executed, so REMOVAL_SCHEDULE is {} (entry deleted per invariant 2) and NEXT_REMOVAL_VERSION moves 5.50 -> 5.52 (invariant 1 needs a horizon after 5.50.x; one two-minor cycle); API_TRANSITION_VERSION stays bound to it
 -->
 
 
@@ -292,3 +293,31 @@ v5.2 (ROADMAP opportunistic item -- "_deprecation.py orphan helpers"):
     name.
 ```
 
+## 5.50.0 -- the 5.48 -> 5.50 slip executed; registry empty; horizon 5.52
+
+*Not a relocation block: a record of a registry change.*  5.48.0 added
+`REMOVAL_SCHEDULE = {'5.48': '5.50'}` and moved `NEXT_REMOVAL_VERSION` from
+`'5.48'` to `'5.50'` because the removals scheduled for 5.48 were not executed
+in that release.  5.50.0 executed them:
+
+* `lumenairy.propagators.gbd`: `gbd_asm_gouy_phase`, `gbd_field_to_asm`,
+  `asm_field_to_gbd` deleted (see docs/history/lumenairy.propagators.gbd.md);
+* `lumenairy.propagators.carrier_field`: `CarrierField` is
+  `@dataclass(frozen=True)`; its assignment-warning shim and
+  `_CARRIER_FIELD_FROZEN_SINCE` / `_CARRIER_FIELD_FROZEN_IN` deleted (see
+  docs/history/carrier_field.md).
+
+The entry was then DELETED from `REMOVAL_SCHEDULE` (now `{}`), as the module's
+convention requires: `check_removal_schedule` invariant 2 needs every value to
+lie after the running version, which `'5.50'` cannot do in a 5.50.x release.
+For the same reason (invariant 1) `NEXT_REMOVAL_VERSION` moved from `'5.50'` to
+`'5.52'`, one two-minor cycle ahead like the 5.46 -> 5.48 -> 5.50 horizons, so a
+5.51 release and every 5.50.x / 5.51.x patch pass without another bump.
+`API_TRANSITION_VERSION` stays bound to it.  No live deprecation states 5.52;
+the remaining `version_removed=` call sites in the package state `'6.0'`.
+
+Correction recorded here: the 5.48.0 comment on `REMOVAL_SCHEDULE` (and the
+5.48.0 CHANGELOG / Migration Guide text) listed the three GBD aliases as
+`gbd_field_to_asm`, `asm_field_to_gbd` and `match_global_phase`.  The third
+deprecated name was `gbd_asm_gouy_phase`; `match_global_phase` was never
+deprecated, is the replacement the 5.46 notes name, and stays public.

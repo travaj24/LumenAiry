@@ -12,20 +12,20 @@ S5.  The give-away, recorded by the audit and re-measured in
 offset depended on ``waist_factor``, a purely numerical knob.
 
 These tests therefore now assert the OPPOSITE of the v5.21 pins:
-``_relerr(Gz, Az)`` must be SMALL with no converter, and the three converter
-functions are deprecated no-ops.  ``match_global_phase`` -- the general,
-propagator-agnostic primitive -- is unaffected and still tested.
+``_relerr(Gz, Az)`` must be SMALL with no converter.  The three converter
+functions (``gbd_asm_gouy_phase``, ``gbd_field_to_asm``, ``asm_field_to_gbd``)
+were deprecated no-ops from v5.46 and were REMOVED in v5.50 (scheduled for
+v5.48, slipped once); ``test_converters_are_removed`` pins their absence.
+``match_global_phase`` -- the general, propagator-agnostic primitive, never
+deprecated -- is unaffected and still tested.
 """
-import warnings
+import importlib
 
 import numpy as np
 import pytest
 
 from lumenairy.propagators.asm import angular_spectrum_propagate
 from lumenairy.propagators.gbd import (
-    asm_field_to_gbd,
-    gbd_asm_gouy_phase,
-    gbd_field_to_asm,
     match_global_phase,
     propagate_gbd_freespace,
 )
@@ -122,26 +122,32 @@ def test_gbd_to_asm_handoff_matches_pure_asm_without_conversion():
     assert _relerr(hybrid, ref) < 5e-3
 
 
-@pytest.mark.parametrize('fn_name', ['gbd_asm_gouy_phase',
-                                     'gbd_field_to_asm',
-                                     'asm_field_to_gbd'])
-def test_converters_are_deprecated_no_ops(fn_name):
-    """The three compensator functions warn and do nothing."""
-    N, dx = 32, 4e-6
-    E = _gauss(N, dx, off=20e-6, tilt=0.002)
-    kw = dict(z=5e-3, wavelength=LAM, dx=dx, waist_factor=1.5)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter('always')
-        if fn_name == 'gbd_asm_gouy_phase':
-            out = gbd_asm_gouy_phase(kw['z'], kw['wavelength'], kw['dx'],
-                                     kw['waist_factor'])
-            assert out == 0.0
-        elif fn_name == 'gbd_field_to_asm':
-            assert np.array_equal(gbd_field_to_asm(E, **kw), E)
-        else:
-            assert np.array_equal(asm_field_to_gbd(E, **kw), E)
-    assert any(issubclass(c.category, DeprecationWarning) for c in caught), (
-        f"{fn_name} must emit a DeprecationWarning")
+_REMOVED_IN_5_50 = ('gbd_asm_gouy_phase', 'gbd_field_to_asm',
+                    'asm_field_to_gbd')
+
+
+@pytest.mark.parametrize('fn_name', _REMOVED_IN_5_50)
+@pytest.mark.parametrize('modname', ['lumenairy.propagators.gbd',
+                                     'lumenairy.propagators', 'lumenairy'])
+def test_converters_are_removed(fn_name, modname):
+    """The three compensator functions are GONE (v5.50).
+
+    They were deprecated no-ops from v5.46 (``0.0`` and the identity, once
+    audit S5 fixed the conjugated beamlet Gouy phase they compensated),
+    scheduled for removal in v5.48 and slipped once to v5.50, where the
+    removal was executed.  A caller deletes the call: a GBD free-space field
+    already matches ASM in absolute phase (``test_s5_*`` above).  Each is
+    absent from the module that defined it and from both re-export layers,
+    as an attribute AND from ``__all__``, so ``from ... import *`` cannot
+    resurrect it.  The never-deprecated replacement stays public."""
+    mod = importlib.import_module(modname)
+    assert not hasattr(mod, fn_name), f'{modname}.{fn_name} still exists'
+    assert fn_name not in getattr(mod, '__all__', ()), (
+        f'{fn_name} still listed in {modname}.__all__')
+    with pytest.raises(ImportError):
+        exec(f'from {modname} import {fn_name}', {})
+    # Premise of the migration note: the replacement IS still public.
+    assert callable(getattr(mod, 'match_global_phase'))
 
 
 def test_match_global_phase():
