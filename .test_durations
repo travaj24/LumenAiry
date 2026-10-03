@@ -17010,5 +17010,12 @@
   "tests/unit/test_pmm2d_staggered_curved_c.py::test_c7_convenience_entry_is_the_one_layer_stack_byte_for_byte": 5.06,
   "tests/unit/test_pmm2d_staggered_curved_c.py::test_c9_incident_decomposition_is_window_free_and_off_the_floor": 21.13,
   "tests/unit/test_pmm2d_staggered_curved_c.py::test_c9_incident_renormalisation_keeps_the_film_exact": 37.93,
-  "tests/unit/test_pmm2d_staggered_curved_c.py::test_c8_efficiency_entry_refuses_shapes_and_points_at_jones": 0.01
+  "tests/unit/test_pmm2d_staggered_curved_c.py::test_c8_efficiency_entry_refuses_shapes_and_points_at_jones": 0.01,
+  "tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_fingerprint_sees_every_arc_parameter": 0.02,
+  "tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_circle_fourfold_symmetry_is_exact": 6.01,
+  "tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_normal_kink_is_harmless_and_position_shift_is_not": 8.52,
+  "tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_corner_rule_on_a_regular_cell_is_the_tensor_rule": 0.31,
+  "tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_duffy_is_spectral_on_every_shape_and_plain_gauss_is_n2": 0.27,
+  "tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_circle_lands_on_a_second_fem_radius": 5.3,
+  "tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_inconsistent_curve_derivative_is_refused": 0.01
 }

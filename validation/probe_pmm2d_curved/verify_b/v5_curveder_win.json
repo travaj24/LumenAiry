@@ -1,0 +1,21 @@
+{
+ "accepted": true,
+ "RT_diff": {
+  "5": 0.03189658827567371,
+  "7": 0.004570532853591134
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_vcurved_b\\lumenairy\\__init__.py",
+  "machine": "Tesla_Ryzen",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  },
+  "when": "2026-10-02 23:31:36"
+ }
+}

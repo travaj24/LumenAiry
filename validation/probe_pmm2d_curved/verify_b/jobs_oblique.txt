@@ -1,0 +1,90 @@
+rung c3 9 25.0000 0.0000
+rung c3 9 24.2498 -0.0000
+rung c3 9 25.0000 40.0000
+rung c3 9 35.2731 -28.0614
+rung c3 9 40.4136 119.9586
+rung c3 8 25.0000 0.0000
+rung c3 8 24.2498 -0.0000
+rung c3 8 25.0000 40.0000
+rung c3 8 35.2731 -28.0614
+rung c3 8 40.4136 119.9586
+rung c3 7 25.0000 0.0000
+rung c3 7 24.2498 -0.0000
+rung c3 7 25.0000 40.0000
+rung c3 7 35.2731 -28.0614
+rung c3 7 40.4136 119.9586
+rung c3 6 25.0000 0.0000
+rung c3 6 24.2498 -0.0000
+rung c3 6 25.0000 40.0000
+rung c3 6 35.2731 -28.0614
+rung c3 6 40.4136 119.9586
+rung c5 6 25.0000 0.0000
+rung c5 6 24.2498 -0.0000
+rung c5 6 25.0000 40.0000
+rung c5 6 35.2731 -28.0614
+rung c5 6 40.4136 119.9586
+rung c5 5 25.0000 0.0000
+rung c5 5 24.2498 -0.0000
+rung c5 5 25.0000 40.0000
+rung c5 5 35.2731 -28.0614
+rung c5 5 40.4136 119.9586
+rung c5 4 25.0000 0.0000
+rung c5 4 24.2498 -0.0000
+rung c5 4 25.0000 40.0000
+rung c5 4 35.2731 -28.0614
+rung c5 4 40.4136 119.9586
+momentum 8 curved
+momentum 8 flat
+momentum 7 curved
+momentum 7 flat
+momentum 6 curved
+momentum 6 flat
+momentum 5 curved
+momentum 5 flat
+momentum 4 curved
+momentum 4 flat
+film c3 4 25 0
+film c3 5 25 0
+film c3 6 25 0
+film c3 7 25 0
+film c3 8 25 0
+film c5 4 25 0
+film c5 5 25 0
+film c5 6 25 0
+film c5 7 25 0
+film c5 8 25 0
+film c3r48 4 25 0
+film c3r48 5 25 0
+film c3r48 6 25 0
+film c3r48 7 25 0
+film c3r48 8 25 0
+film c3r24 4 25 0
+film c3r24 5 25 0
+film c3r24 6 25 0
+film c3r24 7 25 0
+film c3r24 8 25 0
+film flat3 4 25 0
+film flat3 5 25 0
+film flat3 6 25 0
+film flat3 7 25 0
+film flat3 8 25 0
+film flatwide 4 25 0
+film flatwide 5 25 0
+film flatwide 6 25 0
+film flatwide 7 25 0
+film flatwide 8 25 0
+film c3id 4 25 0
+film c3id 5 25 0
+film c3id 6 25 0
+film c3id 7 25 0
+film c3id 8 25 0
+film c3 4 0 0
+film flatwide 4 0 0
+film c3 5 0 0
+film flatwide 5 0 0
+film c3 6 0 0
+film flatwide 6 0 0
+film c3 7 0 0
+film flatwide 7 0 0
+film c3 8 0 0
+film flatwide 8 0 0

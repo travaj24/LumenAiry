@@ -1,0 +1,48 @@
+fillet 0.0125 7 grade
+square 7 grade
+square 14
+fillet 0.0125 8
+fillet 0.025 8
+fillet 0.05 8
+fillet 0.1 8
+fillet 0.2 8
+square 13
+fillet 0.0125 6 grade
+fillet 0.025 6 grade
+fillet 0.05 6 grade
+square 6 grade
+square 12
+fillet 0.0125 7
+fillet 0.025 7
+fillet 0.05 7
+fillet 0.1 7
+fillet 0.2 7
+fillet 0.0125 5 grade
+fillet 0.0125 4 grade
+fillet 0.025 5 grade
+fillet 0.025 4 grade
+fillet 0.05 5 grade
+fillet 0.05 4 grade
+square 5 grade
+square 4 grade
+square 11
+square 10
+square 9
+square 8
+square 7
+square 6
+fillet 0.0125 6
+fillet 0.025 6
+fillet 0.05 6
+fillet 0.1 6
+fillet 0.2 6
+fillet 0.0125 5
+fillet 0.025 5
+fillet 0.05 5
+fillet 0.1 5
+fillet 0.2 5
+fillet 0.0125 4
+fillet 0.025 4
+fillet 0.05 4
+fillet 0.1 4
+fillet 0.2 4

@@ -1,0 +1,88 @@
+{
+ "empty_corner_list": {
+  "Lmat": {
+   "rel": 5.043653282099136e-14,
+   "bitwise": false
+  },
+  "Rmat": {
+   "rel": 2.788585834582045e-16,
+   "bitwise": false
+  },
+  "Stt": {
+   "rel": 5.029992502122259e-14,
+   "bitwise": false
+  },
+  "Schur": {
+   "rel": 1.5840612446709314e-14,
+   "bitwise": false
+  }
+ },
+ "empty_list_two_cells": {
+  "Lmat": {
+   "rel": 5.044250964579298e-14,
+   "bitwise": false
+  },
+  "Rmat": {
+   "rel": 2.788585834582045e-16,
+   "bitwise": false
+  },
+  "Stt": {
+   "rel": 5.029992502122259e-14,
+   "bitwise": false
+  },
+  "Schur": {
+   "rel": 1.5607662263669472e-14,
+   "bitwise": false
+  }
+ },
+ "forced_corner_smooth": {
+  "Lmat": {
+   "rel": 1.370983338620617e-13,
+   "bitwise": false
+  },
+  "Rmat": {
+   "rel": 2.5283178233543873e-15,
+   "bitwise": false
+  },
+  "Stt": {
+   "rel": 1.368000986139769e-13,
+   "bitwise": false
+  },
+  "Schur": {
+   "rel": 1.2171647063831791e-14,
+   "bitwise": false
+  }
+ },
+ "forced_4corners_smooth": {
+  "Lmat": {
+   "rel": 1.0076812218128519e-13,
+   "bitwise": false
+  },
+  "Rmat": {
+   "rel": 7.138779736530035e-15,
+   "bitwise": false
+  },
+  "Stt": {
+   "rel": 1.0046208620550174e-13,
+   "bitwise": false
+  },
+  "Schur": {
+   "rel": 9.434482413113637e-15,
+   "bitwise": false
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_vcurved_b\\lumenairy\\__init__.py",
+  "machine": "Tesla_Ryzen",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  },
+  "when": "2026-10-02 22:57:16"
+ }
+}
