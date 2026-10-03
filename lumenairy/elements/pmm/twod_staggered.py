@@ -2226,7 +2226,7 @@ def _stag_map_detj_refuse(sg, where):
             f"allowed only at a cell CORNER, the singular vertices).")
 
 
-def _stag_map_weights(bx, by, cmap, eps_cell, rule, mu_cell=None):
+def _stag_map_weights(bx, by, cmap, eps_cell, rule, mu_cell=None, xp=np):
     """Effective-tensor weights at every quadrature node of every ``(u, v)``
     cell, for ``eps_cell`` (and ``mu_cell``) under the map ``cmap``.
 
@@ -2257,6 +2257,9 @@ def _stag_map_weights(bx, by, cmap, eps_cell, rule, mu_cell=None):
     nq = xg.size
     Nx, Ny = bx.N, by.N
     shp = (Nx, Ny, nq, nq)
+    if xp is not np:
+        return _stag_map_weights_traced(bx, by, cmap, eps_cell, mu_cell, quad,
+                                        xg, xp)
     if np.ndim(eps_cell) == 4 or mu_cell is not None:
         return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
                                         quad, xg, shp)
@@ -2295,9 +2298,103 @@ def _stag_map_weights(bx, by, cmap, eps_cell, rule, mu_cell=None):
     return {k: _StagNodeWeight(W[k], P[k]) for k in W}
 
 
-def _stag_map_as33(spec, Nx, Ny):
+def _stag_map_node_jacobian(bx, by, cmap, quad, xg, xp):
+    """The map's Jacobian entries ``(x_u, x_v, y_u, y_v)`` at every node the
+    mapped assembly integrates on: the ``(Nx, Ny, nq, nq)`` tensor-rule
+    arrays and, per corner-rule cell of ``quad``, the ``(Nq,)`` point
+    arrays.  Built by STACKING (no in-place writes), so a TRACED map
+    (Phase E3: vertex images and edge curves that are functions of JAX
+    shape parameters on the twin's frozen ``(u, v)`` grid) evaluates through
+    the same :meth:`geom` / :meth:`geom_points` calls the NumPy routes make.
+    Returns ``(J4, P4)``: ``J4`` the four tensor arrays, ``P4[(sx, sy)]``
+    the four point arrays of a corner cell."""
+    pre = getattr(cmap, "prefetch", None)
+    if pre is not None:
+        # a traced map evaluates every cell in ONE batched broadcast (the
+        # per-cell calls below are then memo slices; compile-size economy)
+        pre([(sx, sy, 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg,
+              0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg)
+             for sx in range(bx.N) for sy in range(by.N)])
+        if quad is not None and quad.points:
+            pre([(sx, sy,
+                  0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * ru[0],
+                  0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * rv[0])
+                 for (sx, sy), (ru, rv, _w) in quad.points.items()],
+                grid=False)
+    rows = []
+    for sx in range(bx.N):
+        U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+        col = []
+        for sy in range(by.N):
+            V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+            _X, _Y, xu, xv, yu, yv = cmap.geom(sx, sy, U, V)
+            col.append(xp.stack([xp.broadcast_to(a, (xg.size, xg.size))
+                                 for a in (xu, xv, yu, yv)]))
+        rows.append(xp.stack(col))
+    T = xp.stack(rows)                         # (Nx, Ny, 4, nq, nq)
+    J4 = tuple(T[:, :, k] for k in range(4))
+    P4 = {}
+    if quad is not None:
+        for (sx, sy), (ru, rv, _w) in quad.points.items():
+            U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * ru[0]
+            V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * rv[0]
+            _X, _Y, pu, pv, qu, qv = cmap.geom_points(sx, sy, U, V)
+            P4[(sx, sy)] = (pu, pv, qu, qv)
+    return J4, P4
+
+
+def _stag_map_weights_traced(bx, by, cmap, eps_cell, mu_cell, quad, xg, xp):
+    """The Phase E3 (JAX twin) route of :func:`_stag_map_weights`: the same
+    weights from a possibly TRACED map and traced materials, through the
+    SAME effective-tensor kernels -- :func:`_stag_map_eff` for a scalar
+    non-magnetic cell, :func:`_stag_map_eff_tensor` for a block-form tensor
+    and / or a ``mu`` (``eps_cell`` ``(Nx, Ny)`` or ``(Nx, Ny, 3, 3)``,
+    ``mu_cell`` likewise or ``None``).  The ``det J > 0`` REFUSAL needs
+    concrete values and is not run here: the twin evaluates
+    ``det J`` at every node itself (``_stag_map_node_jacobian``) and poisons
+    its outputs with NaN on a fold (gate E3-4).  Same return layout as the
+    NumPy route."""
+    J4, P4 = _stag_map_node_jacobian(bx, by, cmap, quad, xg, xp)
+    xu, xv, yu, yv = J4
+    Nx, Ny = bx.N, by.N
+    eps = eps_cell
+    scalar = (np.ndim(eps) == 2) and mu_cell is None
+    if scalar:
+        sg = xu * yv - xv * yu
+        W = _stag_map_eff(eps[:, :, None, None], sg, xu * xu + yu * yu,
+                          xu * xv + yu * yv, xv * xv + yv * yv)
+    else:
+        e33 = _stag_map_as33(eps, Nx, Ny, xp=xp)
+        m33 = None if mu_cell is None else _stag_map_as33(mu_cell, Nx, Ny,
+                                                          xp=xp)
+        W = _stag_map_eff_tensor(
+            e33[:, :, None, None],
+            None if m33 is None else m33[:, :, None, None], xu, xv, yu, yv)
+    if quad is None:
+        return W
+    P = {k: {} for k in W}
+    for (sx, sy), (pu, pv, qu, qv) in P4.items():
+        if scalar:
+            sgp = pu * qv - pv * qu
+            Wp = _stag_map_eff(eps[sx, sy], sgp, pu * pu + qu * qu,
+                               pu * pv + qu * qv, pv * pv + qv * qv)
+        else:
+            Wp = _stag_map_eff_tensor(
+                e33[sx, sy], None if m33 is None else m33[sx, sy],
+                pu, pv, qu, qv)
+        for k, v in Wp.items():
+            P[k][(sx, sy)] = v
+    return {k: _StagNodeWeight(W[k], P[k]) for k in W}
+
+
+def _stag_map_as33(spec, Nx, Ny, xp=np):
     """A ``(Nx, Ny)`` scalar or ``(Nx, Ny, 3, 3)`` block-form cell as a
     ``(Nx, Ny, 3, 3)`` tensor cell (a scalar ``s`` becomes ``s I``)."""
+    if xp is not np:
+        a = xp.asarray(spec).astype(_C)
+        if a.ndim == 4:
+            return a
+        return a[:, :, None, None] * xp.eye(3, dtype=_C)
     a = np.asarray(spec, dtype=_C)
     if a.ndim == 4:
         return a
@@ -2390,7 +2487,23 @@ def _stag_quad_axis_factor(basis, s, lset, op, rset, rule, cache, tag="t"):
     return out
 
 
-def _stag_quad_weighted(bx, by, xspec, yspec, W, rule, cache=None):
+def _stag_quad_embedded(basis, factors, key, cache):
+    """``(N, nq, dim, dim)``: the per-segment quadrature factors ``(supL,
+    supR, F)`` of :func:`_stag_quad_axis_factor` embedded into the global
+    index range of ``basis`` (zero outside each segment's support) -- the
+    constant operand of the vectorised traced assembly (Phase E3)."""
+    hit = cache.get(("emb", id(basis), key))
+    if hit is not None:
+        return hit
+    nq = factors[0][2].shape[0]
+    G = np.zeros((basis.N, nq, basis.dim, basis.dim), dtype=_C)
+    for s, (supL, supR, F) in enumerate(factors):
+        G[np.ix_([s], np.arange(nq), supL, supR)] = F[None]
+    cache[("emb", id(basis), key)] = G
+    return G
+
+
+def _stag_quad_weighted(bx, by, xspec, yspec, W, rule, cache=None, xp=np):
     """The 2-D Gauss-quadrature generalisation of
     :meth:`Granet2DTransverseE._eps_weighted` (mass) and
     :meth:`Granet2DTransverseE._eps_dir` (one derivative): ONE function for
@@ -2408,18 +2521,28 @@ def _stag_quad_weighted(bx, by, xspec, yspec, W, rule, cache=None):
     :class:`_StagMapQuad`, whose corner-rule cells are summed over their
     Duffy points instead (same factor kernel, ``loc = sum_q w_q W_q
     X_q Y_q``).  A weight that is identically zero (the shear terms of a
-    separable map) returns the zero block without quadrature."""
+    separable map) returns the zero block without quadrature.
+
+    ``xp`` is the array module of the WEIGHT (Phase E3, the JAX twin): with
+    ``jax.numpy`` the weight may be traced, the per-axis factors (geometry of
+    the frozen ``(u, v)`` grid) stay the NumPy constants of
+    :func:`_stag_quad_axis_factor`, the cell blocks are scatter-added
+    out of place, and the zero-weight shortcut is skipped (a traced weight
+    has no concrete value to test; the quadrature of an exact zero weight is
+    the exact zero block, so the result is the same).  The NumPy default is
+    the shipped arithmetic, byte for byte (gate E3-1)."""
     if cache is None:
         cache = {}
     qx, qy = bx.dim, by.dim
-    out = np.zeros((qy, qx, qy, qx), dtype=_C)
+    out = xp.zeros((qy, qx, qy, qx), dtype=_C)
+    concrete = xp is np
     if isinstance(W, _StagNodeWeight):
-        if not W.any():
+        if concrete and not W.any():
             return out.reshape(qy * qx, qy * qx)
         Wt, Wp = W.t, W.p
         trule, prules = rule.tensor, rule.points
     else:
-        if not np.any(W):
+        if concrete and not np.any(W):
             return out.reshape(qy * qx, qy * qx)
         Wt, Wp = W, {}
         trule = rule.tensor if isinstance(rule, _StagMapQuad) else rule
@@ -2431,9 +2554,26 @@ def _stag_quad_weighted(bx, by, xspec, yspec, W, rule, cache=None):
                                  cache) for sx in range(bx.N)]
     fy = [_stag_quad_axis_factor(by, sy, yspec[0], yspec[1], yspec[2], trule,
                                  cache) for sy in range(by.N)]
+    if not concrete:
+        # Phase E3 (traced weights): every TENSOR-rule cell in ONE pair of
+        # contractions against the per-axis factors EMBEDDED in the global
+        # index range (zero outside each segment's support), so the traced
+        # graph holds two einsums per block instead of one scatter per cell
+        # (the per-cell form measured 2-4 minutes of XLA compile at M = 4).
+        # The same products, summed in a different order: round-off only.
+        FX = _stag_quad_embedded(bx, fx, ("t", xspec), cache)
+        FY = _stag_quad_embedded(by, fy, ("t", yspec), cache)
+        mask = np.ones((bx.N, by.N))
+        for (sx, sy) in prules:
+            mask[sx, sy] = 0.0
+        Wm = Wt * mask[:, :, None, None] if prules else Wt
+        T = xp.einsum("xypr,yrab->xypab", Wm, FY)
+        out = xp.einsum("xpij,xypab->aibj", FX, T)
     for sx in range(bx.N):
         for sy in range(by.N):
             pr = prules.get((sx, sy))
+            if pr is None and not concrete:
+                continue                    # done above, vectorised
             if pr is not None:
                 ru, rv, wq = pr
                 # the tag names the cell AND the axis: the two axis rules of
@@ -2444,15 +2584,30 @@ def _stag_quad_weighted(bx, by, xspec, yspec, W, rule, cache=None):
                 sLy, sRy, Fy = _stag_quad_axis_factor(
                     by, sy, yspec[0], yspec[1], yspec[2], rv, cache,
                     tag=("p", sx, sy, "v"))
-                loc = np.einsum("q,qij,qab->aibj", wq * Wp[(sx, sy)], Fx, Fy,
+                loc = xp.einsum("q,qij,qab->aibj", wq * Wp[(sx, sy)], Fx, Fy,
                                 optimize=True)
             else:
                 sLx, sRx, Fx = fx[sx]
                 sLy, sRy, Fy = fy[sy]
-                T = np.einsum("pr,rab->pab", Wt[sx, sy], Fy, optimize=True)
-                loc = np.einsum("pij,pab->aibj", Fx, T, optimize=True)
-            out[np.ix_(sLy, sLx, sRy, sRx)] += loc
+                T = xp.einsum("pr,rab->pab", Wt[sx, sy], Fy, optimize=True)
+                loc = xp.einsum("pij,pab->aibj", Fx, T, optimize=True)
+            if concrete:
+                out[np.ix_(sLy, sLx, sRy, sRx)] += loc
+            else:
+                out = out.at[np.ix_(sLy, sLx, sRy, sRx)].add(loc)
     return out.reshape(qy * qx, qy * qx)
+
+
+def _xset(xp, A, rows, cols, val):
+    """``A[rows, cols] = val`` for the array module ``xp``: IN PLACE for
+    NumPy (the shipped statement, byte for byte -- the returned object is
+    ``A`` itself), OUT OF PLACE for ``jax.numpy`` (``A.at[...].set``), whose
+    arrays are immutable.  Phase E3: lets the ONE assembly body run on traced
+    weights."""
+    if xp is np:
+        A[rows, cols] = val
+        return A
+    return A.at[rows, cols].set(val)
 
 
 class Granet2DTransverseE:
@@ -2521,6 +2676,15 @@ class Granet2DTransverseE:
                 OUT-OF-PLANE tensor or ``slant`` together with a map raise
                 ``NotImplementedError`` (Phase E).
     """
+
+    #: The array module the ASSEMBLY runs in.  NumPy for every solver this
+    #: class builds; the JAX twin (Phase E3,
+    #: :mod:`lumenairy.elements.pmm._jax_twod_staggered`) runs
+    #: :meth:`_assemble` on a SHADOW copy of a NumPy-built solver with
+    #: ``_xp = jax.numpy`` and traced weights, so the twin's operators are
+    #: this class's own arithmetic, not a copy of it.  With NumPy every
+    #: ``xp`` call below is the shipped call, byte for byte (gate E3-1).
+    _xp = np
 
     def __init__(self, px, py, wx, wy, M, eps_cell,
                  alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi, mu_cell=None,
@@ -2757,21 +2921,22 @@ class Granet2DTransverseE:
         function is the shipped Kronecker assembly, unchanged."""
         bx, refx, sLx, sRx = refx_pair
         by, refy, sLy, sRy = refy_pair
+        xp = self._xp
         if self.cmap is not None:
             return _stag_quad_weighted(
                 bx, by, (_stag_set_name(bx, sLx), "m", _stag_set_name(bx, sRx)),
                 (_stag_set_name(by, sLy), "m", _stag_set_name(by, sRy)),
-                wmap, self._qrule, self._qcache)
+                wmap, self._qrule, self._qcache, xp=xp)
         Gx = _global_pair_segmat(bx, refx, sLx, sRx)      # (Nx, dLx, dRx)
         Gy = _global_pair_segmat(by, refy, sLy, sRy)      # (Ny, dLy, dRy)
         eps = self.eps_cell if wmap is None else wmap     # (Nx, Ny)
         dLx, dRx = Gx.shape[1], Gx.shape[2]
         dLy, dRy = Gy.shape[1], Gy.shape[2]
-        out = np.zeros((dLy * dLx, dRy * dRx), dtype=_C)
+        out = xp.zeros((dLy * dLx, dRy * dRx), dtype=_C)
         for sx in range(bx.N):
             # accumulate over sy with eps weights -> weighted y-matrix
-            Wy = np.einsum("y,yij->ij", eps[sx, :], Gy)   # (dLy,dRy)
-            out += np.kron(Wy, Gx[sx])
+            Wy = xp.einsum("y,yij->ij", eps[sx, :], Gy)   # (dLy,dRy)
+            out += xp.kron(Wy, Gx[sx])
         return out
 
     def _chi_maps(self):
@@ -2792,7 +2957,7 @@ class Granet2DTransverseE:
             return None
         if mu.ndim == 2:
             inv = 1.0 / mu
-            zero = np.zeros_like(inv)
+            zero = self._xp.zeros_like(inv)
             return inv, zero, zero, inv, inv
         m11, m12 = mu[..., 0, 0], mu[..., 0, 1]
         m21, m22 = mu[..., 1, 0], mu[..., 1, 1]
@@ -2829,6 +2994,7 @@ class Granet2DTransverseE:
         """
         bx, by = self.bx, self.by
         k0 = self.k0
+        xp = self._xp
         self._axis_mats()
         q = self.q
         qq = q * q
@@ -2876,7 +3042,7 @@ class Granet2DTransverseE:
         # ============ R = C[chi_t]C = -I  -> -block Gram (mass) ===============
         G1 = np.kron(Mtt_y, Mbb_x)                  # <V1|V1>, V1=B(x1)til(x2)
         G2 = np.kron(Mbb_y, Mtt_x)                  # <V2|V2>, V2=til(x1)B(x2)
-        Rmat = np.zeros((2 * qq, 2 * qq), dtype=_C)
+        Rmat = xp.zeros((2 * qq, 2 * qq), dtype=_C)
         if magnetic:
             # Eq. 24 / Appendix-A Eq. 39: R = C[chi_t]C with C = [[0,1],[-1,0]],
             # i.e. R = [[-chi22, chi21], [chi12, -chi11]] -- the C-rotation
@@ -2887,18 +3053,22 @@ class Granet2DTransverseE:
             # this R is Hermitian NEGATIVE definite, so G = -R stays the
             # Hermitian PD right-hand matrix of the pencil (chi_t = I gives
             # back -blockdiag(G1, G2) to ~1e-16 -- summation order only).
-            Rmat[:qq, :qq] = -self._eps_weighted(
-                (bx, bx.m_ref, bx.B, bx.B),
-                (by, by.m_ref, by.Btilde, by.Btilde), chi22)
-            Rmat[:qq, qq:] = self._eps_weighted(
-                (bx, bx.m_ref, bx.B, bx.Btilde),
-                (by, by.m_ref, by.Btilde, by.B), chi21)
-            Rmat[qq:, :qq] = self._eps_weighted(
-                (bx, bx.m_ref, bx.Btilde, bx.B),
-                (by, by.m_ref, by.B, by.Btilde), chi12)
-            Rmat[qq:, qq:] = -self._eps_weighted(
-                (bx, bx.m_ref, bx.Btilde, bx.Btilde),
-                (by, by.m_ref, by.B, by.B), chi11)
+            Rmat = _xset(xp, Rmat, slice(None, qq), slice(None, qq),
+                         -self._eps_weighted(
+                             (bx, bx.m_ref, bx.B, bx.B),
+                             (by, by.m_ref, by.Btilde, by.Btilde), chi22))
+            Rmat = _xset(xp, Rmat, slice(None, qq), slice(qq, None),
+                         self._eps_weighted(
+                             (bx, bx.m_ref, bx.B, bx.Btilde),
+                             (by, by.m_ref, by.Btilde, by.B), chi21))
+            Rmat = _xset(xp, Rmat, slice(qq, None), slice(None, qq),
+                         self._eps_weighted(
+                             (bx, bx.m_ref, bx.Btilde, bx.B),
+                             (by, by.m_ref, by.B, by.Btilde), chi12))
+            Rmat = _xset(xp, Rmat, slice(qq, None), slice(qq, None),
+                         -self._eps_weighted(
+                             (bx, bx.m_ref, bx.Btilde, bx.Btilde),
+                             (by, by.m_ref, by.B, by.B), chi11))
             # THE PLAIN BLOCK GRAM, kept SEPARATELY.  On the nonmagnetic path
             # -R IS blockdiag(G1, G2) and the shipped code uses the one object
             # for both roles; with chi_t != I they are DIFFERENT operators.
@@ -2909,8 +3079,8 @@ class Granet2DTransverseE:
             # magnetic path retains q^2 x 2, not 4 q^2.
             self.Ggram_blocks = (G1, G2)
         else:
-            Rmat[:qq, :qq] = -G1
-            Rmat[qq:, qq:] = -G2
+            Rmat = _xset(xp, Rmat, slice(None, qq), slice(None, qq), -G1)
+            Rmat = _xset(xp, Rmat, slice(qq, None), slice(qq, None), -G2)
 
         # ============ L = [eps_t] + S_tt - K_tz eps33^-1 K_zt  (/k0^2) ========
         # --- [eps_t] : eps-weighted component masses (k^2[eps]/k0^2 = [eps]) ---
@@ -3009,7 +3179,7 @@ class Granet2DTransverseE:
             # chi21, row 2 chi11 / chi12), and chi_t = I reproduces Grad1 /
             # Grad2 above exactly (to summation order).  The derivative sits on
             # the V3 TRIAL function ("d"), as the eps-free gradient has it.
-            Ktz = np.concatenate([
+            Ktz = xp.concatenate([
                 (-self._eps_dir(bx, "B", "d", "Btilde",
                                 by, "Btilde", "m", "Btilde", wmap=chi22)
                  + self._eps_dir(bx, "B", "m", "Btilde",
@@ -3053,18 +3223,18 @@ class Granet2DTransverseE:
             Kzt_E2 = Kzt_E2 - self._eps_dir(
                 bx, "Btilde", "dL", "Btilde",
                 by, "Btilde", "m", "B", wmap=e12) / k0         # <V3|d1(e12 .)|V2>
-        Kzt = np.concatenate([Kzt_E1, Kzt_E2], axis=1)     # (q^2, 2q^2)
+        Kzt = xp.concatenate([Kzt_E1, Kzt_E2], axis=1)     # (q^2, 2q^2)
 
         # Schur term  K_tz @ Meps33^{-1} @ K_zt  (eps33^-1 = solve vs Meps33).
-        Schur = Ktz @ np.linalg.solve(Meps33, Kzt)
+        Schur = Ktz @ xp.linalg.solve(Meps33, Kzt)
 
         # ----- assemble L -----
-        Lmat = np.zeros((2 * qq, 2 * qq), dtype=_C)
-        Lmat[:qq, :qq] = Et_11
-        Lmat[qq:, qq:] = Et_22
+        Lmat = xp.zeros((2 * qq, 2 * qq), dtype=_C)
+        Lmat = _xset(xp, Lmat, slice(None, qq), slice(None, qq), Et_11)
+        Lmat = _xset(xp, Lmat, slice(qq, None), slice(qq, None), Et_22)
         if tensor:
-            Lmat[:qq, qq:] = Et_12
-            Lmat[qq:, :qq] = Et_21
+            Lmat = _xset(xp, Lmat, slice(None, qq), slice(qq, None), Et_12)
+            Lmat = _xset(xp, Lmat, slice(qq, None), slice(None, qq), Et_21)
         Lmat += Stt
         Lmat -= Schur
 
@@ -3313,9 +3483,10 @@ class Granet2DTransverseE:
         (the isotropic default).  The tensor K_zt columns (Eq. 44) pass one
         component map per term.  With a coordinate map the block is the 2-D
         Gauss quadrature of :func:`_stag_quad_weighted` (``wmap`` per NODE)."""
+        xp = self._xp
         if self.cmap is not None:
             return _stag_quad_weighted(bx, by, (lx, opx, rx), (ly, opy, ry),
-                                       wmap, self._qrule, self._qcache)
+                                       wmap, self._qrule, self._qcache, xp=xp)
 
         def segmat(basis, lset, op, rset):
             sL = getattr(basis, lset)
@@ -3340,11 +3511,11 @@ class Granet2DTransverseE:
         Gx = segmat(bx, lx, opx, rx)
         Gy = segmat(by, ly, opy, ry)
         eps = self.eps_cell if wmap is None else wmap
-        out = np.zeros((Gy.shape[1] * Gx.shape[1],
+        out = xp.zeros((Gy.shape[1] * Gx.shape[1],
                         Gy.shape[2] * Gx.shape[2]), dtype=_C)
         for sx in range(bx.N):
-            Wy = np.einsum("y,yij->ij", eps[sx, :], Gy)
-            out += np.kron(Wy, Gx[sx])
+            Wy = xp.einsum("y,yij->ij", eps[sx, :], Gy)
+            out += xp.kron(Wy, Gx[sx])
         return out
 
 
@@ -3353,14 +3524,14 @@ class Granet2DTransverseE:
 # =========================================================================== #
 # decay-branch helpers (public exp(-i w t))
 # =========================================================================== #
-def _inv_lam(lam):
-    safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
+def _inv_lam(lam, xp=np):
+    safe = xp.where(xp.abs(lam) < 1e-12, 1e-12, lam)
     return 1.0 / safe
 
 
-def _kz_forward2(eps, kx, ky):
-    val = np.sqrt(np.asarray(eps - kx ** 2 - ky ** 2, dtype=_C))
-    return np.where(val.imag < 0.0, -val, val)
+def _kz_forward2(eps, kx, ky, xp=np):
+    val = xp.sqrt(xp.asarray(eps - kx ** 2 - ky ** 2, dtype=_C))
+    return xp.where(val.imag < 0.0, -val, val)
 
 
 # =========================================================================== #
@@ -3520,8 +3691,20 @@ def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy, alpha0x=0.0, alpha0y=0.0
     return P1, P2
 
 
+def _prefetch_frozen(pre, bx, by, M, nq_cells):
+    """Batch-evaluate a TRACED map on the frozen per-cell node counts of the
+    far projector / the incident load (Phase E3; one broadcast per node
+    count instead of one traced blend per cell)."""
+    reqs = []
+    for (sx, sy), n in nq_cells.items():
+        xg, _wg = leggauss(int(n))
+        reqs.append((sx, sy, 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg,
+                     0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg))
+    pre(reqs)
+
+
 def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
-                          cmap):
+                          cmap, xp=np, nq_cells=None, record=None):
     """The far-field Rayleigh projector of a region solved under the
     curved-cell map ``cmap`` -- the pulled-back form of
     :func:`_far_projector_2d`.
@@ -3550,7 +3733,17 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
     ``omega`` the phase ``|k_x| h_x + |k_y| h_y`` across the cell's PHYSICAL
     half-extents (the shipped per-segment phase rule applied to the image of
     the cell).  The identity map reproduces :func:`_far_projector_2d` to
-    round-off with both off-diagonal blocks absent (gate A2)."""
+    round-off with both off-diagonal blocks absent (gate A2).
+
+    Phase E3 (the JAX twin): ``record`` (a dict) receives the node count
+    chosen for every cell; ``nq_cells`` (such a dict) imposes them instead of
+    sizing them from the map -- the sizing reads the cell's physical extent,
+    a data-dependent DISCRETE decision the twin freezes from its NumPy
+    reference so that the traced projector is smooth in the shape
+    parameters; ``xp = jax.numpy`` then evaluates a traced map ``cmap``
+    (positions and Jacobian) and scatter-adds out of place, and every
+    cofactor block is integrated (no zero-coefficient shortcut on a traced
+    value).  The defaults are the shipped arithmetic, byte for byte."""
     M = bx.M
     px, py = bx.d, by.d
     A = px * py
@@ -3564,11 +3757,16 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
     q = bx.dim
     SB = (np.asarray(bx.B), np.asarray(by.B))
     ST = (np.asarray(bx.Btilde), np.asarray(by.Btilde))
-    blocks = {k: np.zeros((Nfo, q, q), dtype=_C) for k in ("xu", "xv", "yu",
+    blocks = {k: xp.zeros((Nfo, q, q), dtype=_C) for k in ("xu", "xv", "yu",
                                                            "yv")}
     used = {k: False for k in blocks}
     base = 2 * M + 16
     rules = {}
+    concrete = xp is np
+    batch = {}
+    pre = getattr(cmap, "prefetch", None)
+    if pre is not None and nq_cells is not None:
+        _prefetch_frozen(pre, bx, by, M, nq_cells)
 
     def _rule(n):
         hit = rules.get(n)
@@ -3579,15 +3777,23 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
 
     for sx in range(bx.N):
         for sy in range(by.N):
-            xg, wg, Vref = _rule(base)
-            U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
-            Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
-            X = cmap.geom(sx, sy, U, Vv)
-            omega = (kxm * 0.5 * float(np.ptp(X[0]))
-                     + kym * 0.5 * float(np.ptp(X[1])))
-            nq = max(base, _stag_quad_order(M, omega))
-            if nq != base:
-                xg, wg, Vref = _rule(nq)
+            if nq_cells is None:
+                xg, wg, Vref = _rule(base)
+                U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+                Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+                X = cmap.geom(sx, sy, U, Vv)
+                omega = (kxm * 0.5 * float(np.ptp(X[0]))
+                         + kym * 0.5 * float(np.ptp(X[1])))
+                nq = max(base, _stag_quad_order(M, omega))
+                if nq != base:
+                    xg, wg, Vref = _rule(nq)
+                    U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+                    Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+                    X = cmap.geom(sx, sy, U, Vv)
+                if record is not None:
+                    record[(sx, sy)] = nq
+            else:
+                xg, wg, Vref = _rule(int(nq_cells[(sx, sy)]))
                 U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
                 Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
                 X = cmap.geom(sx, sy, U, Vv)
@@ -3604,7 +3810,7 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
                 vals[nm + "x"] = (ix, cx[ix] @ Vref)
                 vals[nm + "y"] = (iy, cy[iy] @ Vref)
             w2 = (wg[:, None] * wg[None, :]) * (bx.Jn[sx] * by.Jn[sy] / A)
-            ph = np.exp(1j * (kxv[:, None, None] * Xp[None]
+            ph = xp.exp(1j * (kxv[:, None, None] * Xp[None]
                               + kyv[:, None, None] * Yp[None]))
             # E'_u lives in V1 = B(u) (x) Btilde(v), E'_v in V2 = Btilde(u)
             # (x) B(v); the four cofactor entries select the output component
@@ -3612,21 +3818,39 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
                                       ("xv", -yu, "Tx", "By"),
                                       ("yu", -xv, "Bx", "Ty"),
                                       ("yv", xu, "Tx", "By")):
-                if not np.any(coef):
+                if concrete and not np.any(coef):
                     continue
                 used[key] = True
                 ixs, Xv = vals[xs]
                 iys, Yv = vals[ys]
                 K = ph * (coef * w2)[None]
-                blocks[key][np.ix_(np.arange(Nfo), iys, ixs)] += np.einsum(
-                    "mpr,ip,jr->mji", K, Xv, Yv, optimize=True)
+                if concrete:
+                    blk = np.einsum("mpr,ip,jr->mji", K, Xv, Yv, optimize=True)
+                    blocks[key][np.ix_(np.arange(Nfo), iys, ixs)] += blk
+                else:
+                    # Phase E3: the basis values EMBEDDED in the global index
+                    # range, the cells of one node count batched below (one
+                    # contraction per block per node count, no scatter)
+                    XG = np.zeros((q, Xv.shape[1]), dtype=Xv.dtype)
+                    XG[ixs] = Xv
+                    YG = np.zeros((q, Yv.shape[1]), dtype=Yv.dtype)
+                    YG[iys] = Yv
+                    batch.setdefault((key, Xv.shape[1]), []).append(
+                        (K, XG, YG))
+    if not concrete:
+        for (key, _n), lst in batch.items():
+            Ks = xp.stack([k for k, _x, _y in lst])
+            XGs = np.stack([x for _k, x, _y in lst])
+            YGs = np.stack([y for _k, _x, y in lst])
+            T = xp.einsum("cmpr,cjr->cmpj", Ks, YGs)
+            blocks[key] = blocks[key] + xp.einsum("cmpj,cip->mji", T, XGs)
     Pm = {k: (v.reshape(Nfo, q * q) if (used[k] or k in ("xu", "yv"))
               else None) for k, v in blocks.items()}
     return Pm["xu"], Pm["yv"], Pm["xv"], Pm["yu"]
 
 
 def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
-                               alpha0y, e0):
+                               alpha0y, e0, xp=np, nq_cells=None, record=None):
     """The L2 LOAD vector of the incident plane wave under the curved-cell
     map ``cmap`` -- the right-hand side of its EXACT modal decomposition
     (Phase C of the curved-cell plan; Phase B finding F-B4, Phase A verifier
@@ -3659,14 +3883,19 @@ def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
     _stag_quad_order(M, omega))`` nodes per axis, ``omega`` the incident
     phase across the cell's PHYSICAL half-extents (the far projector's own
     sizing rule).  Without a map this is never called (the shipped
-    least-squares overlap is kept bit for bit)."""
+    least-squares overlap is kept bit for bit).
+
+    ``xp`` / ``nq_cells`` / ``record``: the Phase E3 twin hooks of
+    :func:`_far_projector_mapped` (frozen per-cell node counts, a traced
+    map, out-of-place accumulation); the defaults are the shipped
+    arithmetic."""
     M = bx.M
     ex0, ey0 = complex(e0[0]), complex(e0[1])
     q = bx.dim
     SB = (np.asarray(bx.B), np.asarray(by.B))
     ST = (np.asarray(bx.Btilde), np.asarray(by.Btilde))
-    b1 = np.zeros((q, q), dtype=_C)        # [jy, jx]
-    b2 = np.zeros((q, q), dtype=_C)
+    b1 = xp.zeros((q, q), dtype=_C)        # [jy, jx]
+    b2 = xp.zeros((q, q), dtype=_C)
     base = 2 * M + 16
     rules = {}
 
@@ -3678,22 +3907,33 @@ def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
         return hit
 
     a0x, a0y = float(alpha0x), float(alpha0y)
+    pre = getattr(cmap, "prefetch", None)
+    if pre is not None and nq_cells is not None:
+        _prefetch_frozen(pre, bx, by, M, nq_cells)
     for sx in range(bx.N):
         for sy in range(by.N):
-            xg, wg, Vref = _rule(base)
-            U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
-            Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
-            X = cmap.geom(sx, sy, U, Vv)
-            omega = (abs(a0x) * 0.5 * float(np.ptp(X[0]))
-                     + abs(a0y) * 0.5 * float(np.ptp(X[1])))
-            nq = max(base, _stag_quad_order(M, omega))
-            if nq != base:
-                xg, wg, Vref = _rule(nq)
+            if nq_cells is None:
+                xg, wg, Vref = _rule(base)
+                U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+                Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+                X = cmap.geom(sx, sy, U, Vv)
+                omega = (abs(a0x) * 0.5 * float(np.ptp(X[0]))
+                         + abs(a0y) * 0.5 * float(np.ptp(X[1])))
+                nq = max(base, _stag_quad_order(M, omega))
+                if nq != base:
+                    xg, wg, Vref = _rule(nq)
+                    U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+                    Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+                    X = cmap.geom(sx, sy, U, Vv)
+                if record is not None:
+                    record[(sx, sy)] = nq
+            else:
+                xg, wg, Vref = _rule(int(nq_cells[(sx, sy)]))
                 U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
                 Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
                 X = cmap.geom(sx, sy, U, Vv)
             Xp, Yp, xu, xv, yu, yv = X
-            ph = np.exp(-1j * (a0x * Xp + a0y * Yp))
+            ph = xp.exp(-1j * (a0x * Xp + a0y * Yp))
             w2 = (wg[:, None] * wg[None, :]) * (bx.Jn[sx] * by.Jn[sy])
             f1 = (ex0 * xu + ey0 * yu) * ph * w2           # E'_u
             f2 = (ex0 * xv + ey0 * yv) * ph * w2           # E'_v
@@ -3706,15 +3946,25 @@ def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
                 # conj-left: the TEST functions carry the conjugated stencil
                 vals[nm + "x"] = (ix, np.conj(cx[ix]) @ Vref)
                 vals[nm + "y"] = (iy, np.conj(cy[iy]) @ Vref)
-            for out, f, xs, ys in ((b1, f1, "Bx", "Ty"), (b2, f2, "Tx", "By")):
-                ixs, Xv = vals[xs]
-                iys, Yv = vals[ys]
-                out[np.ix_(iys, ixs)] += Yv @ f.T @ Xv.T
-    return np.concatenate([b1.ravel(), b2.ravel()])
+            if xp is np:
+                for out, f, xs, ys in ((b1, f1, "Bx", "Ty"),
+                                       (b2, f2, "Tx", "By")):
+                    ixs, Xv = vals[xs]
+                    iys, Yv = vals[ys]
+                    out[np.ix_(iys, ixs)] += Yv @ f.T @ Xv.T
+            else:
+                ixs, Xv = vals["Bx"]
+                iys, Yv = vals["Ty"]
+                b1 = b1.at[np.ix_(iys, ixs)].add(Yv @ f1.T @ Xv.T)
+                ixs, Xv = vals["Tx"]
+                iys, Yv = vals["By"]
+                b2 = b2.at[np.ix_(iys, ixs)].add(Yv @ f2.T @ Xv.T)
+    return xp.concatenate([b1.ravel(), b2.ravel()])
 
 
 def _stag_incident_coeffs_mapped(geom, bx: Basis1D, by: Basis1D, cmap,
-                                 alpha0x, alpha0y, H0=None):
+                                 alpha0x, alpha0y, H0=None, xp=np,
+                                 nq_cells=None, record=None):
     """``(2 q^2, 2)`` -- the incident MODAL amplitudes of the superstrate
     under the map ``cmap`` for the two lab inputs ``E_x`` and ``E_y``
     (columns).
@@ -3742,16 +3992,17 @@ def _stag_incident_coeffs_mapped(geom, bx: Basis1D, by: Basis1D, cmap,
     reaches the shipped least-squares overlap by making it return
     ``None``)."""
     W0, Ginv = geom[0], geom[4]
-    B = np.stack([_stag_incident_load_mapped(bx, by, cmap, alpha0x, alpha0y,
-                                             e0)
+    B = xp.stack([_stag_incident_load_mapped(bx, by, cmap, alpha0x, alpha0y,
+                                             e0, xp=xp, nq_cells=nq_cells,
+                                             record=record)
                   for e0 in ((1.0, 0.0), (0.0, 1.0))], axis=1)
-    C = np.linalg.solve(W0, Ginv @ B)
+    C = xp.linalg.solve(W0, Ginv @ B)
     if H0 is None:
         return C
-    return C @ np.linalg.inv(H0 @ C)
+    return C @ xp.linalg.inv(H0 @ C)
 
 
-def _pmm2d_project_orders(P1, P2, Wmodes, qq, P12=None, P21=None):
+def _pmm2d_project_orders(P1, P2, Wmodes, qq, P12=None, P21=None, xp=np):
     """Project a PMM-2D ``[E1; E2]`` modal matrix onto the Rayleigh orders --
     the ONE ``_proj`` closure shared by :mod:`.stack2d_pure` and this
     module (audit S1-10).  ``P1``/``P2`` map the E1 (Ex) / E2 (Ey) nodal blocks
@@ -3770,21 +4021,24 @@ def _pmm2d_project_orders(P1, P2, Wmodes, qq, P12=None, P21=None):
         top = top + P12 @ Wmodes[qq:, :]
     if P21 is not None:
         bot = bot + P21 @ Wmodes[:qq, :]
-    return np.concatenate([top, bot], axis=0)
+    return xp.concatenate([top, bot], axis=0)
 
 
-def _pmm2d_order_kz(eps_sup, eps_sub, kxv, kyv, kx0, ky0):
+def _pmm2d_order_kz(eps_sup, eps_sub, kxv, kyv, kx0, ky0, xp=np):
     """Per-order forward ``kz`` for the two half-spaces, the incident ``kz``, and
     ``kz_ref``/``kz_trn``/``kz_inc``/``safe_r``/``safe_t`` block -- the ONE
     copy shared by :mod:`.stack2d_pure` and this module (audit S1-10).
     Returns ``(kz_ref, kz_trn, kz_inc, safe_r, safe_t)``, reproducing the
     two former inline blocks byte-for-byte.
     block byte-for-byte."""
-    kz_ref = _kz_forward2(eps_sup, kxv, kyv)
-    kz_trn = _kz_forward2(eps_sub, kxv, kyv)
-    kz_inc = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
-    safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    kz_ref = _kz_forward2(eps_sup, kxv, kyv, xp=xp)
+    kz_trn = _kz_forward2(eps_sub, kxv, kyv, xp=xp)
+    if xp is np:
+        kz_inc = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
+    else:       # Phase E3: a traced half-space index keeps kz_inc traced
+        kz_inc = xp.real(_kz_forward2(eps_sup, kx0, ky0, xp=xp))
+    safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+    safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
     return kz_ref, kz_trn, kz_inc, safe_r, safe_t
 
 
@@ -3812,6 +4066,17 @@ def _region_modes(solver: Granet2DTransverseE):
     # separately on ``solver.Ggram_blocks`` (see the H recovery below).
     G = -solver.Rmat
     g2, W = sla.eig(L, G)
+    return _region_modes_from_eig(solver, g2, W)
+
+
+def _region_modes_from_eig(solver: Granet2DTransverseE, g2, W, xp=np):
+    """Everything :func:`_region_modes` does AFTER the pencil's eig: the
+    forward branch and the Eq.-25 H partner, for the eig pair ``(g2, W)`` of
+    ``L W = g2 (-R) W``.  Split out (Phase E3) so the JAX twin, which solves
+    the same pencil by its own differentiable eig, runs THIS body on its
+    eigenpairs (``xp = jax.numpy``) instead of a copy of it; with NumPy the
+    statements are the shipped ones, byte for byte (gate E3-1)."""
+    L = solver.Lmat
     # q = kz/k0 = gamma/k0 = sqrt(g2).  FORWARD branch chosen ROBUSTLY: an
     # EXACT sign test on sqrt(g2) flips degenerate real-g2 pairs inconsistently
     # on QZ noise -> the H-partner sign flips and the S-matrix loses passivity.
@@ -3819,8 +4084,8 @@ def _region_modes(solver: Granet2DTransverseE):
     # (near-)real propagating modes Re(q) > 0 (outgoing).  lam = -i q forward.
     # (This module also carried a private, DEAD copy of ``_sqrt_decay`` with
     # that exact pin until round 2 deleted it, 2026-09-11.)
-    q = np.sqrt(np.asarray(g2, dtype=_C))
-    q = _forward_branch_flip(q)       # shared scalar-vertical selector (S1-8)
+    q = xp.sqrt(xp.asarray(g2, dtype=_C))
+    q = _forward_branch_flip(q, xp=xp)  # shared scalar-vertical selector (S1-8)
     lam = -1j * q                     # forward propagator exp(-lam k0 z) decays
     gamma_over_k0 = q
 
@@ -3832,13 +4097,13 @@ def _region_modes(solver: Granet2DTransverseE):
     # interface match stays a SQUARE modal match -- the cascade is untouched).
     Et11, Et22 = solver.Et_blocks
     qq = solver.q * solver.q
-    Lhh = np.zeros_like(L)
-    Lhh[:qq, :qq] = Et11
-    Lhh[qq:, qq:] = Et22
+    Lhh = xp.zeros_like(L)
+    Lhh = _xset(xp, Lhh, slice(None, qq), slice(None, qq), Et11)
+    Lhh = _xset(xp, Lhh, slice(qq, None), slice(qq, None), Et22)
     if solver.Et_offdiag is not None:
         Et12, Et21 = solver.Et_offdiag
-        Lhh[:qq, qq:] = Et12
-        Lhh[qq:, :qq] = Et21
+        Lhh = _xset(xp, Lhh, slice(None, qq), slice(qq, None), Et12)
+        Lhh = _xset(xp, Lhh, slice(qq, None), slice(None, qq), Et21)
     Lhh = Lhh + solver.Stt
     # block C^{-1} = -C = [[0,-1],[1,0]] acting on the 2-block coeff vector:
     #   (-C) [a;b] = [-b; a]  (a = top block, b = bottom block).
@@ -3854,17 +4119,17 @@ def _region_modes(solver: Granet2DTransverseE):
     # and to any energy check that renormalises).  Solve blockwise against the
     # two retained Gram blocks instead.
     if solver.Ggram_blocks is None:
-        Ginv = np.linalg.inv(G)
+        Ginv = xp.linalg.inv(-solver.Rmat)
         Dual = Ginv @ (Lhh @ W)      # G^{-1} Lhh W  (back to coefficients)
     else:
         G1g, G2g = solver.Ggram_blocks
         LW = Lhh @ W
-        Dual = np.concatenate([np.linalg.solve(G1g, LW[:qq, :]),
-                               np.linalg.solve(G2g, LW[qq:, :])], axis=0)
+        Dual = xp.concatenate([xp.linalg.solve(G1g, LW[:qq, :]),
+                               xp.linalg.solve(G2g, LW[qq:, :])], axis=0)
     top = Dual[:qq, :]
     bot = Dual[qq:, :]
-    rot = np.concatenate([-bot, top], axis=0)     # (-C) Dual
-    inv_g = _inv_lam(gamma_over_k0)               # 1/(gamma/k0)
+    rot = xp.concatenate([-bot, top], axis=0)     # (-C) Dual
+    inv_g = _inv_lam(gamma_over_k0, xp=xp)        # 1/(gamma/k0)
     V = rot * inv_g[None, :]
     return W, V, lam, g2
 
@@ -4342,12 +4607,22 @@ def _homog_geom_cache(solver: Granet2DTransverseE):
             "chi33 weight R, K_tz and S_tt), so either needs its own "
             "_region_modes eig.")
     G = -solver.Rmat                       # block field Gram (Hermitian PD)
-    Stt = solver.Stt
-    L0_geom = Stt - solver.Schur           # = Lmat - eps*G, manifestly eps-free
+    L0_geom = solver.Stt - solver.Schur    # = Lmat - eps*G, manifestly eps-free
     g2_geo, W0 = sla.eig(L0_geom, G)
+    return _homog_geom_from_eig(solver, g2_geo, W0)
+
+
+def _homog_geom_from_eig(solver: Granet2DTransverseE, g2_geo, W0, xp=np):
+    """The geometric-cache tuple of :func:`_homog_geom_cache` from the eig
+    pair ``(g2_geo, W0)`` of ``(S_tt - Schur) W0 = g2_geo (-R) W0`` -- split
+    out (Phase E3) so the JAX twin folds ITS eigenpairs through this body
+    (``xp = jax.numpy``); with NumPy the statements are the shipped ones,
+    byte for byte."""
+    G = -solver.Rmat                       # block field Gram (Hermitian PD)
+    Stt = solver.Stt
     qq = solver.q * solver.q
     if getattr(solver, "cmap", None) is None:
-        Ginv = np.linalg.inv(G)
+        Ginv = xp.linalg.inv(G)
     else:
         # THE CURVED-CELL MAP (plan section 2.4).  The eps-free SPLIT survives
         # a map exactly: for an isotropic homogeneous region det chi_t = 1, so
@@ -4363,16 +4638,18 @@ def _homog_geom_cache(solver: Granet2DTransverseE):
         # probe P2b; gate A6 re-measures it).  Lhh W0 = eps (-R W0) + Stt W0
         # stays the pre-folded form below; only the inverse changes.
         G1g, G2g = solver.Ggram_blocks
-        Ginv = np.zeros_like(G)
-        Ginv[:qq, :qq] = np.linalg.inv(G1g)
-        Ginv[qq:, qq:] = np.linalg.inv(G2g)
+        Ginv = xp.zeros_like(G)
+        Ginv = _xset(xp, Ginv, slice(None, qq), slice(None, qq),
+                     xp.linalg.inv(G1g))
+        Ginv = _xset(xp, Ginv, slice(qq, None), slice(qq, None),
+                     xp.linalg.inv(G2g))
     # Pre-fold the eps-free pieces of the H-partner recovery (Eq.25): for a
     # homogeneous region Lhh = Et + Stt = eps*G + Stt, so Lhh @ W0 = eps*(G W0) +
     # (Stt W0) -- both terms eps-free and reusable across regions.
     return W0, g2_geo, G @ W0, Stt @ W0, Ginv, qq
 
 
-def _homog_region_modes(geom, eps):
+def _homog_region_modes(geom, eps, xp=np):
     """Modes of a homogeneous region (uniform permittivity ``eps``) from the shared
     eps-free geometric eig -- NO per-region eig.
 
@@ -4385,15 +4662,15 @@ def _homog_region_modes(geom, eps):
     downstream for the half-spaces)."""
     W0, g2_geo, GW0, SttW0, Ginv, qq = geom
     g2 = g2_geo + eps
-    q = np.sqrt(np.asarray(g2, dtype=_C))
-    q = _forward_branch_flip(q)            # shared scalar-vertical selector (S1-8)
+    q = xp.sqrt(xp.asarray(g2, dtype=_C))
+    q = _forward_branch_flip(q, xp=xp)     # shared scalar-vertical selector (S1-8)
     lam = -1j * q                          # forward propagator exp(-lam k0 z) decays
     # H recovery (Eq.25) with Lhh = eps*G + Stt (homogeneous -> no Schur term):
     Dual = Ginv @ (eps * GW0 + SttW0)      # G^{-1} Lhh W0  (back to coefficients)
     top = Dual[:qq, :]
     bot = Dual[qq:, :]
-    rot = np.concatenate([-bot, top], axis=0)     # (-C) Dual
-    V = rot * _inv_lam(q)[None, :]
+    rot = xp.concatenate([-bot, top], axis=0)     # (-C) Dual
+    V = rot * _inv_lam(q, xp=xp)[None, :]
     return W0, V, lam
 
 
@@ -4789,6 +5066,8 @@ def pmm_jones_2d_staggered(
     shapes=None,
     background_eps=None,
     background_mu=None,
+    backend: str = "numpy",
+    reference_shapes=None,
 ):
     """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
     in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
@@ -4940,6 +5219,27 @@ def pmm_jones_2d_staggered(
         spacer on top moves them only at the discretisation-error level
         (falling with ``n_modes``; measured in
         ``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``).
+    backend : {'numpy', 'jax'}, optional
+        ``'jax'`` (Phase E3) returns the result of the DIFFERENTIABLE twin of
+        the one-layer stack (``PMM2DStackPure(backend='jax')``): ``eps_cell``,
+        ``mu_cell``, ``depth``, the half-space indices, ``background_eps`` /
+        ``background_mu`` and the shapes may carry JAX values (``jax.grad`` /
+        ``jax.jit`` compose); ``period_x``, ``period_y``, ``wavelength``,
+        ``theta`` and ``phi`` must be concrete (they set the basis' Bloch
+        glue), and at oblique incidence so must ``n_superstrate``.  A traced
+        material value enters through a concrete stand-in that only the
+        concrete guards see (the Wood nudge, the cost guard -- the
+        documented caveat of every JAX twin in the library).  An
+        OUT-OF-PLANE tensor and ``slant`` raise (Phase E1 of the curved-cell
+        plan).  This entry rebuilds the frozen template on every call; for a
+        loop, build the stack once (``PMM2DStackPure(backend='jax')``) and
+        call its ``solve(params=...)``.
+    reference_shapes : list, optional
+        With ``backend='jax'`` and SHAPES whose parameters are traced: the
+        same shapes at CONCRETE values -- the reference at which the wall
+        grid, its topology and the quadrature are frozen (a traced value has
+        no concrete position to lay walls at).  Required then; ignored
+        otherwise.
 
     Returns
     -------
@@ -4979,6 +5279,20 @@ def pmm_jones_2d_staggered(
     ``e13``/``e31`` swap.
     """
     from .stack2d_pure import PMM2DStackPure  # (cycle-free: lazy)
+    if backend not in ("numpy", "jax"):
+        raise ValueError(f"pmm_jones_2d_staggered: backend must be 'numpy' "
+                         f"or 'jax', got {backend!r}.")
+    if backend == "jax":
+        from ._jax_twod_staggered import _pmm_jones_2d_staggered_jax
+        return _pmm_jones_2d_staggered_jax(
+            period_x, period_y, eps_cell, n_substrate, n_superstrate, depth,
+            wavelength, mu_cell=mu_cell,
+            M=int(degree if n_modes is None else n_modes),
+            n_orders=int(n_orders), theta=theta, phi=phi, slant=slant,
+            cmap=cmap, shapes=shapes, background_eps=background_eps,
+            background_mu=background_mu, reference_shapes=reference_shapes,
+            mu_superstrate=mu_superstrate, mu_substrate=mu_substrate,
+            max_pencil_dof=max_pencil_dof)
     if (shapes is not None or background_eps is not None
             or background_mu is not None):
         # THE SHAPE LAYER (Phase C): the one-layer stack, byte for byte;

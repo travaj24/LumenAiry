@@ -130,6 +130,9 @@ from ._curvemap import (
     RefinedMap,
     Sinusoid,
     TransfiniteMap,
+    _any_traced,
+    _num,
+    _xp_of,
 )
 from .twod_staggered import _STAG_MIN_SEG_FRAC
 
@@ -171,25 +174,43 @@ class _HardEdge:
 
     def __init__(self, kind, fixed, a, b, curve=None):
         self.kind = kind
-        self.fixed = float(fixed)
-        self.a = float(a)
-        self.b = float(b)
+        self.fixed = _num(fixed)
+        self.a = _num(a)
+        self.b = _num(b)
         self.curve = curve
 
 
 class _Layout:
     """A shape's own wall grid: interior ``u`` / ``v`` walls, the EXACT image
     of every endpoint of every hard edge (``vertices[(u, v)] = (x, y)``), the
-    hard edges, and the ``(u, v)`` rectangles the shape fills."""
+    hard edges, and the ``(u, v)`` rectangles the shape fills.
 
-    __slots__ = ("u_walls", "v_walls", "vertices", "edges", "fill")
+    ``vertices`` is a list of ``((u, v), (x, y))`` pairs (or a dict).  A
+    TRACED layout (Phase E3: a shape whose parameters are JAX values) keeps
+    the walls and the pairs as they are, in their construction order -- the
+    JAX twin pairs them with the concrete reference layout by that order --
+    since a traced position can neither be converted to ``float`` nor hashed
+    as a key."""
+
+    __slots__ = ("u_walls", "v_walls", "vertices", "edges", "fill", "traced")
 
     def __init__(self, u_walls, v_walls, vertices, edges, fill):
+        items = list(vertices.items()) if isinstance(vertices, dict) \
+            else list(vertices)
+        self.traced = _any_traced(list(u_walls), list(v_walls),
+                                  [xy for _k, xy in items],
+                                  [k for k, _xy in items])
+        self.edges = list(edges)
+        if self.traced:
+            self.u_walls = list(u_walls)
+            self.v_walls = list(v_walls)
+            self.vertices = items
+            self.fill = [tuple(f) for f in fill]
+            return
         self.u_walls = [float(w) for w in u_walls]
         self.v_walls = [float(w) for w in v_walls]
         self.vertices = {(float(u), float(v)): np.asarray(xy, dtype=float)
-                         for (u, v), xy in vertices.items()}
-        self.edges = list(edges)
+                         for (u, v), xy in items}
         self.fill = [tuple(float(c) for c in f) for f in fill]
 
 
@@ -198,6 +219,11 @@ def _as_eps(eps, who):
     if eps is None:
         raise ValueError(f"{who}: eps is required (the shape's permittivity, "
                          f"PUBLIC convention Im(eps) > 0 for loss).")
+    if _any_traced(eps):
+        # Phase E3: a traced permittivity is kept as it is (a JAX complex
+        # scalar or (3, 3)); the twin validates its shape against the
+        # reference shape's
+        return _xp_of(eps).asarray(eps).astype(complex)
     a = np.asarray(eps, dtype=complex)
     if a.ndim == 0:
         if not np.isfinite(a):
@@ -213,6 +239,8 @@ def _as_mu(mu, who):
     """A scalar (complex, nonzero) or a ``(3, 3)`` block-form permeability,
     validated (an out-of-plane ``mu`` is refused by the solver, naming the
     phase that would carry it)."""
+    if _any_traced(mu):
+        return _xp_of(mu).asarray(mu).astype(complex)       # Phase E3
     a = np.asarray(mu, dtype=complex)
     if a.ndim == 0:
         if not np.isfinite(a) or a == 0:
@@ -226,6 +254,8 @@ def _as_mu(mu, who):
 
 
 def _fmt(v):
+    if _any_traced(v):
+        return "<traced>"
     return f"{float(v):.6g}"
 
 
@@ -318,6 +348,12 @@ class Shape2D:
     def _layout(self, px, py):  # pragma: no cover - protocol
         raise NotImplementedError
 
+    def _traced(self):
+        """True when any geometric parameter of this shape is a JAX value
+        (Phase E3, the JAX twin); its layout then takes every structural
+        decision from a CONCRETE reference shape (``_layout(..., ref=)``)."""
+        return _any_traced(*[getattr(self, k) for k in self._GEOM])
+
     def _check_inside(self, px, py, strict):
         x0, x1, y0, y1 = self.bbox()
         mx = (_STAG_MIN_SEG_FRAC * px) if strict else -1e-12 * px
@@ -354,12 +390,13 @@ class Rect(Shape2D):
     """
 
     curved = False
+    _GEOM = ("cx", "cy", "w", "h")
 
     def __init__(self, cx, cy, w, h, eps, *, mu=None, name=None):
         super().__init__(eps, name, mu)
-        self.cx, self.cy = float(cx), float(cy)
-        self.w, self.h = float(w), float(h)
-        if not (self.w > 0.0 and self.h > 0.0):
+        self.cx, self.cy = _num(cx), _num(cy)
+        self.w, self.h = _num(w), _num(h)
+        if not self._traced() and not (self.w > 0.0 and self.h > 0.0):
             raise ValueError(f"{self.name}: w and h must be > 0.")
         self._freeze()
 
@@ -390,20 +427,31 @@ class Rect(Shape2D):
     def perimeter(self):
         return 2.0 * (self.w + self.h)
 
-    def _layout(self, px, py):
-        self._check_inside(px, py, strict=False)
+    def _layout(self, px, py, ref=None):
+        # ``ref`` (Phase E3): the CONCRETE shape whose layout takes every
+        # structural decision for this traced one (None: this shape's own)
+        d = self if ref is None else ref
+        if ref is None:
+            self._check_inside(px, py, strict=False)
         x0, x1, y0, y1 = self.bbox()
+        r0, r1, s0, s1 = d.bbox()
         # a side ON the cell boundary is the cell boundary itself
-        x0 = 0.0 if abs(x0) <= _WALL_SNAP * px else x0
-        y0 = 0.0 if abs(y0) <= _WALL_SNAP * py else y0
-        x1 = px if abs(x1 - px) <= _WALL_SNAP * px else x1
-        y1 = py if abs(y1 - py) <= _WALL_SNAP * py else y1
-        verts = {(x0, y0): (x0, y0), (x1, y0): (x1, y0),
-                 (x0, y1): (x0, y1), (x1, y1): (x1, y1)}
+        x0 = 0.0 if abs(r0) <= _WALL_SNAP * px else x0
+        y0 = 0.0 if abs(s0) <= _WALL_SNAP * py else y0
+        x1 = px if abs(r1 - px) <= _WALL_SNAP * px else x1
+        y1 = py if abs(s1 - py) <= _WALL_SNAP * py else y1
+        keep_u = [abs(r0) > _WALL_SNAP * px, abs(r1 - px) > _WALL_SNAP * px]
+        keep_v = [abs(s0) > _WALL_SNAP * py, abs(s1 - py) > _WALL_SNAP * py]
+        verts = [((x0, y0), (x0, y0)), ((x1, y0), (x1, y0)),
+                 ((x0, y1), (x0, y1)), ((x1, y1), (x1, y1))]
         edges = [_HardEdge("h", y0, x0, x1), _HardEdge("h", y1, x0, x1),
                  _HardEdge("v", x0, y0, y1), _HardEdge("v", x1, y0, y1)]
-        uw = [w for w in (x0, x1) if 0.0 < w < px]
-        vw = [w for w in (y0, y1) if 0.0 < w < py]
+        if ref is None:
+            uw = [w for w in (x0, x1) if 0.0 < w < px]
+            vw = [w for w in (y0, y1) if 0.0 < w < py]
+        else:
+            uw = [w for w, k in zip((x0, x1), keep_u) if k]
+            vw = [w for w, k in zip((y0, y1), keep_v) if k]
         return _Layout(uw, vw, verts, edges, [(x0, x1, y0, y1)])
 
 
@@ -443,11 +491,19 @@ class FilletRect(Shape2D):
         orders, R, T, J = st.solve()
     """
 
+    _GEOM = ("cx", "cy", "w", "h", "r")
+
     def __init__(self, cx, cy, w, h, r, eps, *, mu=None, name=None):
         super().__init__(eps, name, mu)
-        self.cx, self.cy = float(cx), float(cy)
-        self.w, self.h = float(w), float(h)
-        self.r = float(r)
+        self.cx, self.cy = _num(cx), _num(cy)
+        self.w, self.h = _num(w), _num(h)
+        self.r = _num(r)
+        if self._traced():
+            # Phase E3: a traced fillet is curved (r = 0 is a different
+            # topology -- the Rect -- which the twin refuses to cross)
+            self.curved = True
+            self._freeze()
+            return
         if not (self.w > 0.0 and self.h > 0.0):
             raise ValueError(f"{self.name}: w and h must be > 0.")
         if not self.r >= 0.0:
@@ -503,12 +559,15 @@ class FilletRect(Shape2D):
     def perimeter(self):
         return 2.0 * (self.w + self.h) - 8.0 * self.r + 2.0 * np.pi * self.r
 
-    def _layout(self, px, py):
-        if self.r == 0.0:
+    def _layout(self, px, py, ref=None):
+        d = self if ref is None else ref
+        if d.r == 0.0:
+            rr = None if ref is None else Rect(ref.cx, ref.cy, ref.w, ref.h,
+                                               ref.eps)
             return Rect(self.cx, self.cy, self.w, self.h, self.eps,
-                        mu=self.mu, name=self.name)._layout(px, py)
+                        mu=self.mu, name=self.name)._layout(px, py, ref=rr)
         rmin = _FILLET_MIN_FRAC * max(px, py)
-        if self.r < rmin * (1.0 - 1e-9):
+        if ref is None and self.r < rmin * (1.0 - 1e-9):
             raise ValueError(
                 f"{self.name}: the fillet radius r = {self.r!r} is below "
                 f"1.414e-3 of the period ({rmin!r}).  The fillet's own wall "
@@ -519,7 +578,8 @@ class FilletRect(Shape2D):
                 f"carries spurious modal wavenumbers ~ 1 / width.  Use "
                 f"radius=0 (a sharp corner -- the faithful model of a "
                 f"rounding this small) or a radius >= {rmin!r}.")
-        self._check_inside(px, py, strict=True)
+        if ref is None:
+            self._check_inside(px, py, strict=True)
         r = self.r
         cx, cy = self.cx, self.cy
         # Phase B's _fillet_map_5x5, generalised to (cx, cy, w, h): the far
@@ -533,16 +593,16 @@ class FilletRect(Shape2D):
         by_ = loy + r
         u = [ax, bx_, 2 * cx - bx_, 2 * cx - ax]
         v = [ay, by_, 2 * cy - by_, 2 * cy - ay]
-        verts = {}
+        verts = []
         for i in (0, 3):
             for j in (0, 3):
-                verts[(u[i], v[j])] = (u[i], v[j])          # 45-degree points
+                verts.append(((u[i], v[j]), (u[i], v[j])))  # 45-degree points
         for i in (1, 2):
-            verts[(u[i], v[0])] = (u[i], loy)               # bottom tangency
-            verts[(u[i], v[3])] = (u[i], hiy)               # top tangency
+            verts.append(((u[i], v[0]), (u[i], loy)))       # bottom tangency
+            verts.append(((u[i], v[3]), (u[i], hiy)))       # top tangency
         for j in (1, 2):
-            verts[(u[0], v[j])] = (lox, v[j])               # left tangency
-            verts[(u[3], v[j])] = (hix, v[j])               # right tangency
+            verts.append(((u[0], v[j]), (lox, v[j])))       # left tangency
+            verts.append(((u[3], v[j]), (hix, v[j])))       # right tangency
         cBL, cBR = (bx_, by_), (2 * cx - bx_, by_)
         cTL, cTR = (bx_, 2 * cy - by_), (2 * cx - bx_, 2 * cy - by_)
         edges = [
@@ -598,10 +658,12 @@ class Circle(Shape2D):
             shapes=[disk], background_eps=1.0, n_modes=8)
     """
 
+    _GEOM = ("cx", "cy", "r")
+
     def __init__(self, cx, cy, r, eps, *, core=None, mu=None, name=None):
         super().__init__(eps, name, mu)
-        self.cx, self.cy, self.r = float(cx), float(cy), float(r)
-        if not self.r > 0.0:
+        self.cx, self.cy, self.r = _num(cx), _num(cy), _num(r)
+        if not self._traced() and not self.r > 0.0:
             raise ValueError(f"{self.name}: r must be > 0.")
         if core is not None and not 0.0 < float(core) < 1.0:
             raise ValueError(f"{self.name}: core must be None (3 x 3 layout) "
@@ -633,8 +695,9 @@ class Circle(Shape2D):
     def perimeter(self):
         return 2.0 * np.pi * self.r
 
-    def _layout(self, px, py):
-        self._check_inside(px, py, strict=True)
+    def _layout(self, px, py, ref=None):
+        if ref is None:
+            self._check_inside(px, py, strict=True)
         r = self.r
         cx, cy = self.cx, self.cy
         if self.core is None:
@@ -643,7 +706,7 @@ class Circle(Shape2D):
             c = (cx, cy)
             u = [c[0] - h, c[0] + h]
             v = [c[1] - h, c[1] + h]
-            verts = {(uu, vv): (uu, vv) for uu in u for vv in v}
+            verts = [((uu, vv), (uu, vv)) for uu in u for vv in v]
             edges = [
                 _HardEdge("h", v[0], u[0], u[1],
                           Arc(c, r, 225 * _DEG, 315 * _DEG)),
@@ -656,17 +719,19 @@ class Circle(Shape2D):
             ]
             return _Layout(u, v, verts, edges, [(u[0], u[1], v[0], v[1])])
         # Phase B's _circle_map_5x5 (inner = core), generalised to (cx, cy)
-        c5 = np.array([cx, cy])
+        xp = _xp_of(cx, cy, r)
+        c5 = xp.stack([xp.asarray(cx), xp.asarray(cy)]) if xp is not np \
+            else np.array([cx, cy])
         a1x = cx - r / np.sqrt(2.0)
         a1y = cy - r / np.sqrt(2.0)
         hin = self.core * r / np.sqrt(2.0)
         a2x, a2y = cx - hin, cy - hin
         u = [a1x, a2x, 2 * cx - a2x, 2 * cx - a1x]
         v = [a1y, a2y, 2 * cy - a2y, 2 * cy - a1y]
-        phi = np.arcsin(hin / r)
+        phi = xp.arcsin(hin / r)
 
         def circ(th):
-            return (c5[0] + r * np.cos(th), c5[1] + r * np.sin(th))
+            return (c5[0] + r * xp.cos(th), c5[1] + r * xp.sin(th))
 
         # loop vertices: local index 1..4 of the 6-wall grid -> u[k - 1]
         def img(i, j):
@@ -681,9 +746,13 @@ class Circle(Shape2D):
 
         loop = [(i, j) for i in (1, 2, 3, 4) for j in (1, 2, 3, 4)
                 if i in (1, 4) or j in (1, 4)]
-        im = {(i, j): np.array(img(i, j), dtype=np.float64)
-              for i, j in loop}
-        verts5 = {(u[i - 1], v[j - 1]): im[(i, j)] for i, j in loop}
+        if xp is np:
+            im = {(i, j): np.array(img(i, j), dtype=np.float64)
+                  for i, j in loop}
+        else:
+            im = {(i, j): xp.stack([xp.asarray(c, dtype=xp.float64)
+                                    for c in img(i, j)]) for i, j in loop}
+        verts5 = [((u[i - 1], v[j - 1]), im[(i, j)]) for i, j in loop]
         edges = []
         for i in (1, 2, 3):
             for j in (1, 4):
@@ -724,12 +793,17 @@ class Ellipse(Shape2D):
         eps_cell, xw, yw, cmap = compile_shapes(1.2e-6, 1.2e-6, [post], 1.0)
     """
 
+    _GEOM = ("cx", "cy", "a", "b", "angle")
+
     def __init__(self, cx, cy, a, b, eps, *, angle=0.0, mu=None,
                  name=None):
         super().__init__(eps, name, mu)
-        self.cx, self.cy = float(cx), float(cy)
-        self.a, self.b = float(a), float(b)
-        self.angle = float(angle)
+        self.cx, self.cy = _num(cx), _num(cy)
+        self.a, self.b = _num(a), _num(b)
+        self.angle = _num(angle)
+        if self._traced():
+            self._freeze()
+            return
         if not (self.a > 0.0 and self.b > 0.0):
             raise ValueError(f"{self.name}: the semi-axes must be > 0.")
         if not abs(self.angle) < np.pi / 4:
@@ -746,7 +820,8 @@ class Ellipse(Shape2D):
         return s + ")"
 
     def _pt(self, t):
-        ca, sa = np.cos(self.angle), np.sin(self.angle)
+        xp = _xp_of(self.angle, self.a, self.b)
+        ca, sa = xp.cos(self.angle), xp.sin(self.angle)
         X, Y = self.a * np.cos(t), self.b * np.sin(t)
         return self.cx + ca * X - sa * Y, self.cy + sa * X + ca * Y
 
@@ -776,16 +851,18 @@ class Ellipse(Shape2D):
         A, B = max(self.a, self.b), min(self.a, self.b)
         return 4.0 * A * float(ellipe(1.0 - (B / A) ** 2))
 
-    def _layout(self, px, py):
-        self._check_inside(px, py, strict=True)
+    def _layout(self, px, py, ref=None):
+        d = self if ref is None else ref
+        if ref is None:
+            self._check_inside(px, py, strict=True)
         a, b = self.a, self.b
-        if self.angle == 0.0:
+        if d.angle == 0.0 and not _any_traced(self.angle):
             # Phase B's _ellipse_map_3x3, to the bit
             c = (self.cx, self.cy)
             hu, hv = a / np.sqrt(2.0), b / np.sqrt(2.0)
             u = [c[0] - hu, c[0] + hu]
             v = [c[1] - hv, c[1] + hv]
-            verts = {(uu, vv): (uu, vv) for uu in u for vv in v}
+            verts = [((uu, vv), (uu, vv)) for uu in u for vv in v]
             ax = (a, b)
             edges = [
                 _HardEdge("h", v[0], u[0], u[1],
@@ -799,12 +876,15 @@ class Ellipse(Shape2D):
             ]
             return _Layout(u, v, verts, edges, [(u[0], u[1], v[0], v[1])])
         c = (self.cx, self.cy)
-        P = {k: np.array(self._pt(t * _DEG)) for k, t in
+        xp = _xp_of(self.cx, self.cy, a, b, self.angle)
+        P = {k: (np.array(self._pt(t * _DEG)) if xp is np else
+                 xp.stack([xp.asarray(q) for q in self._pt(t * _DEG)]))
+             for k, t in
              (("BL", 225), ("BR", 315), ("TR", 45), ("TL", 135))}
         u = [0.5 * (P["BL"][0] + P["TL"][0]), 0.5 * (P["BR"][0] + P["TR"][0])]
         v = [0.5 * (P["BL"][1] + P["BR"][1]), 0.5 * (P["TL"][1] + P["TR"][1])]
-        vrot = {(u[0], v[0]): P["BL"], (u[1], v[0]): P["BR"],
-                (u[1], v[1]): P["TR"], (u[0], v[1]): P["TL"]}
+        vrot = [((u[0], v[0]), P["BL"]), ((u[1], v[0]), P["BR"]),
+                ((u[1], v[1]), P["TR"]), ((u[0], v[1]), P["TL"])]
         ax = (a, b)
         al = self.angle
         edges = [
@@ -855,21 +935,30 @@ class SinusoidalWall(Shape2D):
                              f"position is an x, running along y) or 'y', "
                              f"got {axis!r}.")
         self.axis = axis
-        self.x0 = float(x0)
-        self.amplitude = float(amplitude)
+        self.x0 = _num(x0)
+        self.amplitude = _num(amplitude)
         n = int(period_count)
         if n != period_count or n < 1:
             raise ValueError(
                 f"{self.name}: period_count must be a positive integer (the "
                 f"wall must repeat with the lattice), got {period_count!r}.")
         self.period_count = n
-        self.phase = float(phase)
-        self.width = None if width is None else float(width)
+        self.phase = _num(phase)
+        self.width = None if width is None else _num(width)
+        if self._traced():
+            # Phase E3: a traced wall is curved (amplitude 0 is the straight
+            # wall, a different topology the twin does not cross)
+            self.curved = True
+            self._periods = None
+            self._freeze()
+            return
         if self.width is not None and not self.width > 0.0:
             raise ValueError(f"{self.name}: width must be > 0.")
         self.curved = self.amplitude != 0.0
         self._periods = None          # (p_run, p_pos), set by _layout
         self._freeze()
+
+    _GEOM = ("x0", "amplitude", "phase", "width")
 
     def _default_name(self):
         s = (f"SinusoidalWall(axis={self.axis!r}, x0={_fmt(self.x0)}, "
@@ -943,8 +1032,31 @@ class SinusoidalWall(Shape2D):
             tot += 0.5 * (t1 - t0) * float(wg @ f)
         return tot * len(self._bases())
 
-    def _layout(self, px, py):
+    def _layout(self, px, py, ref=None):
         p_run, p_pos = (py, px) if self.axis == "x" else (px, py)
+        if ref is not None:
+            # Phase E3: the traced wall's values, the reference's structure
+            object.__setattr__(self, "_periods", (p_run, p_pos))
+            verts, edges = [], []
+            for base in self._bases():
+                crv = Sinusoid(base, self.amplitude,
+                               p_run / self.period_count, 0.0, p_run,
+                               phase=self.phase,
+                               along=("y" if self.axis == "x" else "x"))
+                e0 = crv(np.array([0.0, 1.0]))[0]
+                kind = "v" if self.axis == "x" else "h"
+                for t, e in ((0.0, e0[0]), (p_run, e0[1])):
+                    key = (base, t) if self.axis == "x" else (t, base)
+                    verts.append((key, e))
+                edges.append(_HardEdge(kind, base, 0.0, p_run,
+                                       crv if ref.curved else None))
+            top = p_pos if self.width is None else self.x0 + self.width
+            pos_walls = self._bases()
+            if self.axis == "x":
+                return _Layout(pos_walls, [], verts, edges,
+                               [(self.x0, top, 0.0, p_run)])
+            return _Layout([], pos_walls, verts, edges,
+                           [(0.0, p_run, self.x0, top)])
         if self._periods not in (None, (p_run, p_pos)):
             raise ValueError(
                 f"{self.name}: this wall was compiled for the periods "
@@ -983,29 +1095,50 @@ class SinusoidalWall(Shape2D):
 # =========================================================================== #
 # The merge: many shapes (in many layers) -> ONE wall grid and ONE map
 # =========================================================================== #
-def _curve_piece(e, ta, tb):
+def _curve_piece(e, ta, tb, ref=None):
     """The sub-curve of hard edge ``e`` between the running coordinates
-    ``ta`` and ``tb`` (``None`` for a straight side)."""
-    if e.curve is None:
+    ``ta`` and ``tb`` (``None`` for a straight side).
+
+    ``ref = (e_ref, ta_ref, tb_ref)`` (Phase E3, the JAX twin): the CONCRETE
+    reference edge and coordinates that take the three branch decisions for
+    a traced ``e`` (a traced value cannot be compared); ``None`` decides on
+    ``e`` itself, the shipped behaviour."""
+    er, ra, rb = (e, ta, tb) if ref is None else ref
+    if er.curve is None:
         return None
-    if ta == e.a and tb == e.b:
+    if ra == er.a and rb == er.b:
         return e.curve
-    if isinstance(e.curve, Sinusoid) and e.curve.t0 == e.a and \
-            e.curve.t1 == e.b:
+    if isinstance(er.curve, Sinusoid) and er.curve.t0 == er.a and \
+            er.curve.t1 == er.b:
         return e.curve.between(ta, tb)       # its parameter IS the coordinate
     L = e.b - e.a
     return e.curve.piece((ta - e.a) / L, (tb - e.a) / L)
 
 
-def _curve_point(e, t, ends):
+def _curve_point(e, t, ends, ref=None):
     """The image of the point at running coordinate ``t`` on hard edge
-    ``e`` (``ends`` = the exact images of its two endpoints)."""
+    ``e`` (``ends`` = the exact images of its two endpoints).  ``ref``
+    (Phase E3): the concrete reference edge taking the branch decision for a
+    traced ``e``."""
+    er = e if ref is None else ref
     s = (t - e.a) / (e.b - e.a)
-    if e.curve is None:
+    if er.curve is None:
         return ends[0] + s * (ends[1] - ends[0])
-    if isinstance(e.curve, Sinusoid) and e.curve.t0 == e.a:
+    if isinstance(er.curve, Sinusoid) and er.curve.t0 == er.a:
         return e.curve.between(t, t + 1.0)(np.array([0.0]))[0][0]
     return e.curve(np.array([s]))[0][0]
+
+
+def _fill_mask(lay, uc, vc):
+    """``(N, N)`` bool: the ``(u, v)`` cells (centres ``uc`` x ``vc``) a
+    layout fills -- the ONE painting predicate of :func:`_merge`,
+    :func:`_paint_mu` and the JAX twin's traced painting (Phase E3)."""
+    N = uc.size
+    m = np.zeros((N, N), dtype=bool)
+    for (u0, u1, v0, v1) in lay.fill:
+        m |= ((uc[:, None] > u0) & (uc[:, None] < u1)
+              & (vc[None, :] > v0) & (vc[None, :] < v1))
+    return m
 
 
 class _Grid1D:
@@ -1075,7 +1208,7 @@ def _crossing(A, B, tol):
     return bool(np.any(d < -tol) and np.any(d > tol))
 
 
-def _merge(px, py, layers, grid_hint=None):
+def _merge(px, py, layers, grid_hint=None, parts=False):
     """The core of :func:`compile_shapes` for one or many layers.
 
     ``layers`` is a list of ``(label, shapes, background_eps)`` or
@@ -1084,7 +1217,11 @@ def _merge(px, py, layers, grid_hint=None):
     one ``(N, N)`` (or ``(N, N, 3, 3)``) permittivity grid per layer,
     ``identity`` True when the merged map is the identity (no curve, no moved
     vertex), ``mu_cells`` one permeability grid per layer (``None`` for a
-    layer with no ``mu`` anywhere; a shape without ``mu`` paints ``mu = 1``)."""
+    layer with no ``mu`` anywhere; a shape without ``mu`` paints ``mu = 1``).
+
+    ``parts=True`` (Phase E3, the JAX twin) appends a SEVENTH output: the
+    merge's intermediates ``{items, gu, gv, tm, uc, vc}`` -- the structure
+    the twin replays with traced shape parameters."""
     px, py = float(px), float(py)
     scale = max(px, py)
     items = []
@@ -1233,16 +1370,15 @@ def _merge(px, py, layers, grid_hint=None):
         else:
             cell = np.full((N, N), bgv, dtype=complex)
         for sh in shapes:
-            lay = sh._layout(px, py)
-            m = np.zeros((N, N), dtype=bool)
-            for (u0, u1, v0, v1) in lay.fill:
-                m |= ((uc[:, None] > u0) & (uc[:, None] < u1)
-                      & (vc[None, :] > v0) & (vc[None, :] < v1))
+            m = _fill_mask(sh._layout(px, py), uc, vc)
             if tensor:
                 cell[m] = sh.eps if sh.is_tensor else sh.eps * np.eye(3)
             else:
                 cell[m] = sh.eps
         cells.append(cell)
+    if parts:
+        return U, Vb, cmap, cells, identity, mu_cells, dict(
+            items=items, gu=gu, gv=gv, tm=tm, uc=uc, vc=vc)
     return U, Vb, cmap, cells, identity, mu_cells
 
 
@@ -1263,11 +1399,7 @@ def _paint_mu(shapes, background_mu, px, py, uc, vc):
     else:
         cell = np.full((N, N), bgv, dtype=complex)
     for sh, m in zip(shapes, mus[1:]):
-        lay = sh._layout(px, py)
-        msk = np.zeros((N, N), dtype=bool)
-        for (u0, u1, v0, v1) in lay.fill:
-            msk |= ((uc[:, None] > u0) & (uc[:, None] < u1)
-                    & (vc[None, :] > v0) & (vc[None, :] < v1))
+        msk = _fill_mask(sh._layout(px, py), uc, vc)
         if tensor:
             cell[msk] = m if np.ndim(m) == 2 else m * np.eye(3)
         else:
