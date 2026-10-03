@@ -1,0 +1,26 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "M": 5,
+ "map": "c3off",
+ "floor_dRT": 2.9004576518332215e-15,
+ "orders_dRT_vs_n8": {
+  "2": 4.0245584642661925e-16,
+  "3": 4.0245584642661925e-16,
+  "5": 9.71445146547012e-16
+ },
+ "spacer_dRT": 2.563490781879417e-05,
+ "spacer_dJ_abs": 2.444756612318688e-06,
+ "closure_n3": 0.001158238104844389
+}

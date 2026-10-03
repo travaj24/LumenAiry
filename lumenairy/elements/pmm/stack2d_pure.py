@@ -210,6 +210,7 @@ from .twod_staggered import (
     _region_modes_oop,
     _require_inplane_mu,
     _require_nonmagnetic_halfspace,
+    _stag_incident_load_mapped,
     _stag_kron_apply,
     _stag_mortared_axes,
     _tile_needs_oop,
@@ -2350,12 +2351,35 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         R_rows, T_rows, j_cols, cinc_cols = [], [], [], []
         amp = {k: np.zeros((2, Nfo), dtype=_C)
                for k in ("rx", "ry", "tx", "ty")}
+        cinc_map = None
+        if cmap is not None:
+            # THE INCIDENT FIELD UNDER A MAP (Phase C; Phase B finding F-B4,
+            # Phase A verifier D4).  Under a non-polynomial map the incident
+            # plane wave is not an exact discrete half-space mode, so the
+            # shipped least-squares overlap below was UNDERdetermined
+            # (2 (2 n_orders + 1)^2 equations, 2 q^2 unknowns): its
+            # minimum-norm draw carried a round-off floor (6.8e-10 at M = 6
+            # on the 3 x 3 circle) and made R / T depend on n_orders at the
+            # discretisation level.  The EXACT modal decomposition instead:
+            # the L2 projection of the covariant incident field onto the
+            # staggered basis (plain Gram, the load of
+            # _stag_incident_load_mapped), then the half-space modes,
+            # cinc = W0^-1 G^-1 b -- unique and window-free.  Without a map
+            # the shipped overlap is kept bit for bit.
+            _W0, _Ginv = geom[0], geom[4]
+            _B = np.stack([_stag_incident_load_mapped(bx, by, cmap, a0x, a0y,
+                                                      e0)
+                           for e0 in ((1.0, 0.0), (0.0, 1.0))], axis=1)
+            cinc_map = np.linalg.solve(_W0, _Ginv @ _B)
         for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
             long_inc = kx0 * ex0 + ky0 * ey0
             einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
-            rhs = np.concatenate([ex0 * delta, ey0 * delta])
-            cinc = _guarded_lstsq(
-                Hsup, rhs, "PMM2DStackPure far-field Rayleigh projection")
+            if cinc_map is not None:
+                cinc = cinc_map[:, col]
+            else:
+                rhs = np.concatenate([ex0 * delta, ey0 * delta])
+                cinc = _guarded_lstsq(
+                    Hsup, rhs, "PMM2DStackPure far-field Rayleigh projection")
             cinc_cols.append(cinc)
             r_ord = Hsup @ (S11 @ cinc)
             t_ord = Hsub @ (S21 @ cinc)

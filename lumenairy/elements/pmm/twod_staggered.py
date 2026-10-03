@@ -3450,6 +3450,94 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
     return Pm["xu"], Pm["yv"], Pm["xv"], Pm["yu"]
 
 
+def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
+                               alpha0y, e0):
+    """The L2 LOAD vector of the incident plane wave under the curved-cell
+    map ``cmap`` -- the right-hand side of its EXACT modal decomposition
+    (Phase C of the curved-cell plan; Phase B finding F-B4, Phase A verifier
+    D4).
+
+    The incident wave is ``E_t(x, y) = e0 exp(-i (alpha0x x + alpha0y y))``
+    (the far-field convention of :func:`_stag_fourier_projection`: order 0
+    has transverse dependence ``e^{-i alpha0 . r}``, ``e0 = (E_x, E_y)``).
+    In the solver's ``(u, v)`` frame its COVARIANT components are
+    ``E'_u = e0 . dPhi/du e^{-i alpha0 . Phi}`` and ``E'_v = e0 . dPhi/dv
+    e^{-i alpha0 . Phi}`` (``E' = J^T E``), which are NOT polynomials under a
+    non-polynomial map: the plane wave is not an exact discrete half-space
+    mode.  Its faithful representation is the L2 projection onto the
+    staggered basis, ``G c = b`` with ``G`` the PLAIN block Gram and
+
+        b_I = INT INT conj(phi_I(u, v)) E'(u, v) du dv
+
+    (the sesquilinear ``conj``-left inner product of :meth:`Basis1D.mass`),
+    which this function returns as the ``(2 q^2,)`` vector ``[b1; b2]`` in the
+    shipped ``kron(y, x)`` layout (``E'_u`` in ``V1 = B(u) (x) Btilde(v)``,
+    ``E'_v`` in ``V2 = Btilde(u) (x) B(v)``).  The incident MODAL amplitudes
+    are then ``cinc = W^-1 G^-1 b`` -- unique, so no minimum-norm draw, and
+    independent of the far-field window ``n_orders`` (which enters only the
+    projection of the OUTGOING fields).
+
+    The integrand (the Jacobian entries times the phase) is bounded and
+    analytic inside every cell -- also in the cells that own a singular
+    vertex, where ``det J`` vanishes but ``J`` does not -- so a tensor
+    Gauss rule converges spectrally; it carries ``max(2 M + 16,
+    _stag_quad_order(M, omega))`` nodes per axis, ``omega`` the incident
+    phase across the cell's PHYSICAL half-extents (the far projector's own
+    sizing rule).  Without a map this is never called (the shipped
+    least-squares overlap is kept bit for bit)."""
+    M = bx.M
+    ex0, ey0 = complex(e0[0]), complex(e0[1])
+    q = bx.dim
+    SB = (np.asarray(bx.B), np.asarray(by.B))
+    ST = (np.asarray(bx.Btilde), np.asarray(by.Btilde))
+    b1 = np.zeros((q, q), dtype=_C)        # [jy, jx]
+    b2 = np.zeros((q, q), dtype=_C)
+    base = 2 * M + 16
+    rules = {}
+
+    def _rule(n):
+        hit = rules.get(n)
+        if hit is None:
+            xg, wg = leggauss(n)
+            hit = rules[n] = (xg, wg, _modleg_value_deriv(M, xg)[0])
+        return hit
+
+    a0x, a0y = float(alpha0x), float(alpha0y)
+    for sx in range(bx.N):
+        for sy in range(by.N):
+            xg, wg, Vref = _rule(base)
+            U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+            Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+            X = cmap.geom(sx, sy, U, Vv)
+            omega = (abs(a0x) * 0.5 * float(np.ptp(X[0]))
+                     + abs(a0y) * 0.5 * float(np.ptp(X[1])))
+            nq = max(base, _stag_quad_order(M, omega))
+            if nq != base:
+                xg, wg, Vref = _rule(nq)
+                U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+                Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+                X = cmap.geom(sx, sy, U, Vv)
+            Xp, Yp, xu, xv, yu, yv = X
+            ph = np.exp(-1j * (a0x * Xp + a0y * Yp))
+            w2 = (wg[:, None] * wg[None, :]) * (bx.Jn[sx] * by.Jn[sy])
+            f1 = (ex0 * xu + ey0 * yu) * ph * w2           # E'_u
+            f2 = (ex0 * xv + ey0 * yv) * ph * w2           # E'_v
+            vals = {}
+            for nm, (Sx, Sy) in (("B", SB), ("T", ST)):
+                cx = Sx[:, sx, :]
+                cy = Sy[:, sy, :]
+                ix = np.nonzero(np.any(cx != 0, axis=1))[0]
+                iy = np.nonzero(np.any(cy != 0, axis=1))[0]
+                # conj-left: the TEST functions carry the conjugated stencil
+                vals[nm + "x"] = (ix, np.conj(cx[ix]) @ Vref)
+                vals[nm + "y"] = (iy, np.conj(cy[iy]) @ Vref)
+            for out, f, xs, ys in ((b1, f1, "Bx", "Ty"), (b2, f2, "Tx", "By")):
+                ixs, Xv = vals[xs]
+                iys, Yv = vals[ys]
+                out[np.ix_(iys, ixs)] += Yv @ f.T @ Xv.T
+    return np.concatenate([b1.ravel(), b2.ravel()])
+
+
 def _pmm2d_project_orders(P1, P2, Wmodes, qq, P12=None, P21=None):
     """Project a PMM-2D ``[E1; E2]`` modal matrix onto the Rayleigh orders --
     the ONE ``_proj`` closure shared by :mod:`.stack2d_pure` and this
