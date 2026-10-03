@@ -1,0 +1,15 @@
+{
+ "tag": "tip",
+ "shear_film_M6": 7.054008085427554e-07,
+ "shear_film_M7": 2.663164910821081e-08,
+ "sep_oracle_M4": 4.262819397864729e-13,
+ "env": {
+  "build": "wsl",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "lumenairy": "/mnt/c/tmp/lum_vcurved_a/lumenairy/__init__.py",
+  "date": "2026-10-02 20:45"
+ }
+}

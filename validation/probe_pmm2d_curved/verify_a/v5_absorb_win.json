@@ -1,0 +1,233 @@
+{
+ "rows": [
+  {
+   "map": "harm_asym",
+   "kind": "stripe",
+   "M": 4,
+   "absorbed": [
+    0.21752308322265446,
+    0.38392781410559645
+   ],
+   "closure": 0.057609369255503196,
+   "failbefore_minusR": 0.12580775075345552
+  },
+  {
+   "map": "harm_asym",
+   "kind": "stripe",
+   "M": 5,
+   "absorbed": [
+    0.19171984208734072,
+    0.39970806028760175
+   ],
+   "closure": 0.028519389878889523,
+   "failbefore_minusR": 0.05417049091029558
+  },
+  {
+   "map": "harm_asym",
+   "kind": "stripe",
+   "M": 6,
+   "absorbed": [
+    0.20298801850539783,
+    0.41265734403208787
+   ],
+   "closure": 0.017127446703557286,
+   "failbefore_minusR": 0.06097448588643853
+  },
+  {
+   "map": "harm_asym",
+   "kind": "stripe",
+   "M": 7,
+   "absorbed": [
+    0.1903997045740108,
+    0.4136088321321537
+   ],
+   "closure": 0.006149565971500681,
+   "failbefore_minusR": 0.02476501071782669
+  },
+  {
+   "map": "harm_asym",
+   "kind": "stripe",
+   "M": 8,
+   "absorbed": [
+    0.18771715370639686,
+    0.4188159147008774
+   ],
+   "closure": 0.001158713215169721,
+   "failbefore_minusR": 0.020211715406797337
+  },
+  {
+   "map": "harm_asym",
+   "kind": "pillar",
+   "M": 4,
+   "absorbed": [
+    0.26528333006714444,
+    0.20089763956104345
+   ],
+   "closure": 0.03151746481557188,
+   "failbefore_minusR": 0.16641859245353624
+  },
+  {
+   "map": "harm_asym",
+   "kind": "pillar",
+   "M": 5,
+   "absorbed": [
+    0.2311081083402423,
+    0.20534765399560295
+   ],
+   "closure": 0.009031856334571348,
+   "failbefore_minusR": 0.15402222326615034
+  },
+  {
+   "map": "harm_asym",
+   "kind": "pillar",
+   "M": 6,
+   "absorbed": [
+    0.24473092499952132,
+    0.21245004558679093
+   ],
+   "closure": 0.014054788591775058,
+   "failbefore_minusR": 0.1419876806864535
+  },
+  {
+   "map": "harm_asym",
+   "kind": "pillar",
+   "M": 7,
+   "absorbed": [
+    0.22100367262586795,
+    0.21235881503680532
+   ],
+   "closure": 0.0028621119271483864,
+   "failbefore_minusR": 0.14051402782291278
+  },
+  {
+   "map": "harm_asym",
+   "kind": "pillar",
+   "M": 8,
+   "absorbed": [
+    0.2175470115314797,
+    0.2148796397919851
+   ],
+   "closure": 0.0008645002247982259,
+   "failbefore_minusR": 0.13711855248677135
+  },
+  {
+   "map": "shear",
+   "kind": "stripe",
+   "M": 4,
+   "absorbed": [
+    0.25975604778894545,
+    0.40712851431768604
+   ],
+   "closure": 0.04306636848211873,
+   "failbefore_minusR": 0.04286975939945792
+  },
+  {
+   "map": "shear",
+   "kind": "stripe",
+   "M": 5,
+   "absorbed": [
+    0.2169600408870006,
+    0.4157776988115416
+   ],
+   "closure": 0.0015159490566285516,
+   "failbefore_minusR": 0.019534752566140456
+  },
+  {
+   "map": "shear",
+   "kind": "stripe",
+   "M": 6,
+   "absorbed": [
+    0.21534459473156253,
+    0.4169456690573089
+   ],
+   "closure": 0.0008603496533148292,
+   "failbefore_minusR": 0.019669692929581206
+  },
+  {
+   "map": "shear",
+   "kind": "stripe",
+   "M": 7,
+   "absorbed": [
+    0.21497431240184428,
+    0.4169500063462615
+   ],
+   "closure": 0.00011965374794803418,
+   "failbefore_minusR": 0.019423207100398854
+  },
+  {
+   "map": "shear",
+   "kind": "stripe",
+   "M": 8,
+   "absorbed": [
+    0.21452800834197816,
+    0.41697444356337177
+   ],
+   "closure": 1.3612838583171305e-05,
+   "failbefore_minusR": 0.019273042631365367
+  },
+  {
+   "map": "shear",
+   "kind": "pillar",
+   "M": 4,
+   "absorbed": [
+    0.2637168559638915,
+    0.24761515249945454
+   ],
+   "closure": 0.03671361716816665,
+   "failbefore_minusR": 0.03758070541867309
+  },
+  {
+   "map": "shear",
+   "kind": "pillar",
+   "M": 5,
+   "absorbed": [
+    0.22825614976318787,
+    0.22852469108612128
+   ],
+   "closure": 0.002023663816575677,
+   "failbefore_minusR": 0.018605979103275883
+  },
+  {
+   "map": "shear",
+   "kind": "pillar",
+   "M": 6,
+   "absorbed": [
+    0.22773436432543026,
+    0.22674597379127592
+   ],
+   "closure": 0.0013200503532418972,
+   "failbefore_minusR": 0.018265990429623125
+  },
+  {
+   "map": "shear",
+   "kind": "pillar",
+   "M": 7,
+   "absorbed": [
+    0.22628461294370383,
+    0.22630569000767942
+   ],
+   "closure": 9.747193675049837e-05,
+   "failbefore_minusR": 0.01953749057869153
+  },
+  {
+   "map": "shear",
+   "kind": "pillar",
+   "M": 8,
+   "absorbed": [
+    0.22593170288256836,
+    0.22589998286046553
+   ],
+   "closure": 2.6564532155298748e-05,
+   "failbefore_minusR": 0.019550620577550526
+  }
+ ],
+ "env": {
+  "build": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "lumenairy": "C:\\tmp\\lum_vcurved_a\\lumenairy\\__init__.py",
+  "date": "2026-10-02 20:35"
+ }
+}

@@ -16983,5 +16983,11 @@
   "tests/unit/test_pmm2d_staggered_curved_b.py::test_b7_same_area_square_is_not_a_fillet": 2.4,
   "tests/unit/test_pmm2d_staggered_curved_b.py::test_b10_film_under_the_circle_map_at_conical_incidence": 2.92,
   "tests/unit/test_pmm2d_staggered_curved_b.py::test_b9_ellipse_against_the_exact_form_factor_rcwa": 8.16,
-  "tests/unit/test_pmm2d_staggered_curved_b.py::test_b9_sinusoidal_wall_mirror_and_exact_form_factor": 5.7
+  "tests/unit/test_pmm2d_staggered_curved_b.py::test_b9_sinusoidal_wall_mirror_and_exact_form_factor": 5.7,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_fingerprint_sees_the_curve_parameters": 0.05,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_mapped_operators_match_an_independent_oracle": 4.82,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_mapped_projector_keeps_the_phase_rule_on_a_long_cell": 0.87,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_sheared_film_is_exact": 9.45,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_solver_refuses_a_folding_map": 0.72,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_validation_refuses_a_translated_map": 0.01
 }

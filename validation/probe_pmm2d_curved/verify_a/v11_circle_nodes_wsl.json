@@ -1,0 +1,71 @@
+{
+ "rows": [
+  {
+   "M": 4,
+   "nq": 256,
+   "seconds": 7.997943399999713,
+   "warning": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 256 Gauss nodes per axis per cell (moment error 1.29e+00); the operators carry a quadrature error of that order.  The map varies too sharply inside a cell -- add walls where it is steep, or soften it."
+   ]
+  },
+  {
+   "M": 5,
+   "nq": 144,
+   "seconds": 0.5499377000001004,
+   "warning": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 144 Gauss nodes per axis per cell (moment error 1.76e+00); the operators carry a quadrature error of that order.  The map varies too sharply inside a cell -- add walls where it is steep, or soften it."
+   ]
+  },
+  {
+   "M": 6,
+   "nq": 160,
+   "seconds": 1.4132821000002878,
+   "warning": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 160 Gauss nodes per axis per cell (moment error 1.23e+00); the operators carry a quadrature error of that order.  The map varies too sharply inside a cell -- add walls where it is steep, or soften it."
+   ]
+  },
+  {
+   "M": 7,
+   "nq": 176,
+   "seconds": 0.8034824999999728,
+   "warning": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 176 Gauss nodes per axis per cell (moment error 1.78e+00); the operators carry a quadrature error of that order.  The map varies too sharply inside a cell -- add walls where it is steep, or soften it."
+   ]
+  },
+  {
+   "M": 8,
+   "nq": 192,
+   "seconds": 1.903059199999916,
+   "warning": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 192 Gauss nodes per axis per cell (moment error 2.88e+00); the operators carry a quadrature error of that order.  The map varies too sharply inside a cell -- add walls where it is steep, or soften it."
+   ]
+  }
+ ],
+ "shipped_validate": "CircleMap: the map must be lattice-periodic -- Phi(u + p_x, v) = Phi(u, v) + (p_x, 0) and Phi(u, v + p_y) = Phi(u, v) + (0, p_y) with a periodic Jacobian -- so that the solver's Bloch glue is unchanged; along u (index 1) the position mismatch is 0.000e+00 and the Jacobian mismatch 5.503e-02.",
+ "seam": {
+  "u_seam_row0": {
+   "pos": 0.0,
+   "tangential": 0.0,
+   "normal": 2.220446049250313e-16
+  },
+  "u_seam_row1": {
+   "pos": 0.0,
+   "tangential": 0.0,
+   "normal": 0.06170214894302349
+  },
+  "u_seam_row2": {
+   "pos": 0.0,
+   "tangential": 0.0,
+   "normal": 0.0
+  }
+ },
+ "env": {
+  "build": "wsl",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "lumenairy": "/mnt/c/tmp/lum_vcurved_a/lumenairy/__init__.py",
+  "date": "2026-10-02 22:00"
+ }
+}

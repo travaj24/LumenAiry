@@ -1,0 +1,49 @@
+{
+ "rows": [
+  {
+   "kind": "stripe",
+   "M": 6,
+   "closure": 0.02541232525285575,
+   "mixed_closure": 0.17713505268648855,
+   "mixed_dRT": 0.18099816462583182,
+   "consistent_closure": 0.025412325252858192,
+   "consistent_dRT": 1.2989609388114332e-14
+  },
+  {
+   "kind": "stripe",
+   "M": 8,
+   "closure": 0.0015366111258713344,
+   "mixed_closure": 0.1808793238879991,
+   "mixed_dRT": 0.17304420628022876,
+   "consistent_closure": 0.0015366111259165205,
+   "consistent_dRT": 8.643086246706844e-14
+  },
+  {
+   "kind": "pillar",
+   "M": 6,
+   "closure": 0.03248281080479387,
+   "mixed_closure": 0.29395248755209913,
+   "mixed_dRT": 0.19563702637624325,
+   "consistent_closure": 0.0324828108048012,
+   "consistent_dRT": 1.9872992140790302e-14
+  },
+  {
+   "kind": "pillar",
+   "M": 8,
+   "closure": 0.001549358726107175,
+   "mixed_closure": 0.07972747419151682,
+   "mixed_dRT": 0.1837767352173222,
+   "consistent_closure": 0.001549358726041672,
+   "consistent_dRT": 1.13464793116691e-13
+  }
+ ],
+ "env": {
+  "build": "wsl",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "lumenairy": "/mnt/c/tmp/lum_vcurved_a/lumenairy/__init__.py",
+  "date": "2026-10-02 21:32"
+ }
+}

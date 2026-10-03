@@ -1,0 +1,94 @@
+{
+ "rows": [
+  {
+   "min_fprime": 0.05,
+   "a_over_p": 0.15119719593730058,
+   "M": 5,
+   "nq": 144,
+   "cap_warning": [],
+   "solve_warnings": [
+    "PMM2DStackPure.solve: lossless energy closure violated for incident E_x (sum R+T = 0.9028, off by -0.0972; every permittivity in this stack is real or Hermitian"
+   ],
+   "dRT_vs_1024": 5.914298836784404e-08,
+   "err_te_vs_1d": 0.0799582621215997,
+   "err_te_1024_vs_1d": 0.07995826212163065
+  },
+  {
+   "min_fprime": 0.05,
+   "a_over_p": 0.15119719593730058,
+   "M": 6,
+   "nq": 160,
+   "cap_warning": [],
+   "solve_warnings": [],
+   "dRT_vs_1024": 7.2909251969122124e-09,
+   "err_te_vs_1d": 0.035332809189690506,
+   "err_te_1024_vs_1d": 0.03533280918972398
+  },
+  {
+   "min_fprime": 0.05,
+   "a_over_p": 0.15119719593730058,
+   "M": 8,
+   "nq": 192,
+   "cap_warning": [],
+   "solve_warnings": [],
+   "dRT_vs_1024": 2.8531066398329585e-12,
+   "err_te_vs_1d": 0.006767945938660952,
+   "err_te_1024_vs_1d": 0.006767945938572356
+  },
+  {
+   "min_fprime": 0.01,
+   "a_over_p": 0.15756339366097638,
+   "M": 5,
+   "nq": 144,
+   "cap_warning": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 144 Gauss nodes per axis per cell (moment error 7.30e-09); the operators carry a quadrature error of that order.  The map varies too sharply inside a cell -- add walls where it is steep, or soften it."
+   ],
+   "solve_warnings": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 144 Gauss nodes per axis per cell (moment ",
+    "PMM2DStackPure.solve: lossless energy closure violated for incident E_x (sum R+T = 0.8827, off by -0.117; every permittivity in this stack is real or Hermitian,"
+   ],
+   "dRT_vs_1024": 1.2042381498655885e-06,
+   "err_te_vs_1d": 0.11164885295818783,
+   "err_te_1024_vs_1d": 0.11164885308712563
+  },
+  {
+   "min_fprime": 0.01,
+   "a_over_p": 0.15756339366097638,
+   "M": 6,
+   "nq": 160,
+   "cap_warning": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 160 Gauss nodes per axis per cell (moment error 1.40e-09); the operators carry a quadrature error of that order.  The map varies too sharply inside a cell -- add walls where it is steep, or soften it."
+   ],
+   "solve_warnings": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 160 Gauss nodes per axis per cell (moment "
+   ],
+   "dRT_vs_1024": 5.777370959414441e-08,
+   "err_te_vs_1d": 0.036993497286567756,
+   "err_te_1024_vs_1d": 0.036993497289556754
+  },
+  {
+   "min_fprime": 0.01,
+   "a_over_p": 0.15756339366097638,
+   "M": 8,
+   "nq": 192,
+   "cap_warning": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 192 Gauss nodes per axis per cell (moment error 2.18e-11); the operators carry a quadrature error of that order.  The map varies too sharply inside a cell -- add walls where it is steep, or soften it."
+   ],
+   "solve_warnings": [
+    "Granet2DTransverseE: the coordinate map's geometric weights are not resolved to the quadrature tolerance 1e-13 within 192 Gauss nodes per axis per cell (moment "
+   ],
+   "dRT_vs_1024": 1.1481593453765981e-11,
+   "err_te_vs_1d": 0.010070515816913178,
+   "err_te_1024_vs_1d": 0.010070515816809456
+  }
+ ],
+ "env": {
+  "build": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "lumenairy": "C:\\tmp\\lum_vcurved_a\\lumenairy\\__init__.py",
+  "date": "2026-10-02 20:36"
+ }
+}

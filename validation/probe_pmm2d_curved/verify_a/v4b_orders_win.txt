@@ -1,0 +1,9 @@
+6 asym dJ(no2 vs no3)=5.96e-04 Jxy_leak no3=1.05e-06 Jyx=1.02e-14 te_err=3.22e-02
+6 sine0.02 dJ(no2 vs no3)=8.79e-08 Jxy_leak no3=1.05e-10 Jyx=3.35e-15 te_err=3.52e-05
+6 none dJ(no2 vs no3)=7.26e-16 Jxy_leak no3=5.35e-16 Jyx=6.67e-15 te_err=4.80e-04
+8 asym dJ(no2 vs no3)=5.60e-05 Jxy_leak no3=3.46e-08 Jyx=1.22e-14 te_err=6.39e-03
+8 sine0.02 dJ(no2 vs no3)=5.28e-10 Jxy_leak no3=2.08e-14 Jyx=1.09e-14 te_err=2.58e-06
+8 none dJ(no2 vs no3)=3.27e-16 Jxy_leak no3=8.90e-17 Jyx=6.01e-15 te_err=9.36e-07
+10 asym dJ(no2 vs no3)=1.34e-06 Jxy_leak no3=5.27e-11 Jyx=1.47e-14 te_err=9.43e-04
+10 sine0.02 dJ(no2 vs no3)=3.89e-13 Jxy_leak no3=1.21e-15 Jyx=2.98e-15 te_err=6.95e-08
+10 none dJ(no2 vs no3)=2.97e-16 Jxy_leak no3=3.34e-14 Jyx=3.85e-14 te_err=5.26e-08

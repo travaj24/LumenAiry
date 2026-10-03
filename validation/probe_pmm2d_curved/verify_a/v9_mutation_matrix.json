@@ -1,0 +1,227 @@
+{
+ "m01_cofactor_to_JT": {
+  "build13": {
+   "failed": [
+    "test_a3_film_under_stretch_is_exact_and_spectral",
+    "test_a4_te_stripe_under_stretch_matches_the_1d_oracle",
+    "test_a6_hpartner_plain_gram_closes",
+    "test_a7_absorption_closure_under_stretch"
+   ],
+   "tail": "4 failed, 9 passed in 381.37s (0:06:21)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_sheared_film_is_exact"
+   ],
+   "tail": "1 failed, 5 passed in 61.45s (0:01:01)"
+  }
+ },
+ "m01b_cofactor_offdiag_swap": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 291.55s (0:04:51)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_sheared_film_is_exact"
+   ],
+   "tail": "1 failed, 5 passed in 54.99s"
+  }
+ },
+ "m02_homog_Ginv_minusR": {
+  "build13": {
+   "failed": [
+    "test_a3_film_under_stretch_is_exact_and_spectral",
+    "test_a4_te_stripe_under_stretch_matches_the_1d_oracle",
+    "test_a6_hpartner_plain_gram_closes",
+    "test_a7_absorption_closure_under_stretch"
+   ],
+   "tail": "4 failed, 9 passed in 398.03s (0:06:38)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_sheared_film_is_exact"
+   ],
+   "tail": "1 failed, 5 passed in 37.55s"
+  }
+ },
+ "m02b_region_modes_minusR": {
+  "build13": {
+   "failed": [
+    "test_a3_film_under_stretch_is_exact_and_spectral",
+    "test_a4_te_stripe_under_stretch_matches_the_1d_oracle",
+    "test_a6_fail_before_mixed_hpartner",
+    "test_a6_hpartner_plain_gram_closes"
+   ],
+   "tail": "4 failed, 9 passed in 277.73s (0:04:37)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_sheared_film_is_exact"
+   ],
+   "tail": "1 failed, 5 passed in 32.28s"
+  }
+ },
+ "m02c_flux_gram_minusR": {
+  "build13": {
+   "failed": [
+    "test_a7_absorption_closure_under_stretch"
+   ],
+   "tail": "1 failed, 12 passed in 404.19s (0:06:44)"
+  },
+  "verify": {
+   "failed": [],
+   "tail": "6 passed in 27.51s"
+  }
+ },
+ "m03_nq_pinned_callsite": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 291.48s (0:04:51)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_mapped_operators_match_an_independent_oracle"
+   ],
+   "tail": "1 failed, 5 passed in 31.20s"
+  }
+ },
+ "m03b_nq_function_fixed": {
+  "build13": {
+   "failed": [
+    "test_quadrature_is_adaptive_under_a_strong_stretch"
+   ],
+   "tail": "1 failed, 12 passed in 398.13s (0:06:38)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_mapped_operators_match_an_independent_oracle"
+   ],
+   "tail": "1 failed, 5 passed in 63.34s (0:01:03)"
+  }
+ },
+ "m03c_moments_sqrtg_only": {
+  "build13": {
+   "failed": [
+    "test_quadrature_is_adaptive_under_a_strong_stretch"
+   ],
+   "tail": "1 failed, 12 passed in 286.45s (0:04:46)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_mapped_operators_match_an_independent_oracle"
+   ],
+   "tail": "1 failed, 5 passed in 64.22s (0:01:04)"
+  }
+ },
+ "m04_eps_offdiag_sign": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 430.74s (0:07:10)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_sheared_film_is_exact"
+   ],
+   "tail": "1 failed, 5 passed in 32.73s"
+  }
+ },
+ "m04b_chi_offdiag_sign": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 283.65s (0:04:43)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_sheared_film_is_exact"
+   ],
+   "tail": "1 failed, 5 passed in 43.26s"
+  }
+ },
+ "m04c_chi33_inverted": {
+  "build13": {
+   "failed": [
+    "test_a4_te_stripe_under_stretch_matches_the_1d_oracle",
+    "test_a6_hpartner_plain_gram_closes",
+    "test_a7_absorption_closure_under_stretch"
+   ],
+   "tail": "3 failed, 10 passed in 420.94s (0:07:00)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_mapped_operators_match_an_independent_oracle"
+   ],
+   "tail": "1 failed, 5 passed in 41.86s"
+  }
+ },
+ "m05_fingerprint_no_params": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 291.80s (0:04:51)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_fingerprint_sees_the_curve_parameters"
+   ],
+   "tail": "1 failed, 5 passed in 35.22s"
+  }
+ },
+ "m05b_eigkey_no_map": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 287.11s (0:04:47)"
+  },
+  "verify": {
+   "failed": [],
+   "tail": "6 passed in 46.93s"
+  }
+ },
+ "m06_drop_P12_P21": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 396.58s (0:06:36)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_sheared_film_is_exact"
+   ],
+   "tail": "1 failed, 5 passed in 47.64s"
+  }
+ },
+ "m07_no_detJ_refusal": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 376.64s (0:06:16)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_solver_refuses_a_folding_map"
+   ],
+   "tail": "1 failed, 5 passed in 65.90s (0:01:05)"
+  }
+ },
+ "m08_no_boundary_check": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 409.59s (0:06:49)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_validation_refuses_a_translated_map"
+   ],
+   "tail": "1 failed, 5 passed in 44.14s"
+  }
+ },
+ "m09_proj_no_phase_rule": {
+  "build13": {
+   "failed": [],
+   "tail": "13 passed in 413.84s (0:06:53)"
+  },
+  "verify": {
+   "failed": [
+    "test_verify_a_mapped_projector_keeps_the_phase_rule_on_a_long_cell"
+   ],
+   "tail": "1 failed, 5 passed in 65.92s (0:01:05)"
+  }
+ }
+}
