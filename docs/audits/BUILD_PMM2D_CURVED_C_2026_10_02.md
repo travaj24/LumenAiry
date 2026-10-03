@@ -439,6 +439,21 @@ The stack compiles its shapes at `add_layer` and keys its eig dedupe by the
 map fingerprint; a shape mutated afterwards would silently desynchronise
 both.  Shapes now refuse attribute assignment (C15).
 
+### 4.7 F-C7 -- Phase B's B2 fail-before arm re-derived (intentional algorithm change)
+
+B2's no-cofactor arm read `> 1e-2` at M = 4 because the defective projector
+entered twice (the incident overlap AND the outgoing projection).  With the
+exact incident decomposition it enters once: a FLAT 4.77e-3 at M = 4 / 5 / 6
+against 2.0e-6 / 1.1e-8 / 8.4e-12 correct (`c_b2_nocof_rederive.json`).  The
+bar was re-derived once, dated, to `> 1e-3` (0.68 decades under the defect,
+2.7 above the correct reading); the WSL build caught it.
+
+### 4.8 F-C8 -- the rollback's broad except (fixed)
+
+`_add_shapes_layer` first restored the stack with `except Exception: ...
+raise`, one over the non-ui broad-except budget (51 > 50); it is now a
+try/finally on a success flag.
+
 ---
 
 ## 5. What moved
@@ -499,4 +514,33 @@ python c_misc_readings.py c4|d6|c11|c16
 cd /c/tmp/lum_curved_c && python -m pytest tests/unit/test_pmm2d_staggered_curved_c.py --capture=sys -p no:randomly
 ```
 
-Test tails, both builds: TAILS.
+Test tails, both builds:
+
+* Windows (CPython 3.14.6, numpy 2.4.4, scipy 1.17.1), saturated box,
+  `-n 4`: `tests/unit/test_pmm2d_staggered_curved_c.py` -> `20 passed in
+  218.33s` (C17, added after: `2 passed` with C7, 8.7 s); slowest 73 s (C6).
+* WSL Ubuntu (CPython 3.12.3, numpy 2.4.6, scipy 1.17.1, BLAS pinned,
+  `lumenairy` from `/mnt/c/tmp/lum_curved_c`), Phases A + B + C + the Phase A
+  verifier's tests: `1 failed, 56 passed in 505.33s` -- the failure was
+  Phase B's B2 fail-before arm, re-derived (F-C7) and then `2 passed`
+  (B2 and C17) on WSL.
+* Existing suites, Windows, `-n 6` (every `test_*pmm2d*`, `*stack2d*`,
+  `*stagger*`, `*curved*` file incl. Phases A / B / C and the verifier's,
+  census, public-API, walker, doc identifiers, doc consistency,
+  except-budget, history relocation and lint, kernel consistency,
+  re-exports): `5 failed, 1502 passed, 1 skipped in 1505.94s`; the five:
+  B2 (F-C7, fixed), three ids of the except budget (F-C8, fixed) and the
+  `__all__` walker on `material_key` -- PRE-EXISTING on `91d00288` (it fails
+  there identically: `stack2d_pure.__all__` exports the viewer helper
+  `material_key`, added by `4ec402bc`, which is neither re-exported nor
+  exempt; not touched here, flagged).  Re-run after the fixes: `1 failed, 776
+  passed` (the walker, `material_key` only).
+* `python -m mypy` (the configured strict file list): `Success: no issues
+  found in 33 source files`; `lumenairy/elements/pmm/` is NOT on that list --
+  `python -m mypy lumenairy/elements/pmm/_curvemap.py
+  lumenairy/elements/pmm/shapes2d.py` reports 368 errors, every one
+  `no-untyped-def` / `no-untyped-call` (12 genuine inconsistencies found
+  that way were fixed); adding the package to the strict list is a
+  maintainer decision.
+* WSL ruff 0.15.16 on `lumenairy/ tests/ scripts/` and `build_c/`: `All
+  checks passed!`
