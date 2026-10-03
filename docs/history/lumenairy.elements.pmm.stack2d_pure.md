@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: c3a583feba82d89159f652d51e28cfedcc957188c7a809d918b7946fd9b2ac31
-token_sha256: 0804f63668ed6939c933d8ebe159f48fe15cc5edf99335f787bae4fe1203dce7
+ast_sha256: 29eb9606afa7123e969a750ff9da09413a665a313be108aebd417335d6900883
+token_sha256: 3ed46b6d51ed9c54774e6ee22db6362a3c810eb86661543b9b69e698d4d0bbbe
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -16,6 +16,7 @@ re_recorded: 2026-10-03 -- the curved-cell map, Phase E2: per-layer maps -- add_
 re_recorded: 2026-10-03 -- the curved-cell map, Phase E2 verifier fold-in: convergence_floor isolates a shape layer on its OWN map (and an explicit per-layer cmap= layer under its map) instead of straight walls (V-E2-D10) (VERIFY_PMM2D_CURVED_E2_2026_10_03)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase E2 verifier fold-in: solve() names the two layers when the curved mortar cannot invert a node (V-E2-D6) (VERIFY_PMM2D_CURVED_E2_2026_10_03)
 re_recorded: 2026-10-03 -- curved-cell Phase E1 (2026-10-03): out-of-plane eps and slant accepted under a map / with shapes, slant x mu and OOP eps x mu accepted (refusals lifted, docstrings updated); no line the history document quotes changed
+re_recorded: 2026-10-03 -- curved-cell integration: Phase E1 (out-of-plane tensors and slant under a map) merged with Phase E2 (per-layer maps and the curved mortar); the merged module is the union of both branches' stack2d_pure.py
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d_pure.py`
