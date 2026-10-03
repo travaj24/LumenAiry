@@ -169,7 +169,15 @@ Scope / limitations
 -------------------
 * **Axis-aligned RECTANGULAR pillars only** -- the walls must coincide with the
   segment boundaries of the ``(Nx, Ny)`` ``eps_cell`` grid (Eq. 26).  CURVED
-  boundaries need Granet's transfinite curved-quad mapping (not implemented).
+  boundaries need a coordinate map: the curved-cell map's machinery is in
+  (``cmap=`` on :class:`Granet2DTransverseE`, :func:`pmm_jones_2d_staggered`
+  and ``PMM2DStackPure``; the covariant effective tensors, the 2-D quadrature
+  assembly of every weighted block, the plain-Gram H partner and the
+  cofactor far field -- build doc
+  ``docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md``), but the only maps
+  shipped so far are the identity and a separable per-axis STRETCH, which
+  redistributes resolution without curving any wall; the curved shape maps
+  (circles, fillets, sinusoidal walls) are not implemented yet.
   A constant TILT of the walls IS supported: see SLANT below.
 * **Corner-capped.**  A right-angle dielectric pillar has field singularities at
   its four corners, so the bound-mode (and hence efficiency) convergence is
@@ -1827,6 +1835,252 @@ class StagCrossOps:
         return self._H(self.C2)
 
 
+# =========================================================================== #
+# THE CURVED-CELL MAP: variable-coefficient (2-D Gauss quadrature) assembly.
+# Plan: docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md, Phase A; build doc
+# docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md.  Lifted from the planning
+# probe validation/probe_pmm2d_curved/_curved_scratch.py (``_axis_factor`` +
+# ``CurvedGranet.blk`` -> _stag_quad_axis_factor / _stag_quad_weighted;
+# ``CurvedGranet._weights`` -> _stag_map_weights; ``curved_far_projector`` ->
+# _far_projector_mapped), where the identity map reproduced the shipped
+# operators to 5.5e-14 (P1) and a pure stretch converged to the unmapped
+# answer (P2).
+# =========================================================================== #
+def _stag_set_name(basis, s):
+    """``'B'`` or ``'Btilde'`` -- the NAME of a global set of ``basis``,
+    recovered by identity (the shipped kron helpers are handed the set
+    objects, the quadrature helper works on names)."""
+    if s is basis.B:
+        return "B"
+    if s is basis.Btilde:
+        return "Btilde"
+    raise ValueError("_stag_set_name: not one of this basis' two global sets")
+
+
+def _stag_map_quad_rule(M, nq=None):
+    """The per-axis, per-cell Gauss-Legendre rule of the mapped assembly:
+    ``(nodes, weights, V, Vp)`` with ``V`` / ``Vp`` the ``M`` modified-Legendre
+    functions and their reference derivatives at the nodes.
+
+    ``nq`` defaults to ``2 M + 8`` (the planning probe's rule), exact for a
+    polynomial weight; the solver passes the ADAPTIVE count of
+    :func:`_stag_map_nodes`, because a fixed rule is NOT adequate under a
+    strong stretch (a build finding, measured there)."""
+    n = 2 * int(M) + 8 if nq is None else int(nq)
+    xg, wg = leggauss(n)
+    V, Vp = _modleg_value_deriv(int(M), xg)
+    return xg, wg, V, Vp
+
+
+#: Relative tolerance on the Legendre MOMENTS of the map's geometric weights
+#: that the adaptive node count of :func:`_stag_map_nodes` must meet.  1e-13
+#: sits two to three decades above the moments' own round-off (~1e-16 x the
+#: node count) and far below any discretisation error the solver reaches
+#: (the best measured rung-to-rung change at unit-test sizes is ~1e-10).
+_STAG_MAP_QUAD_TOL = 1.0e-13
+#: Hard cap on the nodes per axis per cell (memory: ten (Nx, Ny, nq, nq)
+#: weight arrays, ~94 MB on a 3 x 3 grid at 256).  Reaching it WARNS with the
+#: moment error actually achieved.
+_STAG_MAP_QUAD_CAP = 256
+
+
+def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
+    """ADAPTIVE per-axis node count of the mapped assembly -- a BUILD FINDING
+    (``docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md``, section A2q).
+
+    The planning probe sized the rule at a fixed ``2 M + 8`` and measured it
+    adequate on the circle map.  Under a STRONG stretch it is not: at
+    ``x = u + 0.15 p sin(2 pi u / p)`` the weights carry ``1 / f'(u)`` with
+    ``f'`` down to 0.058, whose complex poles sit close to the real axis, and
+    the fixed rule leaves the operators 1e-2 and R / T 5e-4 from their
+    converged values at ``M = 5`` (measured,
+    ``validation/probe_pmm2d_curved/build_a/a2q_quadrature_fixed_base.json``).
+    The node count therefore follows the MAP, not ``M`` alone: starting from
+    ``2 M + 8`` it doubles until the Legendre moments up to degree
+    ``2 M - 2`` (the highest product of two basis functions) of the five
+    geometric weight functions ``sqrt(g)``, ``1 / sqrt(g)``,
+    ``g11 / sqrt(g)``, ``g12 / sqrt(g)``, ``g22 / sqrt(g)`` agree between
+    ``n`` and ``2 n`` nodes to :data:`_STAG_MAP_QUAD_TOL` relative, in every
+    cell; ``n`` is then returned.  Polynomial weights (the identity map)
+    pass at the first check, so the identity map runs the planning rule
+    ``2 M + 8`` exactly."""
+    from numpy.polynomial.legendre import legvander
+    tol = _STAG_MAP_QUAD_TOL if tol is None else float(tol)
+    cap = _STAG_MAP_QUAD_CAP if cap is None else int(cap)
+    deg = 2 * int(M) - 2
+
+    def moments(n):
+        xg, wg = leggauss(n)
+        Pv = legvander(xg, deg) * wg[:, None]            # (n, deg+1)
+        out = []
+        for sx in range(bx.N):
+            U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+            for sy in range(by.N):
+                V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+                _X, _Y, xu, xv, yu, yv = cmap.geom(sx, sy, U, V)
+                sg = xu * yv - xv * yu
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    fs = (sg, 1.0 / sg, (xu * xu + yu * yu) / sg,
+                          (xu * xv + yu * yv) / sg, (xv * xv + yv * yv) / sg)
+                out.append([Pv.T @ f @ Pv for f in fs])
+        return out
+
+    n = 2 * int(M) + 8
+    m_lo = moments(n)
+    err = np.inf
+    while True:
+        n2 = 2 * n
+        m_hi = moments(n2) if n2 <= 2 * cap else None
+        if m_hi is None:
+            break
+        err = 0.0
+        for cl, ch in zip(m_lo, m_hi):
+            for a, b in zip(cl, ch):
+                s = float(np.max(np.abs(b)))
+                if s > 0.0 and np.all(np.isfinite(a)):
+                    err = max(err, float(np.max(np.abs(a - b))) / s)
+                elif not np.all(np.isfinite(a)):
+                    err = np.inf
+        if err <= tol or n2 > cap:
+            break
+        n, m_lo = n2, m_hi
+    if err > tol:
+        warnings.warn(
+            f"Granet2DTransverseE: the coordinate map's geometric weights "
+            f"are not resolved to the quadrature tolerance {tol:.0e} within "
+            f"{n} Gauss nodes per axis per cell (moment error {err:.2e}); "
+            f"the operators carry a quadrature error of that order.  The map "
+            f"varies too sharply inside a cell -- add walls where it is "
+            f"steep, or soften it.", stacklevel=4)
+    return n
+
+
+def _stag_map_weights(bx, by, cmap, eps_cell, rule):
+    """Effective-tensor weights at every quadrature node of every ``(u, v)``
+    cell, for a SCALAR ``eps_cell`` under the map ``cmap``.
+
+    With ``J = [[x_u, x_v], [y_u, y_v]]``, ``g = J^T J`` and ``sg = sqrt(g) =
+    det J`` (plan section 2.1; Weiss et al. 2009 Eqs. 7-12):
+
+        eps'_t = eps sg g^-1 = (eps / sg) [[g22, -g12], [-g12, g11]]
+        eps'_33 = eps sg
+        chi_t  = [mu'_t]^-1 = g / sg,      chi33 = 1 / sg
+
+    Returns a dict of ``(Nx, Ny, nq, nq)`` arrays keyed ``e11 e12 e21 e22 e33``
+    (permittivity) and ``c11 c12 c21 c22 c33`` (inverse permeability), first
+    node index along ``u``.  RAISES if ``det J <= 0`` (or is not finite) at ANY
+    node -- a map may be singular at an isolated cell corner, which no Gauss
+    node touches, but never inside a cell."""
+    xg = rule[0]
+    nq = xg.size
+    Nx, Ny = bx.N, by.N
+    shp = (Nx, Ny, nq, nq)
+    sg = np.empty(shp)
+    g11 = np.empty(shp)
+    g12 = np.empty(shp)
+    g22 = np.empty(shp)
+    for sx in range(Nx):
+        U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+        for sy in range(Ny):
+            V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+            _X, _Y, xu, xv, yu, yv = cmap.geom(sx, sy, U, V)
+            sg[sx, sy] = xu * yv - xv * yu
+            g11[sx, sy] = xu * xu + yu * yu
+            g12[sx, sy] = xu * xv + yu * yv
+            g22[sx, sy] = xv * xv + yv * yv
+    bad = ~np.isfinite(sg) | (sg <= 0.0)
+    if np.any(bad):
+        sx, sy = (int(i) for i in np.argwhere(bad)[0][:2])
+        raise ValueError(
+            f"Granet2DTransverseE: the coordinate map has det J <= 0 (or a "
+            f"non-finite Jacobian) at a quadrature node inside cell "
+            f"({sx}, {sy}) -- min det J there "
+            f"{float(np.nanmin(sg[sx, sy])):.3e}.  The map must not fold the "
+            f"plane anywhere inside a cell.")
+    eps = np.asarray(eps_cell, dtype=_C)[:, :, None, None]
+    off = -g12 / sg
+    return {"e11": eps * (g22 / sg), "e12": eps * off, "e21": eps * off,
+            "e22": eps * (g11 / sg), "e33": eps * sg,
+            "c11": g11 / sg, "c12": g12 / sg, "c21": g12 / sg,
+            "c22": g22 / sg, "c33": 1.0 / sg}
+
+
+def _stag_quad_axis_factor(basis, s, lset, op, rset, rule, cache):
+    """Per-node 1-D factor of the quadrature assembly on segment ``s``,
+    restricted to the global functions SUPPORTED there:
+    ``F[p, i, j] = scale * w_p * conj(L_i)^(a)(p) * R_j^(b)(p)``, the flavour
+    ``op`` putting the derivative on the trial (``'d'``) or test (``'dL'``)
+    function, or nowhere (``'m'``).  Returns ``(supL, supR, F)``.  The scale
+    is the segment's ``J_n`` for a mass and 1 for one derivative
+    (``d/dx = (1/J_n) d/du`` against ``dx = J_n du``) -- the same scalings
+    :meth:`Basis1D._global_matrix` and
+    :meth:`Granet2DTransverseE._eps_dir` apply."""
+    key = (id(basis), s, lset, op, rset)
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    _xg, wg, V, Vp = rule
+    stacks = []
+    for name in (lset, rset):
+        stk = cache.get((id(basis), name))
+        if stk is None:
+            stk = cache[(id(basis), name)] = np.asarray(getattr(basis, name))
+        stacks.append(stk[:, s, :])
+    SL, SR = stacks
+    supL = np.nonzero(np.any(SL != 0, axis=1))[0]
+    supR = np.nonzero(np.any(SR != 0, axis=1))[0]
+    if op == "m":
+        fa, gc, scale = V, V, basis.Jn[s]
+    elif op == "d":
+        fa, gc, scale = V, Vp, 1.0
+    elif op == "dL":
+        fa, gc, scale = Vp, V, 1.0
+    else:
+        raise ValueError(f"_stag_quad_axis_factor: unknown flavour {op!r}")
+    Lp = np.conj(SL[supL]) @ fa                     # (nL, nq)
+    Rp = SR[supR] @ gc                              # (nR, nq)
+    F = scale * wg[:, None, None] * Lp.T[:, :, None] * Rp.T[:, None, :]
+    out = (supL, supR, F)
+    cache[key] = out
+    return out
+
+
+def _stag_quad_weighted(bx, by, xspec, yspec, W, rule, cache=None):
+    """The 2-D Gauss-quadrature generalisation of
+    :meth:`Granet2DTransverseE._eps_weighted` (mass) and
+    :meth:`Granet2DTransverseE._eps_dir` (one derivative): ONE function for
+    every weighted block of the mapped assembly.
+
+        out[I, J] = sum_cells INT INT W(u, v) X_{ix,jx}(u) Y_{iy,jy}(v) du dv
+
+    with ``I = ix + q_x iy`` (the solver's ``kron(y, x)`` ordering).
+    ``xspec = (lset, op, rset)`` names the x test set, the flavour
+    (``'m'`` / ``'d'`` / ``'dL'``) and the x trial set; ``yspec`` likewise.
+    ``W`` is the ``(Nx, Ny, nq, nq)`` node weight of
+    :func:`_stag_map_weights` -- the weight VARIES inside a cell, which is the
+    whole point -- and ``rule`` the shared :func:`_stag_map_quad_rule`.  A
+    weight that is identically zero (the shear terms of a separable map)
+    returns the zero block without quadrature."""
+    if cache is None:
+        cache = {}
+    qx, qy = bx.dim, by.dim
+    out = np.zeros((qy, qx, qy, qx), dtype=_C)
+    if not np.any(W):
+        return out.reshape(qy * qx, qy * qx)
+    fx = [_stag_quad_axis_factor(bx, sx, xspec[0], xspec[1], xspec[2], rule,
+                                 cache) for sx in range(bx.N)]
+    fy = [_stag_quad_axis_factor(by, sy, yspec[0], yspec[1], yspec[2], rule,
+                                 cache) for sy in range(by.N)]
+    for sx in range(bx.N):
+        sLx, sRx, Fx = fx[sx]
+        for sy in range(by.N):
+            sLy, sRy, Fy = fy[sy]
+            T = np.einsum("pr,rab->pab", W[sx, sy], Fy, optimize=True)
+            loc = np.einsum("pij,pab->aibj", Fx, T, optimize=True)
+            out[np.ix_(sLy, sLx, sRy, sRx)] += loc
+    return out.reshape(qy * qx, qy * qx)
+
+
 class Granet2DTransverseE:
     """Faithful Granet staggered transverse-E eigensolver for a rectangular
     (or separable) 2-D unit cell, isotropic nonmagnetic media.
@@ -1870,11 +2124,30 @@ class Granet2DTransverseE:
                 BIT-IDENTICAL to no slant.  A shear is NOT a taper -- no shear
                 absorbs a dilation; a tapered feature still needs a
                 z-staircase.
+    cmap      : a COORDINATE MAP ``(x, y) = Phi(u, v)`` from
+                :mod:`lumenairy.elements.pmm._curvemap` (the curved-cell
+                map), or ``None`` (the default: no map, and every operator is
+                BIT-IDENTICAL to the unmapped solver -- a dispatch to the
+                shipped Kronecker assembly, not the identity map).  With a
+                map, ``wx`` / ``wy`` are the ``(u, v)`` wall grid and must
+                equal the map's own (``cmap.u_walls`` / ``cmap.v_walls``),
+                ``eps_cell`` gives the permittivity of each ``(u, v)`` cell,
+                and the solver works on the COVARIANT field components
+                ``E' = J^T E`` with the effective tensors
+                ``eps'_t = eps sqrt(g) g^-1``, ``eps'_33 = eps sqrt(g)``,
+                ``chi_t = g / sqrt(g)``, ``chi33 = 1 / sqrt(g)``
+                (``J = d(x, y)/d(u, v)``, ``g = J^T J``, ``sqrt(g) = det J``).
+                Every mapped region is therefore a block-form TENSOR and
+                MAGNETIC region (vacuum included), assembled by 2-D Gauss
+                quadrature (:func:`_stag_quad_weighted`).  In this phase a
+                map takes SCALAR ``eps_cell`` only: a tensor cell, ``mu_cell``
+                or ``slant`` together with a map raise
+                ``NotImplementedError``.
     """
 
     def __init__(self, px, py, wx, wy, M, eps_cell,
                  alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi, mu_cell=None,
-                 slant=None):
+                 slant=None, cmap=None):
         self.k0 = float(k0)
         self.alpha0x = float(alpha0x)
         self.alpha0y = float(alpha0y)
@@ -1899,6 +2172,14 @@ class Granet2DTransverseE:
                 f"({self.bx.N}, {self.by.N}) implied by wx / wy.")
         self.q = self.bx.dim                              # = Nx*(M-1)
         assert self.bx.dim == self.by.dim, "use square (Nx*(M-1)==Ny*(M-1))"
+        # THE CURVED-CELL MAP (plan docs/audits/PLAN_PMM2D_CURVED_CELLS_
+        # 2026_09_26.md, Phase A).  ``cmap=None`` sets ``self.cmap = None`` and
+        # nothing below this block reads it on that path, so the unmapped
+        # solver is the shipped arithmetic, byte for byte (gate A1).
+        self.cmap = None
+        self._mapw = None
+        if cmap is not None:
+            self._init_map(cmap, eps_cell, mu_cell, slant)
         # SLANT (constant x-z / y-z SHEAR; roadmap Phase D, build doc
         # docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md).  ``slant``
         # is the PUBLIC (t_x, t_y) TANGENT pair of
@@ -1988,6 +2269,57 @@ class Granet2DTransverseE:
         else:
             self._assemble()
 
+    # --- the curved-cell map: validation + the effective-tensor node weights --
+    def _init_map(self, cmap, eps_cell, mu_cell, slant):
+        """Validate a coordinate map against this solver and evaluate the
+        effective-tensor weights at every quadrature node (Phase A of the
+        curved-cell plan: SCALAR ``eps`` cells only)."""
+        fn = "Granet2DTransverseE"
+        if not callable(getattr(cmap, "geom", None)) or not hasattr(
+                cmap, "fingerprint"):
+            raise TypeError(
+                f"{fn}: cmap must follow the map protocol of "
+                f"lumenairy.elements.pmm._curvemap (geom(sx, sy, U, V) and "
+                f"fingerprint), got {type(cmap).__name__}.")
+        if self.eps_cell.ndim != 2:
+            raise NotImplementedError(
+                f"{fn}: a TENSOR eps_cell under a coordinate map is not "
+                f"implemented yet (the congruence sqrt(g) J^-1 eps J^-T on a "
+                f"tensor cell is Phase D of the curved-cell plan); pass a "
+                f"scalar (Nx, Ny) eps_cell.")
+        if mu_cell is not None:
+            raise NotImplementedError(
+                f"{fn}: mu_cell under a coordinate map is not implemented "
+                f"yet (a material permeability under the map is Phase D of "
+                f"the curved-cell plan).")
+        if not _slant_is_zero(_norm_slant_pair(slant, fn)):
+            raise NotImplementedError(
+                f"{fn}: slant= together with a coordinate map is not "
+                f"implemented (the shear composes with the map and needs "
+                f"permeability blocks the out-of-plane generator does not "
+                f"have -- Phase E of the curved-cell plan).")
+        for b, bounds, per, ax in ((self.bx, cmap.u_bounds, cmap.period_x,
+                                    "x"),
+                                   (self.by, cmap.v_bounds, cmap.period_y,
+                                    "y")):
+            if abs(float(per) - b.d) > 1e-12 * b.d:
+                raise ValueError(
+                    f"{fn}: the map's {ax}-period {per!r} differs from the "
+                    f"solver's {b.d!r}.")
+            bounds = np.asarray(bounds, dtype=float)
+            if bounds.shape != b.xb.shape or float(
+                    np.max(np.abs(bounds - b.xb))) > 1e-13 * b.d:
+                raise ValueError(
+                    f"{fn}: the solver's {ax} walls {b.xb!r} are not the "
+                    f"map's (u, v) wall grid {bounds!r} -- with a map, pass "
+                    f"wx = cmap.u_walls and wy = cmap.v_walls.")
+        self.cmap = cmap
+        self._qrule = _stag_map_quad_rule(
+            self.bx.M, _stag_map_nodes(self.bx, self.by, cmap, self.bx.M))
+        self._mapw = _stag_map_weights(self.bx, self.by, cmap, self.eps_cell,
+                                       self._qrule)
+        self._qcache = {}
+
     # --- per-axis 1-D ingredient matrices between set pairs (no eps) ---------
     def _axis_mats(self):
         bx, by = self.bx, self.by
@@ -2016,9 +2348,19 @@ class Granet2DTransverseE:
         isotropic default) uses ``self.eps_cell``.  The TENSOR assembly passes
         one COMPONENT map (e11 / e12 / e21 / e22 / e33) per block, so the
         arithmetic is identical to the scalar path when that component IS
-        ``eps_cell`` (the G1 bit-identity reduction)."""
+        ``eps_cell`` (the G1 bit-identity reduction).
+
+        With a coordinate map (``self.cmap``) ``wmap`` is a per-NODE weight
+        array ``(Nx, Ny, nq, nq)`` and the block is assembled by 2-D Gauss
+        quadrature instead (:func:`_stag_quad_weighted`); without one this
+        function is the shipped Kronecker assembly, unchanged."""
         bx, refx, sLx, sRx = refx_pair
         by, refy, sLy, sRy = refy_pair
+        if self.cmap is not None:
+            return _stag_quad_weighted(
+                bx, by, (_stag_set_name(bx, sLx), "m", _stag_set_name(bx, sRx)),
+                (_stag_set_name(by, sLy), "m", _stag_set_name(by, sRy)),
+                wmap, self._qrule, self._qcache)
         Gx = _global_pair_segmat(bx, refx, sLx, sRx)      # (Nx, dLx, dRx)
         Gy = _global_pair_segmat(by, refy, sLy, sRy)      # (Ny, dLy, dRy)
         eps = self.eps_cell if wmap is None else wmap     # (Nx, Ny)
@@ -2039,6 +2381,11 @@ class Granet2DTransverseE:
         piecewise-constant cells this basis is built on: the walls are element
         boundaries, so inverting per cell and discretizing commute) and
         ``chi33 = 1/m33``.  A SCALAR ``mu`` gives ``chi_t = (1/mu) I``."""
+        if self.cmap is not None:
+            # under a map the permeability is the metric's own: chi_t =
+            # [mu'_t]^-1 = g / sqrt(g), chi33 = 1 / sqrt(g) (per NODE)
+            w = self._mapw
+            return w["c11"], w["c12"], w["c21"], w["c22"], w["c33"]
         mu = self.mu_cell
         if mu is None:
             return None
@@ -2086,7 +2433,18 @@ class Granet2DTransverseE:
         qq = q * q
         # component maps: None -> the eps-weighted helpers use self.eps_cell
         tensor = self.eps_cell.ndim == 4
-        if tensor:
+        if self.cmap is not None:
+            # THE CURVED-CELL MAP: a scalar cell becomes the block-form tensor
+            # eps'_t = eps sqrt(g) g^-1 (mixed entries -eps g12 / sqrt(g)) and
+            # eps'_33 = eps sqrt(g), given per quadrature NODE; the chi maps
+            # below are the metric's (every mapped region is magnetic).  The
+            # SAME body below then assembles all 18 weighted blocks, each one
+            # routed by _eps_weighted / _eps_dir to the 2-D quadrature.
+            tensor = True
+            w = self._mapw
+            e11, e12, e21, e22, e33 = (w["e11"], w["e12"], w["e21"],
+                                       w["e22"], w["e33"])
+        elif tensor:
             e11 = self.eps_cell[..., 0, 0]
             e12 = self.eps_cell[..., 0, 1]
             e21 = self.eps_cell[..., 1, 0]
@@ -2552,7 +2910,12 @@ class Granet2DTransverseE:
 
         ``wmap`` is the per-cell weight map; ``None`` uses ``self.eps_cell``
         (the isotropic default).  The tensor K_zt columns (Eq. 44) pass one
-        component map per term."""
+        component map per term.  With a coordinate map the block is the 2-D
+        Gauss quadrature of :func:`_stag_quad_weighted` (``wmap`` per NODE)."""
+        if self.cmap is not None:
+            return _stag_quad_weighted(bx, by, (lx, opx, rx), (ly, opy, ry),
+                                       wmap, self._qrule, self._qcache)
+
         def segmat(basis, lset, op, rset):
             sL = getattr(basis, lset)
             sR = getattr(basis, rset)
@@ -2721,7 +3084,8 @@ def _stag_fourier_projection(basis: Basis1D, orders, alpha0=0.0):
     return _assemble
 
 
-def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy, alpha0x=0.0, alpha0y=0.0):
+def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy, alpha0x=0.0, alpha0y=0.0,
+                      cmap=None):
     """Forward Fourier->Rayleigh projectors for the 2-D staggered field
     components.  Returns the per-component (E1,E2) projection operators that map
     a region's [E1;E2] modal coefficient vector onto the Rayleigh orders.
@@ -2735,7 +3099,13 @@ def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy, alpha0x=0.0, alpha0y=0.0
     Rayleigh projection stays ORTHOGONAL at oblique incidence (see
     :func:`_stag_fourier_projection`).  Default 0 = normal incidence (byte-
     identical to the un-shifted projection).
+
+    ``cmap`` (the curved-cell map; ``None`` = the separable projector above,
+    unchanged) returns the FOUR blocks ``(P1, P2, P12, P21)`` of the
+    pulled-back projector instead -- see :func:`_far_projector_mapped`.
     """
+    if cmap is not None:
+        return _far_projector_mapped(bx, by, ox, oy, alpha0x, alpha0y, cmap)
     asmx = _stag_fourier_projection(bx, ox, alpha0x)
     asmy = _stag_fourier_projection(by, oy, alpha0y)
     Tx_B = asmx(bx.B)            # (Mx, qx)
@@ -2749,15 +3119,130 @@ def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy, alpha0x=0.0, alpha0y=0.0
     return P1, P2
 
 
-def _pmm2d_project_orders(P1, P2, Wmodes, qq):
+def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
+                          cmap):
+    """The far-field Rayleigh projector of a region solved under the
+    curved-cell map ``cmap`` -- the pulled-back form of
+    :func:`_far_projector_2d`.
+
+    The shipped kernel extracts order ``m`` as
+    ``a_m = (1/A) INT E(x, y) exp(+i k_m . r) dx dy`` (the sign is the
+    order-mirror fix of :func:`_stag_fourier_projection`).  Under the map the
+    solver holds the COVARIANT components ``E' = J^T E`` on the ``(u, v)``
+    cell, and ``dx dy = det J du dv``, so
+
+        a_m = (1/A) INT INT cof(J) E'(u, v) exp(+i k_m . Phi(u, v)) du dv
+        cof(J) = det J * J^-T = [[ y_v, -y_u], [-x_v, x_u]]
+
+    i.e. ``det J E_x = y_v E'_u - y_u E'_v`` and ``det J E_y = -x_v E'_u +
+    x_u E'_v``.  The COFACTOR is the whole point: dropping it (treating the
+    covariant coefficients as Cartesian) is an O(1e-1) error, and so is using
+    ``J^-T`` without the area element (planning probe P2b; build gates A3 /
+    A4 re-measure the first).
+
+    Returns ``(P1, P2, P12, P21)``: ``E'_u -> E_x``, ``E'_v -> E_y``,
+    ``E'_v -> E_x``, ``E'_u -> E_y``, each ``(Nfo, q^2)`` in the shipped order
+    layout (``m_x`` fastest).  An off-diagonal block whose cofactor entry is
+    identically zero (a map without shear, e.g. a separable stretch) is
+    returned as ``None``.  The kernel is a NON-separable 2-D quadrature per
+    cell with ``max(2 M + 16, _stag_quad_order(M, omega))`` nodes per axis,
+    ``omega`` the phase ``|k_x| h_x + |k_y| h_y`` across the cell's PHYSICAL
+    half-extents (the shipped per-segment phase rule applied to the image of
+    the cell).  The identity map reproduces :func:`_far_projector_2d` to
+    round-off with both off-diagonal blocks absent (gate A2)."""
+    M = bx.M
+    px, py = bx.d, by.d
+    A = px * py
+    ox = np.asarray(ox)
+    oy = np.asarray(oy)
+    kxv = np.tile(ox, len(oy)) * (2.0 * np.pi / px) + alpha0x
+    kyv = np.repeat(oy, len(ox)) * (2.0 * np.pi / py) + alpha0y
+    kxm = float(np.max(np.abs(kxv))) if kxv.size else 0.0
+    kym = float(np.max(np.abs(kyv))) if kyv.size else 0.0
+    Nfo = kxv.size
+    q = bx.dim
+    SB = (np.asarray(bx.B), np.asarray(by.B))
+    ST = (np.asarray(bx.Btilde), np.asarray(by.Btilde))
+    blocks = {k: np.zeros((Nfo, q, q), dtype=_C) for k in ("xu", "xv", "yu",
+                                                           "yv")}
+    used = {k: False for k in blocks}
+    base = 2 * M + 16
+    rules = {}
+
+    def _rule(n):
+        hit = rules.get(n)
+        if hit is None:
+            xg, wg = leggauss(n)
+            hit = rules[n] = (xg, wg, _modleg_value_deriv(M, xg)[0])
+        return hit
+
+    for sx in range(bx.N):
+        for sy in range(by.N):
+            xg, wg, Vref = _rule(base)
+            U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+            Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+            X = cmap.geom(sx, sy, U, Vv)
+            omega = (kxm * 0.5 * float(np.ptp(X[0]))
+                     + kym * 0.5 * float(np.ptp(X[1])))
+            nq = max(base, _stag_quad_order(M, omega))
+            if nq != base:
+                xg, wg, Vref = _rule(nq)
+                U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+                Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+                X = cmap.geom(sx, sy, U, Vv)
+            Xp, Yp, xu, xv, yu, yv = X
+            # basis values at the nodes, restricted to the functions SUPPORTED
+            # on this cell (the shipped convention: no conjugation -- the
+            # Bloch tau lives in the stencils)
+            vals = {}
+            for nm, (Sx, Sy) in (("B", SB), ("T", ST)):
+                cx = Sx[:, sx, :]
+                cy = Sy[:, sy, :]
+                ix = np.nonzero(np.any(cx != 0, axis=1))[0]
+                iy = np.nonzero(np.any(cy != 0, axis=1))[0]
+                vals[nm + "x"] = (ix, cx[ix] @ Vref)
+                vals[nm + "y"] = (iy, cy[iy] @ Vref)
+            w2 = (wg[:, None] * wg[None, :]) * (bx.Jn[sx] * by.Jn[sy] / A)
+            ph = np.exp(1j * (kxv[:, None, None] * Xp[None]
+                              + kyv[:, None, None] * Yp[None]))
+            # E'_u lives in V1 = B(u) (x) Btilde(v), E'_v in V2 = Btilde(u)
+            # (x) B(v); the four cofactor entries select the output component
+            for key, coef, xs, ys in (("xu", yv, "Bx", "Ty"),
+                                      ("xv", -yu, "Tx", "By"),
+                                      ("yu", -xv, "Bx", "Ty"),
+                                      ("yv", xu, "Tx", "By")):
+                if not np.any(coef):
+                    continue
+                used[key] = True
+                ixs, Xv = vals[xs]
+                iys, Yv = vals[ys]
+                K = ph * (coef * w2)[None]
+                blocks[key][np.ix_(np.arange(Nfo), iys, ixs)] += np.einsum(
+                    "mpr,ip,jr->mji", K, Xv, Yv, optimize=True)
+    Pm = {k: (v.reshape(Nfo, q * q) if (used[k] or k in ("xu", "yv"))
+              else None) for k, v in blocks.items()}
+    return Pm["xu"], Pm["yv"], Pm["xv"], Pm["yu"]
+
+
+def _pmm2d_project_orders(P1, P2, Wmodes, qq, P12=None, P21=None):
     """Project a PMM-2D ``[E1; E2]`` modal matrix onto the Rayleigh orders --
     the ONE ``_proj`` closure shared by :mod:`.stack2d_pure` and this
     module (audit S1-10).  ``P1``/``P2`` map the E1 (Ex) / E2 (Ey) nodal blocks
     (``qq`` rows each) onto the orders; returns the stacked
     ``[Ex_orders; Ey_orders]``.  Reproduces the two former inline copies
-    operation-for-operation."""
+    operation-for-operation.
+
+    ``P12`` (``E'_v -> Ex``) / ``P21`` (``E'_u -> Ey``) are the off-diagonal
+    blocks of the curved-cell map's pulled-back projector
+    (:func:`_far_projector_mapped`); ``None`` -- always, without a map, and
+    for a map with no shear -- adds nothing, so the unmapped projection is the
+    shipped arithmetic, unchanged."""
     top = P1 @ Wmodes[:qq, :]
     bot = P2 @ Wmodes[qq:, :]
+    if P12 is not None:
+        top = top + P12 @ Wmodes[qq:, :]
+    if P21 is not None:
+        bot = bot + P21 @ Wmodes[:qq, :]
     return np.concatenate([top, bot], axis=0)
 
 
@@ -3333,8 +3818,27 @@ def _homog_geom_cache(solver: Granet2DTransverseE):
     Stt = solver.Stt
     L0_geom = Stt - solver.Schur           # = Lmat - eps*G, manifestly eps-free
     g2_geo, W0 = sla.eig(L0_geom, G)
-    Ginv = np.linalg.inv(G)
     qq = solver.q * solver.q
+    if getattr(solver, "cmap", None) is None:
+        Ginv = np.linalg.inv(G)
+    else:
+        # THE CURVED-CELL MAP (plan section 2.4).  The eps-free SPLIT survives
+        # a map exactly: for an isotropic homogeneous region det chi_t = 1, so
+        # -R = adj(chi_t)^T = chi_t^-1 = sqrt(g) g^-1 = [eps'_t] / eps, and
+        # K_zt, Meps33 both scale with eps (the Schur term stays eps-free);
+        # hence L(eps) = eps (-R) + L0 and the pencil keeps -R, as above.
+        # What does NOT survive is the H-partner Gram: Eq. 25 is tested with
+        # the PLAIN (u, v) block Gram, and under a map -R = C[chi_t]C is a
+        # different operator (every mapped region is magnetic -- the module's
+        # "ONE TRAP").  A patterned mapped layer recovers H through the plain
+        # Gram in _region_modes, so the half-spaces MUST do the same here, or
+        # the two helpers MIX (measured 0.106 / 0.053 on R/T in the planning
+        # probe P2b; gate A6 re-measures it).  Lhh W0 = eps (-R W0) + Stt W0
+        # stays the pre-folded form below; only the inverse changes.
+        G1g, G2g = solver.Ggram_blocks
+        Ginv = np.zeros_like(G)
+        Ginv[:qq, :qq] = np.linalg.inv(G1g)
+        Ginv[qq:, qq:] = np.linalg.inv(G2g)
     # Pre-fold the eps-free pieces of the H-partner recovery (Eq.25): for a
     # homogeneous region Lhh = Et + Stt = eps*G + Stt, so Lhh @ W0 = eps*(G W0) +
     # (Stt W0) -- both terms eps-free and reusable across regions.
@@ -3386,6 +3890,7 @@ def pmm_efficiency_2d_staggered(
     phi: float = 0.0,
     slant=None,
     max_pencil_dof: int = _MAX_STAG_PENCIL_DOF,
+    cmap=None,
 ) -> Efficiency2D:
     """Rigorous diffraction efficiencies of a 2-D crossed grating of axis-aligned
     rectangular pillars by the canonical no-floor Polynomial Modal Method (Granet
@@ -3465,6 +3970,12 @@ def pmm_efficiency_2d_staggered(
         cell.  Use :func:`pmm_jones_2d_staggered`, which drives both
         polarizations.  The keyword exists to raise rather than to be silently
         dropped by a branch that never reads it.
+    cmap : optional
+        Accepted only as ``None``.  A coordinate map (the curved-cell map of
+        :mod:`lumenairy.elements.pmm._curvemap`) RAISES here: this entry takes
+        an integer uniform grid only, and under a map every region is a
+        block-form tensor region whose two polarizations need not decouple.
+        Use :func:`pmm_jones_2d_staggered` (``cmap=``), which drives both.
 
     Returns
     -------
@@ -3491,6 +4002,14 @@ def pmm_efficiency_2d_staggered(
     DOF on vertical pillars, the win being accuracy quality (no floor, exact
     sidewalls, position invariance).  NumPy/SciPy dense generalized eig.
     """
+    if cmap is not None:
+        raise NotImplementedError(
+            "pmm_efficiency_2d_staggered: cmap= (a coordinate map for curved "
+            "cells) is not accepted by this single-polarization entry -- it "
+            "takes an integer uniform grid only, and under a map every region "
+            "is a block-form tensor region.  Use pmm_jones_2d_staggered(..., "
+            "cmap=...), which drives BOTH polarizations and returns (orders, "
+            "R, T, jones).")
     if not _slant_is_zero(_norm_slant_pair(
             slant, "pmm_efficiency_2d_staggered")):
         raise NotImplementedError(
@@ -3722,6 +4241,7 @@ def pmm_jones_2d_staggered(
     symmetry="auto",
     slant=None,
     max_pencil_dof: int = _MAX_STAG_PENCIL_DOF,
+    cmap=None,
 ):
     """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
     in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
@@ -3821,6 +4341,20 @@ def pmm_jones_2d_staggered(
         even when the cell is scalar.  Refused together with ``mu_cell``.  A
         shear is NOT a taper: a shrinking cross-section still needs a
         z-staircase.
+    cmap : optional
+        A COORDINATE MAP ``(x, y) = Phi(u, v)`` for curved cells (the
+        curved-cell map; :mod:`lumenairy.elements.pmm._curvemap`), shared by
+        the layer and both half-spaces.  ``None`` (the default) is the
+        unmapped solver, BIT-IDENTICAL to before.  With a map, ``eps_cell``
+        gives the permittivity of each cell of the map's ``(u, v)`` wall grid
+        (its shape must equal ``cmap.shape``), and the solve runs on the
+        covariant field components with the effective tensors of the map
+        (see :class:`Granet2DTransverseE`).  In this phase a map takes a
+        SCALAR ``eps_cell`` only, at any incidence; a tensor cell,
+        ``mu_cell`` or ``slant`` together with a map raise
+        ``NotImplementedError``.  The only shipped maps are the identity and
+        the separable per-axis stretch
+        (:class:`~lumenairy.elements.pmm._curvemap.SeparableStretch`).
 
     Returns
     -------
@@ -3881,9 +4415,17 @@ def pmm_jones_2d_staggered(
     if M < 3:
         raise ValueError("pmm_jones_2d_staggered: degree / n_modes (the "
                          "modified-Legendre count M) must be >= 3.")
-    stack = PMM2DStackPure(period_x, period_y, n_superstrate=n_superstrate,
-                           n_substrate=n_substrate, n_modes=M,
-                           n_orders=int(n_orders), symmetry=symmetry)
+    if cmap is None:
+        stack = PMM2DStackPure(period_x, period_y,
+                               n_superstrate=n_superstrate,
+                               n_substrate=n_substrate, n_modes=M,
+                               n_orders=int(n_orders), symmetry=symmetry)
+    else:
+        stack = PMM2DStackPure(period_x, period_y,
+                               n_superstrate=n_superstrate,
+                               n_substrate=n_substrate, n_modes=M,
+                               n_orders=int(n_orders), symmetry=symmetry,
+                               cmap=cmap)
     # The SEGMENT-grid cost guard runs inside ``add_layer`` (one implementation,
     # as for the physics), so its message names that method.
     if mu is None:
