@@ -25,12 +25,13 @@ X11^H]]`` (the cofactor of the E row's ``T = J_a^-1 J_b``) is tested, not
 assumed.
 
 A sixth test pins the two measured defaults (q-matching, riding) on both
-sides without a solve.  Two further tests pin open defects
-(``xfail(strict=True)``): V-E2-D1, a grazing cut whose sliver falls between
-two of the 65 samples of the pulled-back wall is MISSED (the cross-mass
-silently 5.6e-9 off at a 1e-6 graze, the adaptive rule reporting 8e-15);
-V-E2-D2, two CROSSING circles are refused in 46 of 56 sampled layouts (a
-cell pair touches a 45-degree point of both maps).
+sides without a solve.  Two further tests pinned open defects: V-E2-D1, a
+grazing cut whose sliver fell between two of the 65 samples of the
+pulled-back wall was MISSED (the cross-mass silently 5.6e-9 off at a 1e-6
+graze) -- FIXED in the Phase E2 fold-in, now a plain gate; V-E2-D2, two
+CROSSING circles are refused in 46 of 56 sampled layouts (a cell pair
+touches a 45-degree point of both maps) -- a documented known limit, still
+``xfail(strict=True)``.
 
 Fixture: square period 1.2, M = 4 (3 for the stack-size kernel), the 2 x 2
 sinusoid wall maps of ``SinusoidalWall``.  Every bar is a measurement of
@@ -406,15 +407,13 @@ def test_ve2_2_wall_tangent_to_an_outline_is_exact():
     assert _rel(cr.H, Hb) <= 1e-12
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "V-E2-D1: _cell_pieces samples the pulled-back wall at 65 points and "
-    "drops a piece that lies between two samples -- a grazing cut of "
-    "1e-6 (sliver 1.6e-3 long) is missed: 5.6e-9 off, adaptive change "
-    "8e-15 (verify_e2/v2d_graze_sweep_win.json)"))
 def test_ve2_3_grazing_cut_is_not_lost_between_samples():
-    """The x-wall 1e-6 inside the crest: measured 5.56e-9 (sliver
-    missed; v2_brute's graded oracle agrees with this one to 1e-15 on the
-    pair family); with 8x the wall samples 2.4e-15.  Bar 1e-12."""
+    """The x-wall 1e-6 inside the crest: measured 5.56e-9 before the fix
+    (sliver missed; v2_brute's graded oracle agrees with this one to 1e-15
+    on the pair family); with 8x the wall samples 2.4e-15.  Bar 1e-12.
+    Was a strict xfail (V-E2-D1); fixed in Phase E2's fold-in by the
+    grazing refinement of ``_cell_pieces`` and the near-tangency
+    square-root substitution (``build_e2/e2_g_graze_post.json``)."""
     ga, gb = _pair("sx_graze6")
     Xb, _Hb = _oracle("sx_graze6")
     assert _rel(_kernel(ga, gb).EH, Xb) <= 1e-12

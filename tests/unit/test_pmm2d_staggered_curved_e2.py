@@ -585,3 +585,40 @@ def test_e2_api_per_layer_maps_refusals_and_viewer():
                               - _R)))
     assert dev <= 1e-12, dev
     plt.close(axes[0].figure)
+
+
+# =========================================================================== #
+# The Phase E2 verifier's fold-in (VERIFY_PMM2D_CURVED_E2_2026_10_03.md)
+# =========================================================================== #
+def test_e2_v1_circle_graze_sliver_is_found_and_scales_like_its_area(
+        monkeypatch):
+    """V-E2-D1 on the CIRCLE (the verifier's ``test_ve2_3`` is the sinusoid
+    case): an unmapped wall y = 0.24 + delta just inside the bottom of the
+    r = 0.36 circle (M = 4) cuts a sliver whose share of the cross-mass is
+    ~ its area ~ delta^1.5.  Measured 2026-10-03 (``e2_g_prepost.json``):
+    the grazing refinement adds 1.17e-10 at delta = 1e-7 and 3.70e-9 at
+    1e-6 -- ratio 31.6 = 10^1.5 -- i.e. the sliver the 65-sample run logic
+    dropped.  (The verifier's brute force reads ~6.5e-7 against the kernel
+    at every graze depth 1e-7 .. 1e-5; its own n = 20 vs 28 change there is
+    4.2e-7, so that residual is the oracle's, ``e2_g_oracle_check.json``.)
+    Bars: the delta = 1e-6 share >= 1e-9 (fail-before: the refinement off
+    drops it), and the ratio within 10 % of 10^1.5."""
+    circ = compile_shapes(_P, _P, [Circle(0.6, 0.6, _R, 4.0)], 1.0)[3]
+    ga = TS.StagGridOps(_P, _P, circ.u_walls, circ.v_walls, 4, 1.0, 1.0,
+                        cmap=circ)
+    shares = []
+    for d in (1e-7, 1e-6):
+        gb = TS.StagGridOps(_P, _P, np.array([0.0, 0.45, _P]),
+                            np.array([0.0, 0.24 + d, _P]), 4, 1.0, 1.0,
+                            cmap=CM.IdentityMap(np.array([0.0, 0.45, _P]),
+                                                np.array([0.0, 0.24 + d, _P])))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            Xf = CMM.curved_cross_mass(ga, gb, 41)
+            with monkeypatch.context() as m:
+                m.setattr(CMM, "_grazing_refine",
+                          lambda Pm, sx, sy, Om, e, tk: tk)
+                Xo = CMM.curved_cross_mass(ga, gb, 41)
+        shares.append(float(np.abs(Xf - Xo).max() / np.abs(Xf).max()))
+    assert shares[1] >= 1e-9, shares
+    assert abs(shares[1] / shares[0] / 10 ** 1.5 - 1.0) <= 0.1, shares

@@ -1,0 +1,32 @@
+{
+ "rows": [
+  {
+   "case": "circ",
+   "delta": 1e-07,
+   "fix_moves": 1.1690162639037587e-10
+  },
+  {
+   "case": "circ",
+   "delta": 1e-06,
+   "fix_moves": 3.6967482946805156e-09
+  },
+  {
+   "case": "circ",
+   "delta": 1e-05,
+   "fix_moves": 0.0
+  },
+  {
+   "case": "sx",
+   "delta": 1e-06,
+   "fix_moves": 5.557408769711493e-09
+  }
+ ],
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "tree": "/mnt/c/tmp/lum_curved_e2",
+  "lumenairy": "/mnt/c/tmp/lum_curved_e2/lumenairy",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39"
+ }
+}

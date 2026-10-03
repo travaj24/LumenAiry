@@ -1,0 +1,76 @@
+{
+ "rows": [
+  {
+   "case": "sx",
+   "delta": 0.0,
+   "err": 8.737607252964695e-15,
+   "n": 27,
+   "change": 7.729421800699605e-15,
+   "warned": false,
+   "wall": 0.8893123000016203
+  },
+  {
+   "case": "sx",
+   "delta": 1e-07,
+   "err": 1.7574111066367173e-10,
+   "n": 27,
+   "change": 7.729421435034776e-15,
+   "warned": false,
+   "wall": 0.6891856000002008
+  },
+  {
+   "case": "sx",
+   "delta": 1e-06,
+   "err": 5.557408934241634e-09,
+   "n": 27,
+   "change": 7.729418144058528e-15,
+   "warned": false,
+   "wall": 1.232669500001066
+  },
+  {
+   "case": "sx",
+   "delta": 3e-05,
+   "err": 8.289407188779569e-15,
+   "n": 27,
+   "change": 7.39325506026292e-15,
+   "warned": false,
+   "wall": 4.866192900000897
+  },
+  {
+   "case": "circ",
+   "delta": 1e-07,
+   "err": 6.754482462062296e-07,
+   "n": 27,
+   "change": 8.15958366482484e-15,
+   "warned": false,
+   "wall": 6.055496299995866
+  },
+  {
+   "case": "circ",
+   "delta": 1e-06,
+   "err": 6.41885007759538e-07,
+   "n": 27,
+   "change": 7.857384239948909e-15,
+   "warned": false,
+   "wall": 2.3047032999966177
+  },
+  {
+   "case": "circ",
+   "delta": 1e-05,
+   "err": 4.7187119711224055e-07,
+   "n": 96,
+   "change": 2.4179981272573007e-11,
+   "warned": true,
+   "wall": 6.057673199997225
+  }
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "c:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ },
+ "circ_sin_n18_moved_pre_to_post": 0.0
+}

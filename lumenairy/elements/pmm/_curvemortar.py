@@ -517,6 +517,64 @@ def _bracket_scan(pred_vec, lo, hi, want_lo_true, rounds=12, m=33):
     return lo, hi
 
 
+#: Between two wall samples, a local minimum of the curve's distance OUTSIDE
+#: the cell (or maximum inside it) smaller than this fraction of the cell is
+#: refined on a fine sub-grid -- the curve may dip in (or out) unseen.
+_CURVE_MORTAR_GRAZE_FRAC = 0.05
+#: The sub-grid of that refinement.
+_CURVE_MORTAR_GRAZE_SUB = 257
+#: A piece END where the curve meets the outer direction at an angle whose
+#: tangent is below this is a NEAR-tangency: its outer breakpoint takes the
+#: square-root substitution (the crossing points move like sqrt there).  The
+#: substitution is a change of variables, harmless at a transversal end.
+_CURVE_MORTAR_NEAR_TANGENT = 0.1
+
+
+def _grazing_refine(Pm, sx, sy, Om, e, tk):
+    """``tk`` plus the parameter of every between-sample DIP of edge ``e``
+    into cell ``(sx, sy)``, and every between-sample EXCURSION out of it,
+    that no sample sees (the Phase E2 verifier's prototype,
+    ``verify_e2/v2e_graze_fix.py``): every local extremum of the curve's
+    signed distance to the cell boundary (positive outside, in units of the
+    cell) within :data:`_CURVE_MORTAR_GRAZE_FRAC` of the boundary is
+    resolved on a :data:`_CURVE_MORTAR_GRAZE_SUB`-point sub-grid of its two
+    neighbouring intervals; a sub-grid point on the other side of the
+    boundary joins the sample set, so the run logic sees the cut."""
+    U, V, _a, _b, ok = _pullback(Pm, sx, sy, Om, e, tk)
+    hu = Pm.ub[sx + 1] - Pm.ub[sx]
+    hv = Pm.vb[sy + 1] - Pm.vb[sy]
+
+    def dout(u, v):
+        return np.maximum.reduce([(Pm.ub[sx] - u) / hu,
+                                  (u - Pm.ub[sx + 1]) / hu,
+                                  (Pm.vb[sy] - v) / hv,
+                                  (v - Pm.vb[sy + 1]) / hv])
+    with np.errstate(invalid="ignore"):
+        d = np.where(ok, dout(U, V), np.inf)
+    g = _CURVE_MORTAR_GRAZE_FRAC
+    extra = []
+    for k in range(1, tk.size - 1):
+        dip = 0.0 < d[k] < g and d[k] <= d[k - 1] and d[k] <= d[k + 1]
+        exc = -g < d[k] <= 0.0 and d[k] >= d[k - 1] and d[k] >= d[k + 1]
+        if not (dip or exc):
+            continue
+        t = np.linspace(tk[k - 1], tk[k + 1], _CURVE_MORTAR_GRAZE_SUB)
+        u, v, _a, _b, okk = _pullback(Pm, sx, sy, Om, e, t)
+        with np.errstate(invalid="ignore"):
+            dd = dout(u, v)
+        if dip:
+            dd = np.where(okk, dd, np.inf)
+            j = int(np.argmin(dd))
+            if dd[j] < 0.0:
+                extra.append(float(t[j]))
+        else:
+            dd = np.where(okk, dd, -np.inf)
+            j = int(np.argmax(dd))
+            if dd[j] > 0.0:
+                extra.append(float(t[j]))
+    return np.unique(np.r_[tk, extra]) if extra else tk
+
+
 def _cell_pieces(Pm, sx, sy, Om, edges):
     """Every portion of ``Om``'s interior edges inside cell ``(sx, sy)`` of
     ``Pm``, as :class:`_Piece` s (entry / exit points located to round-off:
@@ -532,10 +590,17 @@ def _cell_pieces(Pm, sx, sy, Om, edges):
     K = _CURVE_MORTAR_SAMPLES
     tk = 0.5 * (1.0 - np.cos(np.pi * np.arange(K) / (K - 1)))
     out = []
+    tk0 = tk
     for e, ebox in edges:
         if (ebox[1] < bx0 - m or ebox[0] > bx1 + m or ebox[3] < by0 - m
                 or ebox[2] > by1 + m):
             continue
+        # a GRAZING cut (a dip into the cell, or an excursion out of it,
+        # shorter than the sample spacing) is found before the runs are read
+        # (Phase E2 verifier V-E2-D1: a 1e-6 graze was otherwise lost, the
+        # cross-mass 6.4e-7 off with the adaptive change at 8e-15)
+        tk = _grazing_refine(Pm, sx, sy, Om, e, tk0)
+        K = tk.size
         U, V, _du, _dv, ok = _pullback(Pm, sx, sy, Om, e, tk)
         ins = ok & Pm.inside(sx, sy, U, V)
         if not np.any(ins):
@@ -738,6 +803,20 @@ def _cut_cell_nodes(Pm, sx, sy, Om, edges, n, cut=True):
                 tang[inner][k] = _tangencies(Pm, sx, sy, Om, pc,
                                              "v" if inner == "u" else "u")
     cnt = {d: sum(len(v) for v in tang[d].values()) for d in ("u", "v")}
+    # a piece END that meets the outer direction nearly tangentially (a
+    # graze whose extremum lies just OUTSIDE the cell) is a near-tangency
+    # too: its crossing points move like sqrt(s - s_ext) with s_ext a
+    # distance ~ the graze depth beyond the breakpoint, which no fixed
+    # substitution matches -- the other inner direction meets that end
+    # transversally (Phase E2 verifier V-E2-D1, the circle graze)
+    for d in ("u", "v"):
+        for k, pc in enumerate(pieces):
+            if k in flat[d]:
+                continue
+            do = pc.dpv if d == "u" else pc.dpu
+            di = pc.dpu if d == "u" else pc.dpv
+            cnt[d] += sum(int(abs(do[j]) <= _CURVE_MORTAR_NEAR_TANGENT
+                              * abs(di[j])) for j in (0, -1))
     inner = "u" if cnt["u"] <= cnt["v"] else "v"
     (i0, i1), (o0, o1) = (((a0, a1), (c0, c1)) if inner == "u"
                           else ((c0, c1), (a0, a1)))
@@ -754,8 +833,13 @@ def _cut_cell_nodes(Pm, sx, sy, Om, edges, n, cut=True):
             r = _pullback(Pm, sx, sy, Om, pc.edge, np.array([t]))
             ov = float(r[1][0] if inner == "u" else r[0][0])
             bps.append((ov, True))
-        bps.append((float(oc[0]), False))
-        bps.append((float(oc[-1]), False))
+        # a piece end where the curve runs nearly along the inner
+        # direction is a near-tangency (a graze): square-root substitution
+        do = pc.dpv if inner == "u" else pc.dpu
+        di = pc.dpu if inner == "u" else pc.dpv
+        for j in (0, -1):
+            nt = abs(do[j]) <= _CURVE_MORTAR_NEAR_TANGENT * abs(di[j])
+            bps.append((float(oc[j]), bool(nt)))
         for ta, tb in zip(ts[:-1], ts[1:]):
             ra = _pullback(Pm, sx, sy, Om, pc.edge, np.array([ta, tb]))
             ov = ra[1] if inner == "u" else ra[0]

@@ -1,0 +1,24 @@
+{
+ "rows": [
+  {
+   "delta": -0.001,
+   "err": 5.356611365062456e-10
+  },
+  {
+   "delta": -1e-06,
+   "err": 5.364177902611887e-10
+  },
+  {
+   "delta": 0.0,
+   "err": 5.364185765327106e-10
+  }
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "c:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

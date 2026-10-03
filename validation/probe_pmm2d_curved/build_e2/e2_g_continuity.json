@@ -1,0 +1,57 @@
+{
+ "rows": [
+  {
+   "delta": -0.001,
+   "rel_change": 0.0019275400512255127,
+   "per_unit": 1.9275400512255128
+  },
+  {
+   "delta": -1e-05,
+   "rel_change": 1.9196410018311824e-05,
+   "per_unit": 1.9196410018311822
+  },
+  {
+   "delta": -1e-07,
+   "rel_change": 1.9195616756136717e-07,
+   "per_unit": 1.9195616756136717
+  },
+  {
+   "delta": 0.0,
+   "rel_change": 0.0,
+   "per_unit": null
+  },
+  {
+   "delta": 1e-07,
+   "rel_change": 1.9195600618295152e-07,
+   "per_unit": 1.9195600618295152
+  },
+  {
+   "delta": 1e-06,
+   "rel_change": 1.919552863264233e-06,
+   "per_unit": 1.919552863264233
+  },
+  {
+   "delta": 1e-05,
+   "rel_change": 1.919480740938399e-05,
+   "per_unit": 1.919480740938399
+  },
+  {
+   "delta": 0.0001,
+   "rel_change": 0.0001918759245404601,
+   "per_unit": 1.918759245404601
+  },
+  {
+   "delta": 0.001,
+   "rel_change": 0.0019115187185082014,
+   "per_unit": 1.9115187185082012
+  }
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "c:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}
