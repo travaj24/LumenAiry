@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: e0acc548a98d929c24e5f180b69de22280aaf3a5d3fabb31d09c1c72adefaa27
-token_sha256: a55148cdc95fb08ae9a6d64ff5ed9434d36d9a8de334100803e3aa06254d197a
+ast_sha256: 83d7cf4df8cf9b918ed90ca1c0daa9585155ba130378634bfe4c70eacc93a48c
+token_sha256: 7d2e5b8ae08bbc6ce94f44f1027f0c0ed4f95da0084cf51ed2deae633232970b
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -10,6 +10,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-09-21 -- geometry viewers added: plot_geometry, plot_section, material_key and the physics-keyed styling helpers (AUDIT_PMM2D_PURE_VIEWER_2026_09_21)
 re_recorded: 2026-10-02 -- the curved-cell map, Phase A: PMM2DStackPure(cmap=) -- a stack-owned coordinate map on the shared-grid solve (mapped homogeneous solver + geometric eig, plain flux Gram, cofactor far field), its scope refusals (per-layer, tensor, mu, slant, viewers) (BUILD_PMM2D_CURVED_A_2026_10_02)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase C: add_layer(shapes=, background_eps=) and the stack-level merge of every shape layer into ONE map (_add_shapes_layer / _recompile_shapes; rectangles only -> the unmapped solver on the merged walls), the exact renormalised modal decomposition of the incident field under a map (_stag_incident_coeffs_mapped), the viewers drawing mapped cells as curves (_mapped_cell_outline / _plot_mapped_layer / _mapped_section) (BUILD_PMM2D_CURVED_C_2026_10_02)
+re_recorded: 2026-10-03 -- the curved-cell map, Phase C: the shape-layer rollback in _add_shapes_layer restructured from a broad except to try/finally (the except-budget gate; behaviour unchanged -- a refused merge restores the stack and the error propagates)
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d_pure.py`

@@ -1228,16 +1228,20 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                    background_eps=background_eps,
                    max_pencil_dof=max_pencil_dof)
         self._layers.append(rec)
+        merged = False
         try:
             self._recompile_shapes()
-        except Exception:
-            self._layers.pop()
-            if any("shapes" in L for L in self._layers):
-                self._recompile_shapes()
-            else:
-                self.cmap, self._shape_walls = None, None
-                self._shapes_map, self._grid = False, None
-            raise
+            merged = True
+        finally:
+            # a refused merge leaves the stack exactly as it was (the error
+            # propagates unchanged; no broad except)
+            if not merged:
+                self._layers.pop()
+                if any("shapes" in L for L in self._layers):
+                    self._recompile_shapes()
+                else:
+                    self.cmap, self._shape_walls = None, None
+                    self._shapes_map, self._grid = False, None
         if max_pencil_dof is not None:
             self._stag_cost_ack = True
         return self
