@@ -423,14 +423,25 @@ def test_b2_film_under_the_circle_map_is_exact_and_spectral(monkeypatch):
     quadrature).  Bars: M = 6 <= 1e-9 (1.4 decades above 4.3e-11, 2.3 above
     the round-off floor), the M = 4 -> 6 drop >= 3 decades (measured 4.3).
     FAIL-BEFORE: the no-cofactor far projector, measured 0.148 at M = 6 --
-    asserted > 1e-2 at M = 4 (measured below)."""
+    asserted > 1e-2 at M = 4 (measured below).
+
+    RE-DERIVED 2026-10-03 (Phase C, an intentional algorithm change: under a
+    map the incident wave now enters through its exact modal decomposition,
+    which no longer passes through the far projector, so the engineered
+    defect enters once -- the outgoing projection and the order-0
+    renormalisation -- instead of twice).  Measured
+    (``build_c/c_b2_nocof_rederive.json``): the correct arm 2.0e-6 / 1.1e-8 /
+    8.4e-12 at M = 4 / 5 / 6, the no-cofactor arm FLAT at 4.77e-3 (a wrong
+    bilinear form, not a discretisation error).  The fail-before bar becomes
+    > 1e-3 at M = 4: 0.68 decades under the defect, 2.7 above the correct
+    reading."""
     cm, _ = _circle3()
     e4 = _film_err(cm, 4)
     e6 = _film_err(cm, 6)
     assert e6 <= 1e-9, e6
     assert e4 / e6 >= 1e3, (e4, e6)
     _patch_no_cofactor(monkeypatch)
-    assert _film_err(cm, 4) > 1e-2
+    assert _film_err(cm, 4) > 1e-3
 
 
 # =========================================================================== #
