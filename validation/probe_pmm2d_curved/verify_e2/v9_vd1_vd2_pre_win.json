@@ -1,0 +1,596 @@
+{
+ "tree": "pre",
+ "vertex_snap": null,
+ "wall_snap": 1e-12,
+ "claim_tol": 1e-12,
+ "random_rects": {
+  "1.2": {
+   "n": 220,
+   "identity": 131,
+   "missed_identity": 89,
+   "refused": 0,
+   "miss_fraction": 0.40454545454545454
+  },
+  "1.0": {
+   "n": 220,
+   "identity": 151,
+   "missed_identity": 69,
+   "refused": 0,
+   "miss_fraction": 0.31363636363636366
+  },
+  "1.2e-06": {
+   "n": 220,
+   "identity": 133,
+   "missed_identity": 87,
+   "refused": 0,
+   "miss_fraction": 0.39545454545454545
+  }
+ },
+ "boundary": {
+  "0.0": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "5e-14": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "9e-14": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "1.1e-13": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "2e-13": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "5e-13": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "9e-13": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "1.1e-12": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls np.float64(0.36000000000000004) and np.float64(0.36000000000131993) are only 1.319888"
+  },
+  "1e-09": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls np.float64(0.36000000000000004) and np.float64(0.3600000012) are only 1.1999999327549"
+  },
+  "1e-06": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls np.float64(0.36000000000000004) and np.float64(0.3600011999999999) are only 1.1999999"
+  },
+  "0.00099": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls np.float64(0.36000000000000004) and np.float64(0.36118800000000006) are only 0.001188"
+  },
+  "0.00101": {
+   "outcome": "MAPPED",
+   "nx": 5
+  },
+  "0.002": {
+   "outcome": "MAPPED",
+   "nx": 5
+  }
+ },
+ "boundary_solve": {
+  "0.0": {
+   "cmap_is_none": false,
+   "wall": 36.02114319999964,
+   "tensor": "solved"
+  },
+  "5e-14": {
+   "cmap_is_none": false,
+   "wall": 6.365467399999034,
+   "tensor": "solved",
+   "dRT_vs_d0": 1.1435297153639112e-14,
+   "bytes_equal_d0": false
+  },
+  "5e-13": {
+   "cmap_is_none": false,
+   "wall": 4.653241100000741,
+   "tensor": "solved",
+   "dRT_vs_d0": 2.7471080965568717e-14,
+   "bytes_equal_d0": false
+  }
+ },
+ "tiny_sinusoid": {
+  "3e-14": {
+   "cmap": "RefinedMap",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.999999999999925,
+   "dRT_vs_flat": 2.4702462297909733e-15,
+   "closure": 0.0011448031728673591
+  },
+  "5e-13": {
+   "cmap": "RefinedMap",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.9999999999987562,
+   "dRT_vs_flat": 2.1510571102112408e-15,
+   "closure": 0.0011448031728691355
+  },
+  "1e-09": {
+   "cmap": "RefinedMap",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.9999999975131812,
+   "dRT_vs_flat": 6.439293542825908e-15,
+   "closure": 0.0011448031728744645
+  }
+ },
+ "ellipse": {
+  "1.01_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766426841
+  },
+  "1.01_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009497541262746378
+  },
+  "1.01_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009718443701257184
+  },
+  "1.01_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.01067401990153738
+  },
+  "1.01_30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.578e-02) in the cell u in [0, 0.355051], v "
+  },
+  "1.01_40.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -4.780e-01) in the cell u in [0, 0.38333], v i"
+  },
+  "1.01_44.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -7.006e-01) in the cell u in [0, 0.39654], v i"
+  },
+  "1.01_44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -7.544e-01) in the cell u in [0, 0.399651], v "
+  },
+  "1.01_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009718443701257296
+  },
+  "1.01_-30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.578e-02) in the cell u in [0, 0.355051], v "
+  },
+  "1.01_-44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -7.544e-01) in the cell u in [0, 0.399651], v "
+  },
+  "1.05_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00942539676642662
+  },
+  "1.05_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009497541262747267
+  },
+  "1.05_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00971844370125674
+  },
+  "1.05_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.010674019901537046
+  },
+  "1.05_30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -5.749e-02) in the cell u in [0, 0.355051], v "
+  },
+  "1.05_40.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -5.324e-01) in the cell u in [0, 0.38333], v i"
+  },
+  "1.05_44.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -7.601e-01) in the cell u in [0, 0.39654], v i"
+  },
+  "1.05_44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -8.151e-01) in the cell u in [0, 0.399651], v "
+  },
+  "1.05_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009718443701257073
+  },
+  "1.05_-30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -5.749e-02) in the cell u in [0, 0.355051], v "
+  },
+  "1.05_-44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -8.151e-01) in the cell u in [0, 0.399651], v "
+  },
+  "1.5_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766427063
+  },
+  "1.5_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009497541262747267
+  },
+  "1.5_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009718443701257407
+  },
+  "1.5_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.004158294122565354
+  },
+  "1.5_30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -4.834e-01) in the cell u in [0, 0.355051], v "
+  },
+  "1.5_40.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.092e+00) in the cell u in [0, 0.38333], v i"
+  },
+  "1.5_44.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.375e+00) in the cell u in [0, 0.39654], v i"
+  },
+  "1.5_44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.443e+00) in the cell u in [0, 0.399651], v "
+  },
+  "1.5_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00971844370125774
+  },
+  "1.5_-30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -4.834e-01) in the cell u in [0, 0.355051], v "
+  },
+  "1.5_-44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.443e+00) in the cell u in [0, 0.399651], v "
+  },
+  "2.0_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766426508
+  },
+  "2.0_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009497541262745712
+  },
+  "2.0_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009718443701257573
+  },
+  "2.0_20.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.655e-01) in the cell u in [0, 0.334215], v "
+  },
+  "2.0_30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -9.095e-01) in the cell u in [0, 0.355051], v "
+  },
+  "2.0_40.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.657e+00) in the cell u in [0, 0.38333], v i"
+  },
+  "2.0_44.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.000e+00) in the cell u in [0, 0.39654], v i"
+  },
+  "2.0_44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.082e+00) in the cell u in [0, 0.399651], v "
+  },
+  "2.0_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009718443701256962
+  },
+  "2.0_-30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -9.095e-01) in the cell u in [0, 0.355051], v "
+  },
+  "2.0_-44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.082e+00) in the cell u in [0, 0.399651], v "
+  },
+  "3.0_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00942539676642562
+  },
+  "3.0_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009497541262747489
+  },
+  "3.0_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00971844370125663
+  },
+  "3.0_20.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -8.044e-01) in the cell u in [0, 0.334215], v "
+  },
+  "3.0_30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.710e+00) in the cell u in [0, 0.355051], v "
+  },
+  "3.0_40.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.726e+00) in the cell u in [0, 0.38333], v i"
+  },
+  "3.0_44.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.185e+00) in the cell u in [0, 0.39654], v i"
+  },
+  "3.0_44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.295e+00) in the cell u in [0, 0.399651], v "
+  },
+  "3.0_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009718443701256685
+  },
+  "3.0_-30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.710e+00) in the cell u in [0, 0.355051], v "
+  },
+  "3.0_-44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.295e+00) in the cell u in [0, 0.399651], v "
+  },
+  "4.0_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766426952
+  },
+  "4.0_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009497541262747933
+  },
+  "4.0_10.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.354e-01) in the cell u in [0, 0.321454], v "
+  },
+  "4.0_20.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.324e+00) in the cell u in [0, 0.334215], v "
+  },
+  "4.0_30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.484e+00) in the cell u in [0, 0.355051], v "
+  },
+  "4.0_40.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.764e+00) in the cell u in [0, 0.38333], v i"
+  },
+  "4.0_44.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -4.338e+00) in the cell u in [0, 0.39654], v i"
+  },
+  "4.0_44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -4.474e+00) in the cell u in [0, 0.399651], v "
+  },
+  "4.0_-10.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.354e-01) in the cell u in [0, 0.321454], v "
+  },
+  "4.0_-30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.484e+00) in the cell u in [0, 0.355051], v "
+  },
+  "4.0_-44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -4.474e+00) in the cell u in [0, 0.399651], v "
+  },
+  "5.0_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766424843
+  },
+  "5.0_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009497541262746156
+  },
+  "5.0_10.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -4.938e-01) in the cell u in [0, 0.321454], v "
+  },
+  "5.0_20.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -1.837e+00) in the cell u in [0, 0.334215], v "
+  },
+  "5.0_30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.248e+00) in the cell u in [0, 0.355051], v "
+  },
+  "5.0_40.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -4.790e+00) in the cell u in [0, 0.38333], v i"
+  },
+  "5.0_44.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -5.478e+00) in the cell u in [0, 0.39654], v i"
+  },
+  "5.0_44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -5.641e+00) in the cell u in [0, 0.399651], v "
+  },
+  "5.0_-10.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -4.938e-01) in the cell u in [0, 0.321454], v "
+  },
+  "5.0_-30.0": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.248e+00) in the cell u in [0, 0.355051], v "
+  },
+  "5.0_-44.9": {
+   "outcome": "FOLD",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -5.641e+00) in the cell u in [0, 0.399651], v "
+  }
+ },
+ "ellipse_bad": 50,
+ "ellipse_total": 77,
+ "ellipse_edge": {
+  "44.99": {
+   "outcome": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.090e+00) in the cell u in [0, 0.399965], v in [0.499983, 0.700017], which is bounded by Ellipse(cx=0.6, cy=0.6, a=0.4, b=0.2, angle=0.785224). "
+  },
+  "45.0": {
+   "outcome": "ValueError",
+   "msg": "Ellipse(cx=0.6, cy=0.6, a=0.4, b=0.2, angle=0.785398): |angle| must be < pi / 4 (45 degrees); rotate by a quarter-turn by swapping a and b instead."
+  },
+  "50.0": {
+   "outcome": "ValueError",
+   "msg": "Ellipse(cx=0.6, cy=0.6, a=0.4, b=0.2, angle=0.872665): |angle| must be < pi / 4 (45 degrees); rotate by a quarter-turn by swapping a and b instead."
+  },
+  "-45.0": {
+   "outcome": "ValueError",
+   "msg": "Ellipse(cx=0.6, cy=0.6, a=0.4, b=0.2, angle=-0.785398): |angle| must be < pi / 4 (45 degrees); rotate by a quarter-turn by swapping a and b instead."
+  }
+ },
+ "mirror": {
+  "4": {
+   "err": "compile_shapes: the merged map FOLDS (det J <= 0, min -9.095e-01) in the cell u in [0, 0.355051], v in [0.477526, 0.7224"
+  },
+  "5": {
+   "err": "compile_shapes: the merged map FOLDS (det J <= 0, min -9.095e-01) in the cell u in [0, 0.355051], v in [0.477526, 0.7224"
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\vcurved_e2_pre\\lumenairy\\__init__.py",
+  "tree": "pre",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

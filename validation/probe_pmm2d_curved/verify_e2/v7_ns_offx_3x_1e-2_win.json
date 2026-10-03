@@ -1,0 +1,33 @@
+{
+ "geom": "offx",
+ "M": 4,
+ "s=0.01": {
+  "raised": "NotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of BOTH maps; the cross-mass integrand is singular in either layer's coordinates there.  Move one outline so the two maps' singular vertices do not share a cell overlap, or use layer_grids='shared' (one merged map) when the outlines do not cross.",
+  "warnings": [],
+  "wall_adaptive": 4.208897099997557
+ },
+ "s=0.001": {
+  "raised": "NotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of BOTH maps; the cross-mass integrand is singular in either layer's coordinates there.  Move one outline so the two maps' singular vertices do not share a cell overlap, or use layer_grids='shared' (one merged map) when the outlines do not cross.",
+  "warnings": [],
+  "wall_adaptive": 3.910248899999715
+ },
+ "s=0.0001": {
+  "raised": "NotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of BOTH maps; the cross-mass integrand is singular in either layer's coordinates there.  Move one outline so the two maps' singular vertices do not share a cell overlap, or use layer_grids='shared' (one merged map) when the outlines do not cross.",
+  "warnings": [],
+  "wall_adaptive": 3.3352069000029587
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

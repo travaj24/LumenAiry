@@ -1,0 +1,13 @@
+shipped closure [4.62701396e-05 9.80026491e-05] n [59]
+h_no_measure {'wall': 21.933251999995264, 'error': None, 'rt_moved': 0.022766783844002318, 'closure': array([0.08334149, 0.06774181]), 'dX': 0.0, 'dH': 0.5316949446500392, 'n': [59], 'change': [1.0178907159970126e-13]} 2 warnings
+h_no_offdiag {'wall': 14.987354299999424, 'error': None, 'rt_moved': 0.030408329682095614, 'closure': array([0.01823985, 0.04590564]), 'dX': 0.0, 'dH': 0.20025002679858567, 'n': [59], 'change': [1.0178907159970126e-13]} 0 warnings
+e_no_factor {'wall': 15.62004049999814, 'error': None, 'rt_moved': 0.09208838799590202, 'closure': array([1.59729989e-04, 3.85208486e-06]), 'dX': 0.24116641196199728, 'dH': 0.24116641196199728, 'n': [59], 'change': [1.0178907159970126e-13]} 0 warnings
+tangency-flagged interval ends in the shipped run: 10
+sqrt_off {'wall': 27.783183999999892, 'error': None, 'rt_moved': 5.500808142322455e-13, 'closure': array([4.62701396e-05, 9.80026491e-05]), 'dX': 5.291311275276225e-12, 'dH': 5.291311275276225e-12, 'n': [96], 'change': [1.3413595005735306e-12]} 1 warnings
+tang_missed {'wall': 9.567772200003674, 'error': None, 'rt_moved': 3.977829731355298e-06, 'closure': array([4.62708908e-05, 9.80043216e-05]), 'dX': 3.06262469472415e-05, 'dH': 3.06262469472415e-05, 'n': [59], 'change': [1.0177678268607097e-13]} 0 warnings
+maps_ignored {'wall': 4.864830399994389, 'error': None, 'rt_moved': 0.13246174652302822, 'closure': array([1.07718268e-05, 1.15063639e-04])} 0 warnings
+newton_tol {'wall': 10.942285199998878, 'error': None, 'rt_moved': 7.882583474838611e-15, 'closure': array([4.62701396e-05, 9.80026491e-05]), 'dX': 6.6360133603572e-16, 'dH': 6.6360133603572e-16, 'n': [59], 'change': [1.0177985491447855e-13]} 0 warnings
+hswap_off {'wall': 11.736061299998255, 'error': None, 'rt_moved': 0.6627261586574971, 'closure': array([0.36645189, 0.36008848]), 'dX': 0.0, 'dH': 0.0, 'n': [59], 'change': [1.0178907159970126e-13]} 2 warnings
+fast_forced {'wall': 13.646488600003067, 'error': None, 'rt_moved': 0.0, 'closure': array([4.62701396e-05, 9.80026491e-05]), 'dX': 0.0, 'dH': 0.0, 'n': [59], 'change': [1.0178907159970126e-13]} 0 warnings
+fast_forced refusal: compile_shapes: layer 1: Circle(cx=0.55, cy=0.62, r=0.33) and layer 2: SinusoidalWall(axis='x', x0=0.66, amplitude=0.1) need DIFFERENT physical positions for the same grid vertex (near x = 0.669407, y = 0.312361: (0.6694070047611376, 0.31236065398916596) vs (0.7005086147181199, 0.3866547622084393)) -- their outlines meet in one cell in two different ways (e.g. a rounded corner over a sharp one, or an edge laid on another shape's flat side).  One map cannot carry both; a common map for them is Phase E of the curved-cell plan.
+wrote v8_mutations_own_M5_win.json

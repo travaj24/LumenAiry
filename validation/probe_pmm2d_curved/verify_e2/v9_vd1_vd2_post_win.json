@@ -1,0 +1,873 @@
+{
+ "tree": "post",
+ "vertex_snap": 1e-13,
+ "wall_snap": 1e-12,
+ "claim_tol": 1e-12,
+ "random_rects": {
+  "1.2": {
+   "n": 220,
+   "identity": 220,
+   "missed_identity": 0,
+   "refused": 0,
+   "miss_fraction": 0.0
+  },
+  "1.0": {
+   "n": 220,
+   "identity": 220,
+   "missed_identity": 0,
+   "refused": 0,
+   "miss_fraction": 0.0
+  },
+  "1.2e-06": {
+   "n": 220,
+   "identity": 220,
+   "missed_identity": 0,
+   "refused": 0,
+   "miss_fraction": 0.0
+  }
+ },
+ "boundary": {
+  "0.0": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "5e-14": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "9e-14": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "1.1e-13": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "2e-13": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "5e-13": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "9e-13": {
+   "outcome": "MAPPED",
+   "nx": 4
+  },
+  "1.1e-12": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls 0.36000000000000004 and 0.36000000000131993 are only 1.3198886428256174e-12 apart (1."
+  },
+  "1e-09": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls 0.36000000000000004 and 0.3600000012 are only 1.1999999327549915e-09 apart (1e-09 of "
+  },
+  "1e-06": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls 0.36000000000000004 and 0.3600011999999999 are only 1.1999999998679733e-06 apart (1e-"
+  },
+  "0.00099": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls 0.36000000000000004 and 0.36118800000000006 are only 0.0011880000000000224 apart (0.0"
+  },
+  "0.00101": {
+   "outcome": "identity",
+   "nx": 5
+  },
+  "0.002": {
+   "outcome": "identity",
+   "nx": 5
+  }
+ },
+ "boundary_solve": {
+  "0.0": {
+   "cmap_is_none": true,
+   "wall": 33.64704740000161,
+   "tensor": "solved"
+  },
+  "5e-14": {
+   "cmap_is_none": true,
+   "wall": 3.59450790000119,
+   "tensor": "solved",
+   "dRT_vs_d0": 0.0,
+   "bytes_equal_d0": true
+  },
+  "5e-13": {
+   "cmap_is_none": false,
+   "wall": 5.685018799995305,
+   "tensor": "solved",
+   "dRT_vs_d0": 2.5543673653274923e-06,
+   "bytes_equal_d0": false
+  }
+ },
+ "tiny_sinusoid": {
+  "3e-14": {
+   "cmap": "RefinedMap",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.999999999999925,
+   "dRT_vs_flat": 2.4702462297909733e-15,
+   "closure": 0.0011448031728673591
+  },
+  "5e-13": {
+   "cmap": "RefinedMap",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.9999999999987562,
+   "dRT_vs_flat": 2.1510571102112408e-15,
+   "closure": 0.0011448031728691355
+  },
+  "1e-09": {
+   "cmap": "RefinedMap",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.9999999975131812,
+   "dRT_vs_flat": 6.439293542825908e-15,
+   "closure": 0.0011448031728744645
+  }
+ },
+ "boundary_snap_eq_wall": {
+  "0.0": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "5e-14": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "9e-14": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "1.1e-13": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "2e-13": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "5e-13": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "9e-13": {
+   "outcome": "identity",
+   "nx": 4
+  },
+  "1.1e-12": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls 0.36000000000000004 and 0.36000000000131993 are only 1.3198886428256174e-12 apart (1."
+  },
+  "1e-09": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls 0.36000000000000004 and 0.3600000012 are only 1.1999999327549915e-09 apart (1e-09 of "
+  },
+  "1e-06": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls 0.36000000000000004 and 0.3600011999999999 are only 1.1999999998679733e-06 apart (1e-"
+  },
+  "0.00099": {
+   "outcome": "refused",
+   "msg": "compile_shapes: the merged u-walls 0.36000000000000004 and 0.36118800000000006 are only 0.0011880000000000224 apart (0.0"
+  },
+  "0.00101": {
+   "outcome": "identity",
+   "nx": 5
+  },
+  "0.002": {
+   "outcome": "identity",
+   "nx": 5
+  }
+ },
+ "random_rects_snap_eq_wall_missed": {
+  "1.2": 0,
+  "1.0": 0,
+  "1.2e-06": 0
+ },
+ "ellipse": {
+  "1.01_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766426841
+  },
+  "1.01_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00942542951454528
+  },
+  "1.01_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425405698309963
+  },
+  "1.01_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425324448374184
+  },
+  "1.01_30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425232051598731
+  },
+  "1.01_40.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425171742304728
+  },
+  "1.01_44.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425163804425263
+  },
+  "1.01_44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425163473642972
+  },
+  "1.01_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00942540569830963
+  },
+  "1.01_-30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425232051598842
+  },
+  "1.01_-44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425163473643305
+  },
+  "1.05_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00942539676642662
+  },
+  "1.05_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00942618384045213
+  },
+  "1.05_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00942561199122105
+  },
+  "1.05_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009423660295780567
+  },
+  "1.05_30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009421439316910085
+  },
+  "1.05_40.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009419988760609566
+  },
+  "1.05_44.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00941979778751767
+  },
+  "1.05_44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00941978982913827
+  },
+  "1.05_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425611991220939
+  },
+  "1.05_-30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009421439316909863
+  },
+  "1.05_-44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009419789829137604
+  },
+  "1.5_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766427063
+  },
+  "1.5_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009478335920095171
+  },
+  "1.5_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009442323691556731
+  },
+  "1.5_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009316005003026762
+  },
+  "1.5_30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00916539290534657
+  },
+  "1.5_40.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009062743743017077
+  },
+  "1.5_44.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009048962403621297
+  },
+  "1.5_44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009048386713754686
+  },
+  "1.5_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009442323691555954
+  },
+  "1.5_-30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009165392905345238
+  },
+  "1.5_-44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009048386713755685
+  },
+  "2.0_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766426508
+  },
+  "2.0_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009572266745328739
+  },
+  "2.0_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00948309174734141
+  },
+  "2.0_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009156551213917508
+  },
+  "2.0_30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.008734976852448006
+  },
+  "2.0_40.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.008423504589371411
+  },
+  "2.0_44.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.008379976628520858
+  },
+  "2.0_44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.008378148933809948
+  },
+  "2.0_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009483091747341299
+  },
+  "2.0_-30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.008734976852447562
+  },
+  "2.0_-44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00837814893381067
+  },
+  "3.0_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00942539676642562
+  },
+  "3.0_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009753946587850948
+  },
+  "3.0_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009591642633309694
+  },
+  "3.0_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.0089582402924816
+  },
+  "3.0_30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.008021395906919304
+  },
+  "3.0_40.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.0072011871193183585
+  },
+  "3.0_44.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.007074498757429715
+  },
+  "3.0_44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.007069102157420959
+  },
+  "3.0_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009591642633308917
+  },
+  "3.0_-30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00802139590692047
+  },
+  "3.0_-44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.007069102157420903
+  },
+  "4.0_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766426952
+  },
+  "4.0_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00989644146118096
+  },
+  "4.0_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009696585972677835
+  },
+  "4.0_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.008888807437600343
+  },
+  "4.0_30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.007584538551613423
+  },
+  "4.0_40.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.006268135070867584
+  },
+  "4.0_44.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.006042154838973496
+  },
+  "4.0_44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.006032353143862856
+  },
+  "4.0_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00969658597267778
+  },
+  "4.0_-30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.007584538551612896
+  },
+  "4.0_-44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.006032353143861302
+  },
+  "5.0_0.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009425396766424843
+  },
+  "5.0_5.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.010006293326876053
+  },
+  "5.0_10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009785993223107137
+  },
+  "5.0_20.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.008877916357412335
+  },
+  "5.0_30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.007329103918780611
+  },
+  "5.0_40.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.005582927149071715
+  },
+  "5.0_44.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00525117331107916
+  },
+  "5.0_44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.00523648039724689
+  },
+  "5.0_-10.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.009785993223107053
+  },
+  "5.0_-30.0": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.0073291039187800555
+  },
+  "5.0_-44.9": {
+   "outcome": "EXACT",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.005236480397247126
+  }
+ },
+ "ellipse_bad": 0,
+ "ellipse_total": 77,
+ "ellipse_edge": {
+  "44.99": {
+   "outcome": "laid out",
+   "wrong": [
+    0,
+    0
+   ],
+   "min_detJ": 0.008378130643793336
+  },
+  "45.0": {
+   "outcome": "ValueError",
+   "msg": "Ellipse(cx=0.6, cy=0.6, a=0.4, b=0.2, angle=0.785398): |angle| must be < pi / 4 (45 degrees); rotate by a quarter-turn by swapping a and b instead."
+  },
+  "50.0": {
+   "outcome": "ValueError",
+   "msg": "Ellipse(cx=0.6, cy=0.6, a=0.4, b=0.2, angle=0.872665): |angle| must be < pi / 4 (45 degrees); rotate by a quarter-turn by swapping a and b instead."
+  },
+  "-45.0": {
+   "outcome": "ValueError",
+   "msg": "Ellipse(cx=0.6, cy=0.6, a=0.4, b=0.2, angle=-0.785398): |angle| must be < pi / 4 (45 degrees); rotate by a quarter-turn by swapping a and b instead."
+  }
+ },
+ "mirror": {
+  "4": {
+   "dR": 1.4172690798730514e-15,
+   "dT": 1.354472090042691e-14,
+   "dJones": 8.001718306849511e-15,
+   "closure": 0.0023095246989933704,
+   "jones_shape": [
+    2,
+    2
+   ]
+  },
+  "5": {
+   "dR": 5.307386474751041e-15,
+   "dT": 3.2106262093378746e-14,
+   "dJones": 1.1627333722403417e-14,
+   "closure": 0.001058271623903706,
+   "jones_shape": [
+    2,
+    2
+   ]
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

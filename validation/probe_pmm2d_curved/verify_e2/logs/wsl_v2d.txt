@@ -1,0 +1,10 @@
+delta 0e+00: sliver 0.00e+00  kernel 5.49e-15 (n 27, change 9e-15)  samples x8 5.49e-15
+delta 1e-07: sliver 4.93e-04  kernel 1.76e-10 (n 27, change 8e-15)  samples x8 1.76e-10
+delta 1e-06: sliver 1.56e-03  kernel 5.56e-09 (n 27, change 8e-15)  samples x8 2.58e-15
+delta 1e-05: sliver 4.93e-03  kernel 3.58e-15 (n 27, change 9e-15)  samples x8 3.58e-15
+delta 3e-05: sliver 8.54e-03  kernel 2.69e-15 (n 27, change 8e-15)  samples x8 2.69e-15
+delta 1e-04: sliver 1.56e-02  kernel 2.58e-15 (n 27, change 8e-15)  samples x8 2.58e-15
+delta 3e-04: sliver 2.70e-02  kernel 2.02e-15 (n 27, change 7e-15)  samples x8 2.02e-15
+delta 1e-03: sliver 4.93e-02  kernel 2.13e-15 (n 27, change 7e-15)  samples x8 2.13e-15
+delta 3e-03: sliver 8.54e-02  kernel 2.24e-15 (n 27, change 7e-15)  samples x8 2.24e-15
+wrote v2d_graze_sweep_wsl.json

@@ -1,0 +1,177 @@
+{
+ "bytes_win": {
+  "n_pre": 191,
+  "n_post": 191,
+  "n_common": 191,
+  "n_equal": 191,
+  "differing": [],
+  "only_pre": [],
+  "only_post": [],
+  "exceptions": [],
+  "n_mortar": 65,
+  "n_mortar_equal": 65,
+  "declared_changed": {
+   "rotated_ellipse_30deg": true,
+   "rotated_ellipse_10deg_compile": true
+  },
+  "behaviour_pre": {
+   "pl_rects_only_two_layers": "EXC:NotImplementedError:PMM2DStackPure.add_layer: shapes= with layer_grids='per-layer' is not implemented -- the stack merges every shape layer into ONE map; di",
+   "pl_rects_only_one_layer": "EXC:NotImplementedError:PMM2DStackPure.add_layer: shapes= with layer_grids='per-layer' is not implemented -- the stack merges every shape layer into ONE map; di",
+   "pl_rects_as_eps_cell": "e478a8a729f5662c12e9cd9ba52c16ac0670f5f6114a5e8a4309b0326dc75f33",
+   "pl_circle_one_layer": "EXC:NotImplementedError:PMM2DStackPure.add_layer: shapes= with layer_grids='per-layer' is not implemented -- the stack merges every shape layer into ONE map; di"
+  },
+  "behaviour_post": {
+   "pl_rects_only_two_layers": "bb1d76e1b97e6b947196cc43c320021a0ed144f7239a65a2387d5e23473fba6e",
+   "pl_rects_only_one_layer": "d78836c3807c93334ae9374320de8ad623c99b53192370297cf4d4053f7de157",
+   "pl_rects_as_eps_cell": "e478a8a729f5662c12e9cd9ba52c16ac0670f5f6114a5e8a4309b0326dc75f33",
+   "pl_circle_one_layer": "5d83f713a1dd1df2677559df93f50f635098e712cd630d50b0123b01a6a313ca"
+  },
+  "beh_num_post": {
+   "rects_shapes_vs_eps_cell_maxdRT": 0.0011814166042486383,
+   "rects_shapes_vs_eps_cell_maxdA": 5.40322165161071e-15,
+   "rects_perlayer_shapes_vs_shared_shapes_bytes_equal": true
+  },
+  "fb_post": {
+   "ulp_eps_shared_multilayer": {
+    "sha_ref": "20f508b6de03cbc8b01b167e9b9a6d620c02b401ae64c9ec9988c3e3cdc891a3",
+    "sha_pert": "7492b2b6a9a34837668571b2aebe17428b0eb563bac317477ddd7038fb7a6496",
+    "max_dR": 2.031361190368841e-15,
+    "max_dT": 1.4210854715202004e-14
+   },
+   "ulp_eps_pl_nonconf_conical": {
+    "sha_ref": "8f6d6ae22856601fa6cc08a36e95a0b4b9de75827018a04fb1500a1d74ecb498",
+    "sha_pert": "3e38ea25502bea09bfb08c330c4b7db4e87b573953875968fefa0531c00cbb4e",
+    "matches_fixture": true,
+    "max_dR": 1.3253287356462806e-15
+   },
+   "identity_map_quadrature_op": {
+    "Rmat_equal_hash": false,
+    "Lmat_equal_hash": false,
+    "Lmat_rel": 7.380067608371092e-15
+   }
+  },
+  "fb_pre": {
+   "ulp_eps_shared_multilayer": {
+    "sha_ref": "20f508b6de03cbc8b01b167e9b9a6d620c02b401ae64c9ec9988c3e3cdc891a3",
+    "sha_pert": "7492b2b6a9a34837668571b2aebe17428b0eb563bac317477ddd7038fb7a6496",
+    "max_dR": 2.031361190368841e-15,
+    "max_dT": 1.4210854715202004e-14
+   },
+   "ulp_eps_pl_nonconf_conical": {
+    "sha_ref": "8f6d6ae22856601fa6cc08a36e95a0b4b9de75827018a04fb1500a1d74ecb498",
+    "sha_pert": "3e38ea25502bea09bfb08c330c4b7db4e87b573953875968fefa0531c00cbb4e",
+    "matches_fixture": true,
+    "max_dR": 1.3253287356462806e-15
+   },
+   "identity_map_quadrature_op": {
+    "Rmat_equal_hash": false,
+    "Lmat_equal_hash": false,
+    "Lmat_rel": 7.380067608371092e-15
+   }
+  }
+ },
+ "capture_win": {
+  "n_pre": 535,
+  "n_post": 535,
+  "n_common": 535,
+  "n_equal": 535,
+  "differing": [],
+  "only_pre": [],
+  "only_post": [],
+  "by_kind": {
+   "PMM2DStackPure._solve_per_layer": 141,
+   "PMM2DStackPure.solve": 145,
+   "PMMStack.solve": 44,
+   "sp._interface_smatrix_mortar_2d": 165,
+   "sp._interface_smatrix_general_mortar_2d": 19,
+   "PMM2DStackPure.convergence_floor": 2,
+   "PMM2DStackPure.layer_absorption": 1,
+   "PMMStack.layer_absorption": 3,
+   "core._interface_smatrix_general_mortar_2d": 15
+  },
+  "n_tests": 88,
+  "non_passed_post": {
+   "tests/unit/test_fix_pmm2d_mortar_round2.py::test_the_guarded_mortar_solve_returns_the_numpy_solve_bit_for_bit": [
+    "skipped",
+    "skipped"
+   ]
+  },
+  "exitstatus": [
+   0,
+   0
+  ]
+ },
+ "bytes_wsl": {
+  "n_pre": 191,
+  "n_post": 191,
+  "n_common": 191,
+  "n_equal": 191,
+  "differing": [],
+  "only_pre": [],
+  "only_post": [],
+  "exceptions": [],
+  "n_mortar": 65,
+  "n_mortar_equal": 65,
+  "declared_changed": {
+   "rotated_ellipse_30deg": true,
+   "rotated_ellipse_10deg_compile": true
+  },
+  "behaviour_pre": {
+   "pl_rects_only_two_layers": "EXC:NotImplementedError:PMM2DStackPure.add_layer: shapes= with layer_grids='per-layer' is not implemented -- the stack merges every shape layer into ONE map; di",
+   "pl_rects_only_one_layer": "EXC:NotImplementedError:PMM2DStackPure.add_layer: shapes= with layer_grids='per-layer' is not implemented -- the stack merges every shape layer into ONE map; di",
+   "pl_rects_as_eps_cell": "7a5ec175d6c1341072eb7952f87eb5e64fe7418b31712b981e62fa928cd53bf6",
+   "pl_circle_one_layer": "EXC:NotImplementedError:PMM2DStackPure.add_layer: shapes= with layer_grids='per-layer' is not implemented -- the stack merges every shape layer into ONE map; di"
+  },
+  "behaviour_post": {
+   "pl_rects_only_two_layers": "33d56c9f119ebc7678259e1932abe40264306ede1626150508ae3dcb3dfa56f5",
+   "pl_rects_only_one_layer": "80cde873031a0659a85d59168e5f5ab57d4b45e2ce1cceaf3f9fff26a1907513",
+   "pl_rects_as_eps_cell": "7a5ec175d6c1341072eb7952f87eb5e64fe7418b31712b981e62fa928cd53bf6",
+   "pl_circle_one_layer": "3b244fc05f0319b6ab8277b3509b054f9e7cb739d1aa8b2fb14db6f722b6a893"
+  },
+  "beh_num_post": {
+   "rects_shapes_vs_eps_cell_maxdRT": 0.0011814166042548972,
+   "rects_shapes_vs_eps_cell_maxdA": 6.367751779366713e-15,
+   "rects_perlayer_shapes_vs_shared_shapes_bytes_equal": true
+  },
+  "fb_post": {
+   "ulp_eps_shared_multilayer": {
+    "sha_ref": "ae08380c9958a8b990e3083a5cc707aff8d6e3d72288daeba8cb23f6b334c81f",
+    "sha_pert": "aeed77ffd4b310df5563ec73d919adc6aecb152cb0161dc12dea07f99fb5f51b",
+    "max_dR": 7.993605777301127e-15,
+    "max_dT": 2.1538326677728037e-14
+   },
+   "ulp_eps_pl_nonconf_conical": {
+    "sha_ref": "dc676ec1d5100b2202f4d5ac0df41edbd77e9e90eae509922d4d6d0cded86a8d",
+    "sha_pert": "0cd20908779fe7070e550341140a1771e9bc6b8dabd51f6565a5c497690a765d",
+    "matches_fixture": true,
+    "max_dR": 1.304512053934559e-15
+   },
+   "identity_map_quadrature_op": {
+    "Rmat_equal_hash": false,
+    "Lmat_equal_hash": false,
+    "Lmat_rel": 7.380067608371092e-15
+   }
+  },
+  "fb_pre": {
+   "ulp_eps_shared_multilayer": {
+    "sha_ref": "ae08380c9958a8b990e3083a5cc707aff8d6e3d72288daeba8cb23f6b334c81f",
+    "sha_pert": "aeed77ffd4b310df5563ec73d919adc6aecb152cb0161dc12dea07f99fb5f51b",
+    "max_dR": 7.993605777301127e-15,
+    "max_dT": 2.1538326677728037e-14
+   },
+   "ulp_eps_pl_nonconf_conical": {
+    "sha_ref": "dc676ec1d5100b2202f4d5ac0df41edbd77e9e90eae509922d4d6d0cded86a8d",
+    "sha_pert": "0cd20908779fe7070e550341140a1771e9bc6b8dabd51f6565a5c497690a765d",
+    "matches_fixture": true,
+    "max_dR": 1.304512053934559e-15
+   },
+   "identity_map_quadrature_op": {
+    "Rmat_equal_hash": false,
+    "Lmat_equal_hash": false,
+    "Lmat_rel": 7.380067608371092e-15
+   }
+  }
+ },
+ "post_win_vs_wsl_equal": 83,
+ "post_win_vs_wsl_total": 191
+}

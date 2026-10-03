@@ -1,0 +1,64 @@
+{
+ "rows": [
+  {
+   "case": "sx",
+   "delta": 0.0,
+   "shipped": 8.737607252964695e-15,
+   "fixed": 8.737607252964695e-15,
+   "fixed_n": 27,
+   "fixed_change": 7.729421800699605e-15,
+   "shipped_vs_fixed": 0.0
+  },
+  {
+   "case": "sx",
+   "delta": 1e-07,
+   "shipped": 1.7574111066367173e-10,
+   "fixed": 8.737606839604453e-15,
+   "fixed_n": 27,
+   "fixed_change": 7.729421435034776e-15,
+   "shipped_vs_fixed": 1.7574102664822287e-10
+  },
+  {
+   "case": "sx",
+   "delta": 1e-06,
+   "shipped": 5.557408934241634e-09,
+   "fixed": 8.289520908120673e-15,
+   "fixed_n": 27,
+   "fixed_change": 7.729418144058528e-15,
+   "shipped_vs_fixed": 5.557408769711493e-09
+  },
+  {
+   "case": "sx",
+   "delta": 3e-05,
+   "shipped": 8.289407188779569e-15,
+   "fixed": 8.289407188779569e-15,
+   "fixed_n": 27,
+   "fixed_change": 7.39325506026292e-15,
+   "shipped_vs_fixed": 0.0
+  },
+  {
+   "case": "circ",
+   "delta": 1e-06,
+   "shipped": 6.41885007759538e-07,
+   "fixed": 6.457273017125259e-07,
+   "fixed_n": 96,
+   "fixed_change": 3.616920746184114e-10,
+   "shipped_vs_fixed": 3.842358577053629e-09
+  }
+ ],
+ "circ_sin_moved": 0.0,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

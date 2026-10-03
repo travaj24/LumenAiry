@@ -1,0 +1,232 @@
+{
+ "circ_45_near_gNone_gNone": {
+  "ok": true,
+  "grids": [
+   3,
+   3
+  ],
+  "maptypes": [
+   "TransfiniteMap",
+   "TransfiniteMap"
+  ]
+ },
+ "circ_45_near_g5_g5": {
+  "ok": true,
+  "grids": [
+   5,
+   5
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "RefinedMap"
+  ]
+ },
+ "circ_45_near_g5_gNone": {
+  "ok": true,
+  "grids": [
+   5,
+   3
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "TransfiniteMap"
+  ]
+ },
+ "circ_45_near_gNone_g5": {
+  "ok": true,
+  "grids": [
+   3,
+   5
+  ],
+  "maptypes": [
+   "TransfiniteMap",
+   "RefinedMap"
+  ]
+ },
+ "circ_45_near_g7_g7": {
+  "ok": true,
+  "grids": [
+   7,
+   7
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "RefinedMap"
+  ]
+ },
+ "ii_circ_circ_gNone_gNone": {
+  "ok": true,
+  "grids": [
+   3,
+   3
+  ],
+  "maptypes": [
+   "TransfiniteMap",
+   "TransfiniteMap"
+  ]
+ },
+ "ii_circ_circ_g5_g5": {
+  "ok": true,
+  "grids": [
+   5,
+   5
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "RefinedMap"
+  ]
+ },
+ "ii_circ_circ_g5_gNone": {
+  "ok": true,
+  "grids": [
+   5,
+   3
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "TransfiniteMap"
+  ]
+ },
+ "ii_circ_circ_gNone_g5": {
+  "ok": true,
+  "grids": [
+   3,
+   5
+  ],
+  "maptypes": [
+   "TransfiniteMap",
+   "RefinedMap"
+  ]
+ },
+ "ii_circ_circ_g7_g7": {
+  "ok": true,
+  "grids": [
+   7,
+   7
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "RefinedMap"
+  ]
+ },
+ "i_circ_sin_gNone_gNone": {
+  "ok": true,
+  "grids": [
+   3,
+   2
+  ],
+  "maptypes": [
+   "TransfiniteMap",
+   "RefinedMap"
+  ]
+ },
+ "i_circ_sin_g5_g5": {
+  "ok": true,
+  "grids": [
+   5,
+   5
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "RefinedMap"
+  ]
+ },
+ "i_circ_sin_g5_gNone": {
+  "ok": true,
+  "grids": [
+   5,
+   2
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "RefinedMap"
+  ]
+ },
+ "i_circ_sin_gNone_g5": {
+  "ok": true,
+  "grids": [
+   3,
+   5
+  ],
+  "maptypes": [
+   "TransfiniteMap",
+   "RefinedMap"
+  ]
+ },
+ "i_circ_sin_g7_g7": {
+  "ok": true,
+  "grids": [
+   7,
+   7
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "RefinedMap"
+  ]
+ },
+ "same_circle_gNone_gNone": {
+  "ok": true,
+  "grids": [
+   3,
+   3
+  ],
+  "maptypes": [
+   "TransfiniteMap",
+   "TransfiniteMap"
+  ]
+ },
+ "same_circle_g5_g5": {
+  "ok": true,
+  "grids": [
+   5,
+   5
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "RefinedMap"
+  ]
+ },
+ "same_circle_g5_gNone": {
+  "ok": false,
+  "err": "NotImplementedError: curved mortar: the overlap of cell (1, 2) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of ",
+  "fails": [],
+  "maptypes": [
+   "RefinedMap",
+   "TransfiniteMap"
+  ]
+ },
+ "same_circle_gNone_g5": {
+  "ok": false,
+  "err": "NotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 2) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of ",
+  "fails": [],
+  "maptypes": [
+   "TransfiniteMap",
+   "RefinedMap"
+  ]
+ },
+ "same_circle_g7_g7": {
+  "ok": true,
+  "grids": [
+   7,
+   7
+  ],
+  "maptypes": [
+   "RefinedMap",
+   "RefinedMap"
+  ]
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

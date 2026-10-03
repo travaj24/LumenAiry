@@ -1,0 +1,9 @@
+sinx_siny M=4: kernel n=27 change=7.6e-14 2.8s
+  events 10, outer nodes 180
+  inner segments 740, nodes 14800
+  max inversion residual 5.55e-16; failed groups []
+  brute 2.3s  E-row {'11': 7.377464618983688e-15, '12': 6.29783565035193e-16, '21': 8.631408681509117e-16, '22': 7.017588296106436e-15, 'all': 7.377464618983688e-15, 'scale': 0.6170025389549355}
+  H-row kernel vs brute {'H11': 7.017588296106436e-15, 'H12': 6.185374299452787e-16, 'H21': 8.631408681509117e-16, 'H22': 7.377464618983688e-15, 'all': 7.377464618983688e-15}
+  H identity on brute X vs brute H 1.80e-16
+  fail-before (H without off-diagonal cofactor) 8.84e-02
+wrote v2_brute_sinx_siny_M4_n20_L18_f0.05_wsl.json

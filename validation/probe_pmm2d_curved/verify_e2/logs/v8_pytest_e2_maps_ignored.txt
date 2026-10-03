@@ -1,0 +1,5 @@
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_1_unmapped_per_layer_never_reaches_the_curved_mortar
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_2_same_map_through_the_curved_mortar_is_the_shared_solve
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_3_two_stretches_converge_to_the_unmapped_device
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_8_mutations_maps_ignored_and_the_forced_fast_path
+4 failed, 8 passed in 62.38s (0:01:02)

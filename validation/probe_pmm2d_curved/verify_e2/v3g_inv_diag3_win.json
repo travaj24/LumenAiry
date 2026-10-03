@@ -1,0 +1,81 @@
+{
+ "ii_circ_circ_g5_g5": {
+  "ok": true,
+  "n": 96,
+  "change": 4.373850265499074e-09,
+  "warn": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped la"
+  ]
+ },
+ "ii_circ_circ_g5_gNone": {
+  "ok": true,
+  "n": 96,
+  "change": 1.2518540238171146e-09,
+  "warn": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped la"
+  ]
+ },
+ "ii_circ_circ_g7_g7": {
+  "ok": true,
+  "n": 96,
+  "change": 1.3214956311708872e-09,
+  "warn": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped la"
+  ]
+ },
+ "i_circ_sin_g5_g5": {
+  "ok": true,
+  "n": 96,
+  "change": 2.5414715324162427e-10,
+  "warn": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped la"
+  ]
+ },
+ "i_circ_sin_g5_gNone": {
+  "ok": true,
+  "n": 96,
+  "change": 2.0635126245594946e-10,
+  "warn": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped la"
+  ]
+ },
+ "i_circ_sin_g7_g7": {
+  "ok": true,
+  "n": 96,
+  "change": 6.028555615685395e-10,
+  "warn": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped la"
+  ]
+ },
+ "same_circle_g5_g5": {
+  "ok": true,
+  "n": 12,
+  "change": 1.5134527545629906e-15,
+  "warn": []
+ },
+ "same_circle_g5_gNone": {
+  "ok": false,
+  "err": "NotImplementedError: curved mortar: the overlap of cell (1, 2) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = ",
+  "fail_cell": []
+ },
+ "same_circle_g7_g7": {
+  "ok": true,
+  "n": 12,
+  "change": 1.6472083132555484e-15,
+  "warn": []
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

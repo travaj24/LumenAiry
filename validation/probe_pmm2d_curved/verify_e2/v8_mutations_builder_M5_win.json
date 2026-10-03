@@ -1,0 +1,194 @@
+{
+ "device": "builder",
+ "M": 5,
+ "shipped": {
+  "closure": [
+   0.0001756789397122649,
+   8.952097019632177e-05
+  ],
+  "wall": 55.036012099997606,
+  "n": [
+   26
+  ],
+  "change": [
+   1.1403922881875603e-15
+  ]
+ },
+ "h_no_measure": {
+  "wall": 13.599384599998302,
+  "warnings": [
+   "PMM2DStackPure.solve: lossless energy closure violated for incident E_x (sum R+T = 0.931, off by -0.069; every permittivity in this stack is real or Hermitian, so R+T = 1 is exact).  The staggered bas",
+   "PMM2DStackPure.solve: lossless energy closure violated for incident E_y (sum R+T = 0.9295, off by -0.0705; every permittivity in this stack is real or Hermitian, so R+T = 1 is exact).  The staggered b"
+  ],
+  "error": null,
+  "rt_moved": 0.05495751789991321,
+  "closure": [
+   0.06903736293499518,
+   0.07050541023016499
+  ],
+  "dX": 0.0,
+  "dH": 0.5261316884558095,
+  "n": [
+   26
+  ],
+  "change": [
+   1.1403922881875603e-15
+  ]
+ },
+ "h_no_offdiag": {
+  "wall": 28.902710399997886,
+  "warnings": [],
+  "error": null,
+  "rt_moved": 0.022503505161474535,
+  "closure": [
+   0.006865334928358613,
+   0.039832082787323975
+  ],
+  "dX": 0.0,
+  "dH": 0.21581020596508768,
+  "n": [
+   26
+  ],
+  "change": [
+   1.1403922881875603e-15
+  ]
+ },
+ "e_no_factor": {
+  "wall": 27.470258100001956,
+  "warnings": [],
+  "error": null,
+  "rt_moved": 0.05293857302113103,
+  "closure": [
+   0.0002594395040370623,
+   4.656432947069966e-05
+  ],
+  "dX": 0.21581020596508768,
+  "dH": 0.21581020596508768,
+  "n": [
+   26
+  ],
+  "change": [
+   1.1403922881875603e-15
+  ]
+ },
+ "tangency_ends_in_shipped_run": 0,
+ "sqrt_off": {
+  "wall": 8.713257800001884,
+  "warnings": [],
+  "error": null,
+  "rt_moved": 0.0,
+  "closure": [
+   0.0001756789397122649,
+   8.952097019632177e-05
+  ],
+  "dX": 0.0,
+  "dH": 0.0,
+  "n": [
+   26
+  ],
+  "change": [
+   1.1403922881875603e-15
+  ]
+ },
+ "tang_missed": {
+  "wall": 25.481250500000897,
+  "warnings": [],
+  "error": null,
+  "rt_moved": 0.0,
+  "closure": [
+   0.0001756789397122649,
+   8.952097019632177e-05
+  ],
+  "dX": 0.0,
+  "dH": 0.0,
+  "n": [
+   26
+  ],
+  "change": [
+   1.1403922881875603e-15
+  ]
+ },
+ "maps_ignored": {
+  "wall": 11.576286299998173,
+  "warnings": [],
+  "error": null,
+  "rt_moved": 0.06707070528613834,
+  "closure": [
+   0.00020213637854504807,
+   4.412328235248175e-05
+  ]
+ },
+ "newton_tol": {
+  "wall": 8.198441300002742,
+  "warnings": [],
+  "error": null,
+  "rt_moved": 2.55351295663786e-15,
+  "closure": [
+   0.00017567893971293103,
+   8.952097019743199e-05
+  ],
+  "dX": 5.701961440937801e-16,
+  "dH": 5.701961440937801e-16,
+  "n": [
+   26
+  ],
+  "change": [
+   1.14039228818756e-15
+  ]
+ },
+ "hswap_off": {
+  "wall": 6.539295000002312,
+  "warnings": [
+   "PMM2DStackPure.solve: lossless energy closure violated for incident E_x (sum R+T = 1.099, off by +0.0991; every permittivity in this stack is real or Hermitian, so R+T = 1 is exact).  The staggered ba",
+   "PMM2DStackPure.solve: lossless energy closure violated for incident E_y (sum R+T = 1.115, off by +0.115; every permittivity in this stack is real or Hermitian, so R+T = 1 is exact).  The staggered bas"
+  ],
+  "error": null,
+  "rt_moved": 0.5105742211983187,
+  "closure": [
+   0.099118560815036,
+   0.11521349515138968
+  ],
+  "dX": 0.0,
+  "dH": 0.0,
+  "n": [
+   26
+  ],
+  "change": [
+   1.1403922881875603e-15
+  ]
+ },
+ "fast_forced": {
+  "wall": 23.05215660000249,
+  "warnings": [],
+  "error": null,
+  "rt_moved": 0.0,
+  "closure": [
+   0.0001756789397122649,
+   8.952097019632177e-05
+  ],
+  "dX": 0.0,
+  "dH": 0.0,
+  "n": [
+   26
+  ],
+  "change": [
+   1.1403922881875603e-15
+  ],
+  "merge_refusal": "compile_shapes: layer 1: Circle(cx=0.6, cy=0.6, r=0.36) and layer 2: SinusoidalWall(axis='x', x0=0.6, amplitude=0.12) need DIFFERENT physical positions for the same grid vertex (near x = 0.6, y = 0.24: (0.5999999999999999, 0.24) vs (0.7166193116685604, 0.3454415587728429)) -- their outlines meet in one cell in two different ways (e.g. a rounded corner over a sharp one, or an edge laid on another shape's flat side).  One map cannot carry both; a common map for them is Phase E of the curved-cell plan.",
+  "fast_ok": false
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

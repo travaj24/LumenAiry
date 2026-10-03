@@ -1,0 +1,49 @@
+{
+ "geom": "diag",
+ "M": 4,
+ "s=0.003": {
+  "raised": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "warnings": [],
+  "wall_adaptive": 48.4279824999976
+ },
+ "s=0.001": {
+  "n": 96,
+  "change": 5.2911913348408216e-08,
+  "warnings": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped layers did not settle to 1e-12 within 96 Gauss nodes per sub-interval (last change 5.29e-08); the interface carries a quadrature error of that order.  The two maps are too different inside a cell -- add walls (grid_hint) where they are steep."
+  ],
+  "wall_adaptive": 196.71510470000067,
+  "rel_fine": 4.735231615365456e-07,
+  "rel_primary_a": 1.5769844163152827e-06,
+  "rel_primary_b": 1.2621935824845007e-05,
+  "wall_checks": 188.09028229999967,
+  "absmax": 0.4064346606707015
+ },
+ "s=0.0001": {
+  "n": 96,
+  "change": 7.060433142523592e-08,
+  "warnings": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped layers did not settle to 1e-12 within 96 Gauss nodes per sub-interval (last change 7.06e-08); the interface carries a quadrature error of that order.  The two maps are too different inside a cell -- add walls (grid_hint) where they are steep."
+  ],
+  "wall_adaptive": 188.90742740000132,
+  "rel_fine": 5.924651854127102e-07,
+  "rel_primary_a": 1.5743484723596578e-06,
+  "rel_primary_b": 1.266572876065884e-05,
+  "wall_checks": 129.65967029999592,
+  "absmax": 0.40501624882243314
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

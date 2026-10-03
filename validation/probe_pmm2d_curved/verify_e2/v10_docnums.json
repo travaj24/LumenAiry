@@ -1,0 +1,1950 @@
+{
+ "rows": [
+  {
+   "section": "2.2",
+   "what": "Newton per node circle (us)",
+   "doc": "31.5",
+   "json": "e2_d_design_M4.json",
+   "value": 31.491330555379843,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "Newton per node sinusoid (us)",
+   "doc": "21.7",
+   "json": "e2_d_design_M4.json",
+   "value": 21.702499999719294,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "max inversion error circle",
+   "doc": "9.8e-15",
+   "json": "e2_d_design_M4.json",
+   "value": 9.825473767932635e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "max inversion error sinusoid",
+   "doc": "1.1e-15",
+   "json": "e2_d_design_M4.json",
+   "value": 1.1102230246251565e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "Gordon-Hall us/point",
+   "doc": "0.36",
+   "json": "e2_d_design_M4.json",
+   "value": 0.3647999983513728,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "cond(X) curved",
+   "doc": "769",
+   "json": "e2_d_design_M4.json",
+   "value": 768.9519298575915,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "cond separable",
+   "doc": "829",
+   "json": "e2_d_design_M4.json",
+   "value": 828.9838074541475,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "cond plain Gram",
+   "doc": "878",
+   "json": "e2_d_design_M4.json",
+   "value": 877.5974161851832,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "composite rel n=8",
+   "doc": "4.2e-2",
+   "json": "e2_d_design_M4.json",
+   "value": 0.041709486209478876,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "composite rel n=16",
+   "doc": "1.4e-2",
+   "json": "e2_d_design_M4.json",
+   "value": 0.013629497521964823,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "composite rel n=32",
+   "doc": "8.1e-3",
+   "json": "e2_d_design_M4.json",
+   "value": 0.008128372252838507,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "composite rel n=64",
+   "doc": "8.6e-4",
+   "json": "e2_d_design_M4.json",
+   "value": 0.0008612425022019611,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "composite rel n=128",
+   "doc": "3.2e-4",
+   "json": "e2_d_design_M4.json",
+   "value": 0.0003193177131946383,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "composite rel n=256",
+   "doc": "2.0e-4",
+   "json": "e2_d_design_M4.json",
+   "value": 0.0002030367497847498,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "composite wall n=256 (s)",
+   "doc": "31",
+   "json": "e2_d_design_M4.json",
+   "value": 31.047107500002312,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "cut rel n=6",
+   "doc": "1.4e-6",
+   "json": "e2_d_design_M4.json",
+   "value": 1.3725319798755933e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "cut rel n=9",
+   "doc": "3.2e-10",
+   "json": "e2_d_design_M4.json",
+   "value": 3.183014805511213e-10,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "cut rel n=12",
+   "doc": "5.5e-14",
+   "json": "e2_d_design_M4.json",
+   "value": 5.5380300495108475e-14,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "cut rel n=18",
+   "doc": "6.8e-15",
+   "json": "e2_d_design_M4.json",
+   "value": 6.8423537291253715e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "cut rel n=27",
+   "doc": "1.0e-15",
+   "json": "e2_d_design_M4.json",
+   "value": 9.978432521641167e-16,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "composite in stack (nocut d_RT, M5)",
+   "doc": "6.8e-5",
+   "json": "e2_8_mutations_M5.json",
+   "value": 6.812126652568085e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "cross-mass at M=8 (s)",
+   "doc": "1.1",
+   "json": "e2_9_cost_M8.json",
+   "value": 1.1137701999978162,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.2",
+   "what": "per-layer solve at M=8 (s)",
+   "doc": "48",
+   "json": "e2_9_cost_M8.json",
+   "value": 47.769093499999144,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.3",
+   "what": "same map vs plain Gram",
+   "doc": "2.5e-15",
+   "json": "e0_smoke_M4.json",
+   "value": 2.528317823354403e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.3",
+   "what": "identity maps vs StagCrossOps",
+   "doc": "7.3e-16",
+   "json": "e0_smoke_M4.json",
+   "value": 7.315167850201993e-16,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.3",
+   "what": "one integral two coords n=24",
+   "doc": "7.2e-16",
+   "json": "e0b_consistency_M4.json",
+   "value": 7.165062669186696e-16,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.3",
+   "what": "separable X11",
+   "doc": "1.3e-14",
+   "json": "e2_x_separable_M5.json",
+   "value": 1.2841205330586759e-14,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.3",
+   "what": "separable X22",
+   "doc": "5.4e-15",
+   "json": "e2_x_separable_M5.json",
+   "value": 5.432817639863628e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.3",
+   "what": "X12 = X21 = 0",
+   "doc": "0",
+   "json": "e2_x_separable_M5.json",
+   "value": 0.0,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.3",
+   "what": "without psi'",
+   "doc": "0.42",
+   "json": "e2_x_separable_M5.json",
+   "value": 0.42261693958599234,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.3",
+   "what": "circle/sin in sinusoid coords n=16",
+   "doc": "6.9e-4",
+   "json": "e0b_consistency_M4.json",
+   "value": 0.0006909557718842561,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.3",
+   "what": "circle/sin in sinusoid coords n=32",
+   "doc": "1.8e-4",
+   "json": "e0b_consistency_M4.json",
+   "value": 0.0001782885136953442,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.4",
+   "what": "q-match (6,6)",
+   "doc": "1.0e-6",
+   "json": "e2_h_host_sin_circ_vac_M6_th0.0_ph0.0.json",
+   "value": 1.0051707504121765e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.4",
+   "what": "q-match _Ms6-8",
+   "doc": "1.0e-6",
+   "json": "e2_h_host_sin_circ_vac_M6_Ms6-8_th0.0_ph0.0.json",
+   "value": 1.009191360479278e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.4",
+   "what": "q-match _Ms8-6",
+   "doc": "3.9e-9",
+   "json": "e2_h_host_sin_circ_vac_M6_Ms8-6_th0.0_ph0.0.json",
+   "value": 3.856594377182887e-09,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.4",
+   "what": "q-match _Ms8-8",
+   "doc": "2.2e-10",
+   "json": "e2_h_host_sin_circ_vac_M6_Ms8-8_th0.0_ph0.0.json",
+   "value": 2.1986568121690198e-10,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.4",
+   "what": "single map circle M6 (1e-11 class)",
+   "doc": "2.3e-11",
+   "json": "e2_h_host_shared_circ_M6_th0.0_ph0.0.json",
+   "value": 2.2722823622700616e-11,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.4",
+   "what": "single map sinx M6 (claimed 1e-11..1e-13 by M=6/7)",
+   "doc": "5.3e-9",
+   "json": "e2_h_host_shared_sinx_M6_th0.0_ph0.0.json",
+   "value": 5.299914396239558e-09,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.5",
+   "what": "noride vs alone M4",
+   "doc": "2.1e-3",
+   "json": "e2_4_vacuum_M4.json",
+   "value": 0.002146358490150546,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.5",
+   "what": "noride vs alone M5",
+   "doc": "3.4e-3",
+   "json": "e2_4_vacuum_M5.json",
+   "value": 0.003436305151086283,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.5",
+   "what": "noride vs alone M6",
+   "doc": "2.7e-3",
+   "json": "e2_4_vacuum_M6.json",
+   "value": 0.0027050175387155484,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.6",
+   "what": "two_circles_r_0.30_0.40 closure M3",
+   "doc": "3.7e-2",
+   "json": "e2_m_overrefusal_M3.json",
+   "value": 0.03693981380856948,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.6",
+   "what": "two_circles_r_0.30_0.40 closure M4",
+   "doc": "1.1e-2",
+   "json": "e2_m_overrefusal_M4.json",
+   "value": 0.010789719952425392,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.6",
+   "what": "two_circles_r_0.30_0.40 closure M5",
+   "doc": "1.6e-2",
+   "json": "e2_m_overrefusal_M5.json",
+   "value": 0.015740233264342374,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.6",
+   "what": "equal_circles_dy_0.05 closure M3",
+   "doc": "7.5e-2",
+   "json": "e2_m_overrefusal_M3.json",
+   "value": 0.07487686244995873,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.6",
+   "what": "equal_circles_dy_0.05 closure M4",
+   "doc": "1.9e-2",
+   "json": "e2_m_overrefusal_M4.json",
+   "value": 0.018975439745410827,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.6",
+   "what": "equal_circles_dy_0.05 closure M5",
+   "doc": "9.6e-3",
+   "json": "e2_m_overrefusal_M5.json",
+   "value": 0.009608640242220634,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.6",
+   "what": "rect_touching_circle_30deg M3 (n_orders cap)",
+   "doc": "true",
+   "json": "e2_m_overrefusal_M3.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.6",
+   "what": "rect_touching_circle_30deg closure M4",
+   "doc": "1.5e-2",
+   "json": "e2_m_overrefusal_M4.json",
+   "value": 0.01502174657540667,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "2.6",
+   "what": "rect_touching_circle_30deg closure M5",
+   "doc": "1.6e-3",
+   "json": "e2_m_overrefusal_M5.json",
+   "value": 0.0015628161135724516,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.1",
+   "what": "fixtures equal",
+   "doc": "134",
+   "json": "e2_1_compare.json",
+   "value": 134,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.1",
+   "what": "fixtures common",
+   "doc": "134",
+   "json": "e2_1_compare.json",
+   "value": 134,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.1",
+   "what": "mortar fixtures",
+   "doc": "12",
+   "json": "e2_1_compare.json",
+   "value": 12,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.1",
+   "what": "idmap changed",
+   "doc": "28",
+   "json": "e2_1_compare.json",
+   "value": 28,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.1",
+   "what": "idmap total",
+   "doc": "36",
+   "json": "e2_1_compare.json",
+   "value": 36,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.2",
+   "what": "th0.0_ph0.0 per-layer bit-identical",
+   "doc": "true",
+   "json": "e2_2_same_map_M4.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.2",
+   "what": "th0.0_ph0.0 forced mortar",
+   "doc": "1.4e-15",
+   "json": "e2_2_same_map_M4.json",
+   "value": 1.4432899320127035e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.2",
+   "what": "th0.0_ph0.0 H-swap off",
+   "doc": "1.10",
+   "json": "e2_2_same_map_M4.json",
+   "value": 1.1021316822859093,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.2",
+   "what": "th0.3_ph0.0 per-layer bit-identical",
+   "doc": "true",
+   "json": "e2_2_same_map_M4.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.2",
+   "what": "th0.3_ph0.0 forced mortar",
+   "doc": "1.3e-15",
+   "json": "e2_2_same_map_M4.json",
+   "value": 1.3322676295501878e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.2",
+   "what": "th0.3_ph0.0 H-swap off",
+   "doc": "0.92",
+   "json": "e2_2_same_map_M4.json",
+   "value": 0.9204810078286573,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.2",
+   "what": "th0.3_ph0.7 per-layer bit-identical",
+   "doc": "true",
+   "json": "e2_2_same_map_M4.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.2",
+   "what": "th0.3_ph0.7 forced mortar",
+   "doc": "3.1e-15",
+   "json": "e2_2_same_map_M4.json",
+   "value": 3.0792470469794305e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.2",
+   "what": "th0.3_ph0.7 H-swap off",
+   "doc": "0.80",
+   "json": "e2_2_same_map_M4.json",
+   "value": 0.8011577341059295,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M4 mapped vs unmapped",
+   "doc": "2.1e-2",
+   "json": "e2_3_stretches_M4_th0.0_ph0.0.json",
+   "value": 0.021349189247213796,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M4 mapped vs union",
+   "doc": "3.6e-2",
+   "json": "e2_3_stretches_M4_th0.0_ph0.0.json",
+   "value": 0.03565834954231656,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M4 unmapped vs union",
+   "doc": "3.6e-2",
+   "json": "e2_3_stretches_M4_th0.0_ph0.0.json",
+   "value": 0.03554256024776731,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M4 mapped closure",
+   "doc": "1.2e-2",
+   "json": "e2_3_stretches_M4_th0.0_ph0.0.json",
+   "value": 0.011994165544951252,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M5 mapped vs unmapped",
+   "doc": "2.0e-3",
+   "json": "e2_3_stretches_M5_th0.0_ph0.0.json",
+   "value": 0.0020221745962559767,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M5 mapped vs union",
+   "doc": "4.3e-3",
+   "json": "e2_3_stretches_M5_th0.0_ph0.0.json",
+   "value": 0.004332026769072905,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M5 unmapped vs union",
+   "doc": "2.8e-3",
+   "json": "e2_3_stretches_M5_th0.0_ph0.0.json",
+   "value": 0.0027557696727673053,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M5 mapped closure",
+   "doc": "1.0e-3",
+   "json": "e2_3_stretches_M5_th0.0_ph0.0.json",
+   "value": 0.0010148031680845548,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M6 mapped vs unmapped",
+   "doc": "6.0e-3",
+   "json": "e2_3_stretches_M6_th0.0_ph0.0.json",
+   "value": 0.006005265177024932,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M6 mapped vs union",
+   "doc": "5.8e-3",
+   "json": "e2_3_stretches_M6_th0.0_ph0.0.json",
+   "value": 0.005806279125231573,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M6 unmapped vs union",
+   "doc": "6.9e-4",
+   "json": "e2_3_stretches_M6_th0.0_ph0.0.json",
+   "value": 0.0006912307327764933,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M6 mapped closure",
+   "doc": "8.0e-5",
+   "json": "e2_3_stretches_M6_th0.0_ph0.0.json",
+   "value": 8.00667700335822e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M7 mapped vs unmapped",
+   "doc": "5.2e-4",
+   "json": "e2_3_stretches_M7_th0.0_ph0.0.json",
+   "value": 0.0005213227882490401,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M7 mapped vs union",
+   "doc": "4.8e-4",
+   "json": "e2_3_stretches_M7_th0.0_ph0.0.json",
+   "value": 0.00047615983250370864,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M7 unmapped vs union",
+   "doc": "3.3e-4",
+   "json": "e2_3_stretches_M7_th0.0_ph0.0.json",
+   "value": 0.00032760336251244637,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.3",
+   "what": "M7 mapped closure",
+   "doc": "1.9e-5",
+   "json": "e2_3_stretches_M7_th0.0_ph0.0.json",
+   "value": 1.9475784667766227e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "closure M4",
+   "doc": "6.5e-4",
+   "json": "e2_4_closure_M4.json",
+   "value": 0.0006517992512529158,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "closure M5",
+   "doc": "1.8e-4",
+   "json": "e2_4_closure_M5.json",
+   "value": 0.0001756789397122649,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "closure M6",
+   "doc": "2.4e-5",
+   "json": "e2_4_closure_M6.json",
+   "value": 2.4466625456409652e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "closure M7",
+   "doc": "7.6e-7",
+   "json": "e2_4_closure_M7.json",
+   "value": 7.641008815673089e-07,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "closure M8",
+   "doc": "9.7e-7",
+   "json": "e2_4_closure_M8.json",
+   "value": 9.672033760566023e-07,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "H-swap off closure in0 (M5)",
+   "doc": "0.10",
+   "json": "e2_8_mutations_M5.json",
+   "value": 0.099118560815036,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "H-swap off closure in1 (M5)",
+   "doc": "0.12",
+   "json": "e2_8_mutations_M5.json",
+   "value": 0.11521349515138968,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "lossless layer absorbs in0",
+   "doc": "1.5e-15",
+   "json": "e2_4_absorb_M4.json",
+   "value": 1.5425861800199085e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "lossless layer absorbs in1",
+   "doc": "4.6e-16",
+   "json": "e2_4_absorb_M4.json",
+   "value": 4.624104703415224e-16,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "-R flux form in0",
+   "doc": "5.0e-3",
+   "json": "e2_4_absorb_M4.json",
+   "value": 0.005027592979682734,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "-R flux form in1",
+   "doc": "4.7e-3",
+   "json": "e2_4_absorb_M4.json",
+   "value": 0.004694468488958494,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "budget mismatch in0",
+   "doc": "7.5e-3",
+   "json": "e2_4_absorb_M4.json",
+   "value": 0.007488086972461727,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "budget mismatch in1",
+   "doc": "5.4e-3",
+   "json": "e2_4_absorb_M4.json",
+   "value": 0.005406745597264381,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M4 per-layer vs shared spacer",
+   "doc": "0",
+   "json": "e2_4_vacuum_M4.json",
+   "value": 0.0,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M4 bytes equal",
+   "doc": "true",
+   "json": "e2_4_vacuum_M4.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M4 spacer vs alone",
+   "doc": "3.6e-4",
+   "json": "e2_4_vacuum_M4.json",
+   "value": 0.0003563124070455285,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M4 noride vs alone",
+   "doc": "2.1e-3",
+   "json": "e2_4_vacuum_M4.json",
+   "value": 0.002146358490150546,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M5 per-layer vs shared spacer",
+   "doc": "0",
+   "json": "e2_4_vacuum_M5.json",
+   "value": 0.0,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M5 bytes equal",
+   "doc": "true",
+   "json": "e2_4_vacuum_M5.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M5 spacer vs alone",
+   "doc": "7.4e-5",
+   "json": "e2_4_vacuum_M5.json",
+   "value": 7.39407201678522e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M5 noride vs alone",
+   "doc": "3.4e-3",
+   "json": "e2_4_vacuum_M5.json",
+   "value": 0.003436305151086283,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M6 per-layer vs shared spacer",
+   "doc": "0",
+   "json": "e2_4_vacuum_M6.json",
+   "value": 0.0,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M6 bytes equal",
+   "doc": "true",
+   "json": "e2_4_vacuum_M6.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M6 spacer vs alone",
+   "doc": "5.0e-6",
+   "json": "e2_4_vacuum_M6.json",
+   "value": 4.994066358868406e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "vacuum M6 noride vs alone",
+   "doc": "2.7e-3",
+   "json": "e2_4_vacuum_M6.json",
+   "value": 0.0027050175387155484,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M4 fast path bit-identical",
+   "doc": "true",
+   "json": "e2_4_merged_M4.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M4 per-layer vs merged",
+   "doc": "9.9e-2",
+   "json": "e2_4_merged_M4.json",
+   "value": 0.09908284327268613,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M4 closure merged",
+   "doc": "1.5e-3",
+   "json": "e2_4_merged_M4.json",
+   "value": 0.0014876510148559285,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M4 closure per-layer",
+   "doc": "1.5e-3",
+   "json": "e2_4_merged_M4.json",
+   "value": 0.0015182016983581459,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M5 fast path bit-identical",
+   "doc": "true",
+   "json": "e2_4_merged_M5.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M5 per-layer vs merged",
+   "doc": "1.1e-2",
+   "json": "e2_4_merged_M5.json",
+   "value": 0.01142123469688705,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M5 closure merged",
+   "doc": "1.4e-3",
+   "json": "e2_4_merged_M5.json",
+   "value": 0.0014318676739382141,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M5 closure per-layer",
+   "doc": "2.8e-4",
+   "json": "e2_4_merged_M5.json",
+   "value": 0.0002765026205282517,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M6 fast path bit-identical",
+   "doc": "true",
+   "json": "e2_4_merged_M6.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M6 per-layer vs merged",
+   "doc": "9.7e-3",
+   "json": "e2_4_merged_M6.json",
+   "value": 0.00967992519152061,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M6 closure merged",
+   "doc": "1.8e-4",
+   "json": "e2_4_merged_M6.json",
+   "value": 0.0001839887643688698,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M6 closure per-layer",
+   "doc": "2.8e-5",
+   "json": "e2_4_merged_M6.json",
+   "value": 2.8451946567198405e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M7 fast path bit-identical",
+   "doc": "true",
+   "json": "e2_4_merged_M7.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M7 per-layer vs merged",
+   "doc": "4.5e-4",
+   "json": "e2_4_merged_M7.json",
+   "value": 0.0004457290473387984,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M7 closure merged",
+   "doc": "8.5e-6",
+   "json": "e2_4_merged_M7.json",
+   "value": 8.539768277193716e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.4",
+   "what": "merged M7 closure per-layer",
+   "doc": "5.1e-6",
+   "json": "e2_4_merged_M7.json",
+   "value": 5.068113544615116e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 circle_sinx n=4",
+   "doc": "1.5e-2",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 0.014806893765905233,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 sinx_siny n=4",
+   "doc": "4.3e-3",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 0.004268840734264301,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 circle_sinx n=4",
+   "doc": "1.4e-1",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 0.13500039839360245,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 sinx_siny n=4",
+   "doc": "1.8e-1",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 0.18342967776775063,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 circle_sinx n=8",
+   "doc": "3.7e-8",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 3.6878129913254426e-08,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 sinx_siny n=8",
+   "doc": "1.9e-6",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 1.8715338190648395e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 circle_sinx n=8",
+   "doc": "1.6e-5",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 1.601497997604513e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 sinx_siny n=8",
+   "doc": "8.4e-5",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 8.404406928236413e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 circle_sinx n=12",
+   "doc": "9.3e-13",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 9.327952314993211e-13,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 sinx_siny n=12",
+   "doc": "3.6e-10",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 3.6262322273307853e-10,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 circle_sinx n=12",
+   "doc": "6.9e-10",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 6.869789983391495e-10,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 sinx_siny n=12",
+   "doc": "1.2e-7",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 1.1703827793820665e-07,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 circle_sinx n=16",
+   "doc": "4.6e-16",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 4.632843670761954e-16,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 sinx_siny n=16",
+   "doc": "3.5e-14",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 3.4758950503370674e-14,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 circle_sinx n=16",
+   "doc": "1.7e-14",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 1.710588432281308e-14,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 sinx_siny n=16",
+   "doc": "3.5e-11",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 3.4915865769414634e-11,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 circle_sinx n=20",
+   "doc": "3.8e-15",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 3.848823972633008e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 sinx_siny n=20",
+   "doc": "8.1e-16",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 8.060695502834974e-16,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 circle_sinx n=20",
+   "doc": "1.3e-14",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 1.3114511314156695e-14,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 sinx_siny n=20",
+   "doc": "5.3e-15",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 5.263504716418269e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 circle_sinx adaptive n",
+   "doc": "23",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 23,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 circle_sinx adaptive last change",
+   "doc": "1.3e-15",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 1.2829413242110048e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 sinx_siny adaptive n",
+   "doc": "27",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 27,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M4 sinx_siny adaptive last change",
+   "doc": "8.2e-15",
+   "json": "e2_5_quadrature_M4.json",
+   "value": 8.239822069564713e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 circle_sinx adaptive n",
+   "doc": "30",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 30,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 circle_sinx adaptive last change",
+   "doc": "9.7e-15",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 9.693334449594298e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 sinx_siny adaptive n",
+   "doc": "35",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 35,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "e2_5_quadrature_M6 sinx_siny adaptive last change",
+   "doc": "2.0e-15",
+   "json": "e2_5_quadrature_M6.json",
+   "value": 1.970392234026335e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "composite n=64 fail-before",
+   "doc": "8.6e-4",
+   "json": "e2_d_design_M4.json",
+   "value": 0.0008612425022019611,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "near-singular r2=0.3 n",
+   "doc": "41",
+   "json": "e2_n_near_singular.json",
+   "value": 41,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "near-singular r2=0.34 n",
+   "doc": "41",
+   "json": "e2_n_near_singular.json",
+   "value": 41,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "near-singular r2=0.355 n",
+   "doc": "62",
+   "json": "e2_n_near_singular.json",
+   "value": 62,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "near-singular r2=0.3599 n",
+   "doc": "96",
+   "json": "e2_n_near_singular.json",
+   "value": 96,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "near-singular max change",
+   "doc": "2.2e-13",
+   "json": "e2_n_near_singular.json",
+   "value": 2.1836844127844188e-13,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.5",
+   "what": "1.2e-6 apart raises RuntimeError",
+   "doc": "true",
+   "json": "e2_n_near_singular.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M4 recip (25,0)",
+   "doc": "1.4e-4",
+   "json": "e2_6_angles_M4.json",
+   "value": 0.00013630268689693303,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M4 recip (25,40)",
+   "doc": "7.5e-4",
+   "json": "e2_6_angles_M4.json",
+   "value": 0.0007462729954323677,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M4 closure max",
+   "doc": "5.8e-3",
+   "json": "e2_6_angles_M4.json",
+   "value": 0.005767167284515207,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M4 wrong pairing (25,0)",
+   "doc": "0.039",
+   "json": "e2_6_angles_M4.json",
+   "value": 0.03944533690595741,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M4 wrong pairing (25,40)",
+   "doc": "0.067",
+   "json": "e2_6_angles_M4.json",
+   "value": 0.06711417022112365,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M5 recip (25,0)",
+   "doc": "1.1e-5",
+   "json": "e2_6_angles_M5.json",
+   "value": 1.1107788643466288e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M5 recip (25,40)",
+   "doc": "1.1e-4",
+   "json": "e2_6_angles_M5.json",
+   "value": 0.00011427275312045349,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M5 closure max",
+   "doc": "1.8e-3",
+   "json": "e2_6_angles_M5.json",
+   "value": 0.0018396343734705667,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M5 wrong pairing (25,0)",
+   "doc": "0.041",
+   "json": "e2_6_angles_M5.json",
+   "value": 0.040617087841566576,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M5 wrong pairing (25,40)",
+   "doc": "0.050",
+   "json": "e2_6_angles_M5.json",
+   "value": 0.0501451541212796,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M6 recip (25,0)",
+   "doc": "7.7e-6",
+   "json": "e2_6_angles_M6.json",
+   "value": 7.701661832865137e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M6 recip (25,40)",
+   "doc": "7.2e-6",
+   "json": "e2_6_angles_M6.json",
+   "value": 7.176276366885337e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M6 closure max",
+   "doc": "2.3e-4",
+   "json": "e2_6_angles_M6.json",
+   "value": 0.00023266458132686907,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M6 wrong pairing (25,0)",
+   "doc": "0.045",
+   "json": "e2_6_angles_M6.json",
+   "value": 0.04461717330230963,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M6 wrong pairing (25,40)",
+   "doc": "0.073",
+   "json": "e2_6_angles_M6.json",
+   "value": 0.07309390128062734,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M7 recip (25,0)",
+   "doc": "1.0e-6",
+   "json": "e2_6_angles_M7.json",
+   "value": 1.0134494611291345e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M7 recip (25,40)",
+   "doc": "7.3e-6",
+   "json": "e2_6_angles_M7.json",
+   "value": 7.342575902291593e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M7 closure max",
+   "doc": "5.6e-5",
+   "json": "e2_6_angles_M7.json",
+   "value": 5.601245394615262e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M7 wrong pairing (25,0)",
+   "doc": "0.038",
+   "json": "e2_6_angles_M7.json",
+   "value": 0.03775590460579714,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.6",
+   "what": "M7 wrong pairing (25,40)",
+   "doc": "0.077",
+   "json": "e2_6_angles_M7.json",
+   "value": 0.07664523732228792,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M4 closure",
+   "doc": "1.5e-3",
+   "json": "e2_7_three_M4.json",
+   "value": 0.0015217993208402891,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M4 lossless absorption",
+   "doc": "2.5e-14",
+   "json": "e2_7_three_M4.json",
+   "value": 2.4941958762868137e-14,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M4 sum(A) vs 1-R-T",
+   "doc": "1.2e-3",
+   "json": "e2_7_three_M4.json",
+   "value": 0.0012384804381292969,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M5 closure",
+   "doc": "2.1e-4",
+   "json": "e2_7_three_M5.json",
+   "value": 0.00020989397386828035,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M5 lossless absorption",
+   "doc": "5.3e-14",
+   "json": "e2_7_three_M5.json",
+   "value": 5.304921950039033e-14,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M5 sum(A) vs 1-R-T",
+   "doc": "8.1e-5",
+   "json": "e2_7_three_M5.json",
+   "value": 8.14632890677458e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M6 closure",
+   "doc": "7.4e-5",
+   "json": "e2_7_three_M6.json",
+   "value": 7.378004594849052e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M6 lossless absorption",
+   "doc": "2.6e-13",
+   "json": "e2_7_three_M6.json",
+   "value": 2.567242368370026e-13,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M6 sum(A) vs 1-R-T",
+   "doc": "6.6e-5",
+   "json": "e2_7_three_M6.json",
+   "value": 6.645409999658791e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M7 closure",
+   "doc": "2.9e-6",
+   "json": "e2_7_three_M7.json",
+   "value": 2.9234096616814753e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M7 lossless absorption",
+   "doc": "2.7e-13",
+   "json": "e2_7_three_M7.json",
+   "value": 2.696920055878772e-13,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.7",
+   "what": "M7 sum(A) vs 1-R-T",
+   "doc": "1.4e-6",
+   "json": "e2_7_three_M7.json",
+   "value": 1.4128289575754405e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "shipped closure in0",
+   "doc": "1.8e-4",
+   "json": "e2_8_mutations_M5.json",
+   "value": 0.0001756789397122649,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "shipped closure in1",
+   "doc": "9.0e-5",
+   "json": "e2_8_mutations_M5.json",
+   "value": 8.952097019632177e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "Newton tol 1e3x d_RT",
+   "doc": "2.6e-15",
+   "json": "e2_8_mutations_M5.json",
+   "value": 2.55351295663786e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "maps ignored d_RT",
+   "doc": "6.7e-2",
+   "json": "e2_8_mutations_M5.json",
+   "value": 0.06707070528613834,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "maps ignored closure",
+   "doc": "2.0e-4",
+   "json": "e2_8_mutations_M5.json",
+   "value": 0.00020213637854504807,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "both ways maps ignored",
+   "doc": "3.9e-2",
+   "json": "e2_8_mutations_M5.json",
+   "value": 0.03888216034590164,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "both ways shipped",
+   "doc": "1.1e-2",
+   "json": "e2_8_mutations_M5.json",
+   "value": 0.01142123469688705,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "nocut d_RT",
+   "doc": "6.8e-5",
+   "json": "e2_8_mutations_M5.json",
+   "value": 6.812126652568085e-05,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "H-swap d_RT",
+   "doc": "0.51",
+   "json": "e2_8_mutations_M5.json",
+   "value": 0.5105742211983187,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "fast path forced d_RT",
+   "doc": "0",
+   "json": "e2_8_mutations_M5.json",
+   "value": 0.0,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.8",
+   "what": "fast path forced refusal names claim",
+   "doc": "true",
+   "json": "e2_8_mutations_M5.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 merged grid 4x4",
+   "doc": "true",
+   "json": "e2_9_cost_M6.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 merged pencil",
+   "doc": "800",
+   "json": "e2_9_cost_M6.json",
+   "value": 800,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 merged wall",
+   "doc": "34.7",
+   "json": "e2_9_cost_M6.json",
+   "value": 34.676455800006806,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 modal counts 6,9",
+   "doc": "true",
+   "json": "e2_9_cost_M6.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 pencil 0",
+   "doc": "450",
+   "json": "e2_9_cost_M6.json",
+   "value": 450,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 pencil 1",
+   "doc": "512",
+   "json": "e2_9_cost_M6.json",
+   "value": 512,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 per-layer wall",
+   "doc": "10.0",
+   "json": "e2_9_cost_M6.json",
+   "value": 9.987150399996608,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 cross-mass wall",
+   "doc": "1.18",
+   "json": "e2_9_cost_M6.json",
+   "value": 1.1824536999993143,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 cross-mass n",
+   "doc": "30",
+   "json": "e2_9_cost_M6.json",
+   "value": 30,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M6 ratio",
+   "doc": "0.29",
+   "json": "e2_9_cost_M6.json",
+   "value": 0.2880095491187611,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 merged grid 4x4",
+   "doc": "true",
+   "json": "e2_9_cost_M8.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 merged pencil",
+   "doc": "1568",
+   "json": "e2_9_cost_M8.json",
+   "value": 1568,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 merged wall",
+   "doc": "252",
+   "json": "e2_9_cost_M8.json",
+   "value": 252.02472920000582,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 modal counts 8,12",
+   "doc": "true",
+   "json": "e2_9_cost_M8.json",
+   "value": true,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 pencil 0",
+   "doc": "882",
+   "json": "e2_9_cost_M8.json",
+   "value": 882,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 pencil 1",
+   "doc": "968",
+   "json": "e2_9_cost_M8.json",
+   "value": 968,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 per-layer wall",
+   "doc": "47.8",
+   "json": "e2_9_cost_M8.json",
+   "value": 47.769093499999144,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 cross-mass wall",
+   "doc": "1.11",
+   "json": "e2_9_cost_M8.json",
+   "value": 1.1137701999978162,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 cross-mass n",
+   "doc": "36",
+   "json": "e2_9_cost_M8.json",
+   "value": 36,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "M8 ratio",
+   "doc": "0.19",
+   "json": "e2_9_cost_M8.json",
+   "value": 0.18954129482305596,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "cross-mass share upper end ('2-11 %')",
+   "doc": "11",
+   "json": "e2_9_cost_M6.json",
+   "value": 11.839750605935762,
+   "verdict": "MISMATCH"
+  },
+  {
+   "section": "3.9",
+   "what": "cross-mass share lower end ('2-11 %')",
+   "doc": "2",
+   "json": "e2_9_cost_M8.json",
+   "value": 2.3315707257409777,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M4 spacer one cell",
+   "doc": "4.1e-3",
+   "json": "e2_v_spacer_shipped_M4.json",
+   "value": 0.004134069780246996,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M4 spacer 3x3",
+   "doc": "3.6e-3",
+   "json": "e2_v_spacer_shipped_M4.json",
+   "value": 0.003636474885671648,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M4 spacer conforming",
+   "doc": "4.7e-6",
+   "json": "e2_v_spacer_shipped_M4.json",
+   "value": 4.714090480498808e-06,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M5 spacer one cell",
+   "doc": "3.0e-3",
+   "json": "e2_v_spacer_shipped_M5.json",
+   "value": 0.002986183830649969,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M5 spacer 3x3",
+   "doc": "2.1e-3",
+   "json": "e2_v_spacer_shipped_M5.json",
+   "value": 0.002138739239825771,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M5 spacer conforming",
+   "doc": "2.3e-7",
+   "json": "e2_v_spacer_shipped_M5.json",
+   "value": 2.3430885540132174e-07,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M6 spacer one cell",
+   "doc": "1.2e-3",
+   "json": "e2_v_spacer_shipped_M6.json",
+   "value": 0.0012467782639904446,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M6 spacer 3x3",
+   "doc": "1.7e-3",
+   "json": "e2_v_spacer_shipped_M6.json",
+   "value": 0.0017028934576703847,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M6 spacer conforming",
+   "doc": "7.7e-9",
+   "json": "e2_v_spacer_shipped_M6.json",
+   "value": 7.725936891980756e-09,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M5 stripe vs union",
+   "doc": "2.8e-2",
+   "json": "e2_w_shipped_baseline_M5.json",
+   "value": 0.027649259170973883,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M5 stripe q-matched",
+   "doc": "5.1e-3",
+   "json": "e2_w_shipped_baseline_M5.json",
+   "value": 0.005059402081227182,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M6 stripe vs union",
+   "doc": "9.7e-3",
+   "json": "e2_w_shipped_baseline_M6.json",
+   "value": 0.009744376403595378,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M6 stripe q-matched",
+   "doc": "8.6e-4",
+   "json": "e2_w_shipped_baseline_M6.json",
+   "value": 0.0008558248067018909,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M7 stripe vs union",
+   "doc": "5.6e-3",
+   "json": "e2_w_shipped_baseline_M7.json",
+   "value": 0.005633571795431766,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.3",
+   "what": "M7 stripe q-matched",
+   "doc": "1.4e-3",
+   "json": "e2_w_shipped_baseline_M7.json",
+   "value": 0.0013639593958802987,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "4.4",
+   "what": "q-matched 3.9e-9 (the (8,6) arm)",
+   "doc": "3.9e-9",
+   "json": "e2_h_host_sin_circ_vac_M6_Ms8-6_th0.0_ph0.0.json",
+   "value": 3.856594377182887e-09,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "9",
+   "what": "WSL separable X11",
+   "doc": "1.27e-14",
+   "json": "e2_x_separable_M5_wsl.json",
+   "value": 1.2717732202408039e-14,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "9",
+   "what": "WSL separable X22",
+   "doc": "5.37e-15",
+   "json": "e2_x_separable_M5_wsl.json",
+   "value": 5.371081075774269e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "9",
+   "what": "Win separable X11",
+   "doc": "1.28e-14",
+   "json": "e2_x_separable_M5.json",
+   "value": 1.2841205330586759e-14,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "9",
+   "what": "Win separable X22",
+   "doc": "5.43e-15",
+   "json": "e2_x_separable_M5.json",
+   "value": 5.432817639863628e-15,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "9",
+   "what": "WSL adaptive n circle",
+   "doc": "23",
+   "json": "e2_5_quadrature_M4_wsl.json",
+   "value": 23,
+   "verdict": "MATCH"
+  },
+  {
+   "section": "9",
+   "what": "WSL adaptive n sinx/siny",
+   "doc": "27",
+   "json": "e2_5_quadrature_M4_wsl.json",
+   "value": 27,
+   "verdict": "MATCH"
+  }
+ ],
+ "n": 243,
+ "mismatch": 1
+}
