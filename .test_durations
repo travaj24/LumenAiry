@@ -17061,5 +17061,10 @@
   "tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_slanted_uniform_slab_under_a_map_is_the_slab": 2.31,
   "tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_the_shear_must_be_composed_with_the_map": 2.35,
   "tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_slanted_circle_lands_on_its_converged_answer": 3.99,
-  "tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_7_slant_oop_curved_is_reciprocal_and_a_nonreciprocal_one_obeys_its_transpose": 7.72
+  "tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_7_slant_oop_curved_is_reciprocal_and_a_nonreciprocal_one_obeys_its_transpose": 7.72,
+  "tests/unit/test_pmm2d_staggered_magnetic.py::test_g7_mu_with_an_out_of_plane_eps_raises": 0.0006760000833310187,
+  "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_curve_derivative_check_refuses_a_small_derivative_bug": 0.01,
+  "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_geom_slot_4_is_the_inverse_plain_gram_for_both_consumers": 0.32,
+  "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_gyrotropic_mu_under_a_shear_matches_an_independent_berreman": 15.91,
+  "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_material_key_walker_exemption_states_its_reason": 0.005
 }

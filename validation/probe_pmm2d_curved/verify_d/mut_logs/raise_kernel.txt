@@ -1,0 +1,757 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+FFFFFF.FFFFFFFFF.FF.......                                               [100%]
+================================== FAILURES ===================================
+___________ test_d3_tensor_films_under_the_circle_map_are_spectral ____________
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d3_tensor_films_under_the_circle_map_are_spectral():
+        """The LC and gyrotropic films under the 3 x 3 CIRCLE map (four singular
+        vertices, the Duffy corner rule; a general, non-diagonal J everywhere).
+        Measured 2026-10-03 (``d_unit_film.json``): LC 2.5e-6 -> 7.7e-11 (R / T),
+        2.9e-6 -> 1.7e-10 (Jones); gyro 2.0e-6 -> 4.4e-11, 2.9e-6 -> 1.7e-10 at
+        M = 4 -> 6.  Bars: M = 6 <= 1e-9 (0.77 decades above the worst 1.74e-10)
+        and the R / T drop >= 3 decades (4.4 / 4.6 measured).  The build doc's
+        ladder reaches 2.4e-13 / 1.4e-13 at M = 8 and is spectral at conical
+        incidence too (8.8e-11 / 9.9e-11 at M = 8)."""
+        cm = _circle(_G3["P"])
+        for t in (_LC, _GYRO):
+>           r4 = _film(t, cm, 4)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:414: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:107: in _film
+    _o, R, T, J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x000002817F90BED0>, <lumenairy.elements.pmm.twod_staggered.... 2.25000000e+00+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x000002817FCB4050>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+_______ test_d2_tensor_films_under_a_stretch_and_a_shear_match_berreman _______
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d2_tensor_films_under_a_stretch_and_a_shear_match_berreman():
+        """A uniform LC (rotated in-plane uniaxial) and a GYROTROPIC film under
+        the a = 0.05 p sine stretch of both axes, against ``berreman_jones_1d``
+        (R, T and the complex Jones matrix).  Measured 2026-10-03
+        (``d_unit_film.json``): LC 5.1e-6 / 9.9e-10, gyro 7.3e-6 / 1.4e-9 (R / T)
+        at M = 4 / 6, Jones 1.4e-6 / 2.8e-10 and 2.1e-6 / 4.2e-10.  Bars: M = 6
+        <= 1e-8 (0.84 decades above the worst 1.44e-9) and a M = 4 -> 6 drop
+        >= 3 decades (3.7 measured).  The build doc's ladder reaches 6.9e-14 /
+        1.3e-13 at M = 8 and 5.6e-13 at the 33:1 stretch (the stop condition
+        1e-9 by M = 8 is met by four decades).  The SHEARED bilinear map makes
+        the plane-wave field an exact polynomial: <= 6.8e-15 at M = 4, bar 1e-11.
+        Fail-before (the shear distinguishes J^-1 eps J^-T from J^-T eps J^-1,
+        a stretch cannot -- its J is diagonal): the side-swapped congruence on
+        the LC film reads 7.0e-4 (R / T) / 2.6e-3 (Jones) at M = 4."""
+        cs = _stretch(_G3["P"], 0.05)
+        for t in (_LC, _GYRO):
+>           r4 = _film(t, cs, 4)
+                 ^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:368: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:107: in _film
+    _o, R, T, J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x00000220B312BD90>, <lumenairy.elements.pmm.twod_staggered.... 2.25000000e+00+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x00000220B312BED0>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+____ test_d3_corner_rule_reaches_roundoff_with_tensor_and_magnetic_weights ____
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002817FE09810>
+
+    def test_d3_corner_rule_reaches_roundoff_with_tensor_and_magnetic_weights(
+            monkeypatch):
+        """The corner (Duffy) rule with a TENSOR weight (the LC30 disk) AND a
+        material mu (diag(2, 2, 1) in the disk): the weights now carry the
+        individual Jacobian products, not only the five metric combinations the
+        node criterion measures.  Measured 2026-10-03 (``d3_quad_c3_M6.json``,
+        ``d_unit_quad.json``, M = 6): the corner-rule operators at n = 16 vs
+        n = 48 differ by 7.3e-13 (bar 1e-11, 1.1 decades above); the plain
+        tensor rule at n = 24 is 4.5e-2 from them (bar >= 1e-2) -- its moments
+        fall only algebraically (0.33, 0.16, 0.097, ..., 0.012 at n = 8 .. 48);
+        the adaptive count picks n0 = 2 M + 8 = 20, within 5.5e-13 of 2 n0."""
+        cm = _circle(_P)
+        eps = np.broadcast_to(_EYE3, (3, 3, 3, 3)).copy()
+        mu = eps.copy()
+        eps[1, 1] = _LC30
+        mu[1, 1] = np.diag([2.0, 2.0, 1.0])
+    
+        def ops(n, plain=False):
+            monkeypatch.setattr(TS, "_stag_map_nodes", lambda *a, **k: n)
+            if plain:
+                monkeypatch.setattr(TS, "_stag_map_singular_corners",
+                                    lambda c: {})
+            s = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 6, eps,
+                                       k0=2 * np.pi, mu_cell=mu, cmap=cm)
+            monkeypatch.undo()
+            return s.Lmat, s.Rmat
+>       a, top, pl = ops(16), ops(48), ops(24, plain=True)
+                     ^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:446: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:442: in ops
+    s = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 6, eps,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x000002817FE09E00>, <lumenairy.elements.pmm.twod_staggered....  [0.+0.j, 0.+0.j, 1.+0.j]]]]), <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x000002817FE651D0>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+_________ test_d2_gyrotropic_jones_sees_the_transpose_and_rt_does_not _________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d2_gyrotropic_jones_sees_the_transpose_and_rt_does_not():
+        """THE transpose-convention gate, both halves asserted.  For a uniform
+        gyrotropic film the efficiencies are TRANSPOSE-BLIND (eps^T is the
+        opposite magnetization; per-input power sums are equal), only the Jones
+        matrix sees the sign.  Measured 2026-10-03 (``d_unit_film.json``), the
+        s05 stretch at M = 5: correct Jones 4.7e-8; TRANSPOSED Jones 0.1496
+        (bar >= 1e-2: 1.2 decades under it, 5.3 decades above the correct
+        arm's bar 1e-7), while the transposed R / T error equals the correct
+        one to 1.9e-15 (bar 1e-12 on the difference) -- an R / T gate would
+        pass a transposed build.  The film's own gyrotropic signature: J01 / J10
+        = -1 + 6.0e-7 (M = 5; bar 1e-5)."""
+        cs = _stretch(_G3["P"], 0.05)
+>       dRT, dJ, J = _film(_GYRO, cs, 5)
+                     ^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:391: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:107: in _film
+    _o, R, T, J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x00000220B5661E10>, <lumenairy.elements.pmm.twod_staggered....  +0.j ,  2.  +0.j ]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x00000220B5625CD0>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+_____________ test_d4_tensor_pillar_lands_on_its_converged_answer _____________
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d4_tensor_pillar_lands_on_its_converged_answer():
+        """The LC30 disk (r 0.36, director at 30 deg) in air on n = 1.45: the
+        5 x 5 circle map at M = 4 (dof 450) against the CONVERGED tensor answer
+        -- the 3 x 3 map at M = 10, which the INDEPENDENT 5 x 5 topology at M = 7
+        reproduces to 3.1e-6 (``d4_summary.json``).  Measured 2026-10-03: 3.3e-4
+        (bar 1e-3, 0.48 decades above).  The two families the brief names as
+        oracles approach that same answer from far away (build doc ladders): the
+        shipped 2-D tensor RCWA with the EXACT disk form factor at 9 .. 29
+        orders per axis 9.1e-3 .. 3.0e-3 (distance x N within 0.082 .. 0.088 --
+        1 / N; Richardson pairs down to 5.6e-5), and the shipped staggered
+        solver on the 4 / 8 / 16-step staircases 1.7e-2 / 1.4e-2 / 5.4e-3.
+        Fail-before here: the 4-step staircase at M = 4 (the shipped code, no
+        map), 4.8e-2 -- >= 1e-2, 1 decade above the bar."""
+        with open(os.path.join(_PROBE, "d4_curved_c3_M10.json"),
+                  encoding="utf-8") as fh:
+            ref = json.load(fh)
+        ref = np.array(ref["vec"])
+>       o, R, T = _lc30_pillar(CM._circle_map_5x5(_P, 0.36)[0], 4)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:493: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:472: in _lc30_pillar
+    o, R, T, _J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x000002817FE3E550>, <lumenairy.elements.pmm.twod_staggered.... 1.00000000e+00+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x000002817FE09940>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+__________ test_d5_li2003_under_a_stretch_keeps_the_gyrotropic_sign ___________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d5_li2003_under_a_stretch_keeps_the_gyrotropic_sign():
+        """The same grating under a sine stretch of both axes (a = 0.05 p_x,
+        -0.03 p_y) with the walls at the PREIMAGES of the physical walls (the
+        same device).  Measured 2026-10-03 (``d_unit_li.json``, M = 8): Li's
+        first row 1.40e-4 (bar 5e-4 = the shipped G2 bar, Li's own four-decimal
+        rounding at truncation order 23; 0.55 decades above), his SECOND row
+        (the cross terms reversed) missed by 1.32e-2; the swapped cell lands on
+        the second row (1.41e-4) and misses the first by 1.32e-2 (bar >= 1e-3,
+        1.1 decades under).  So the gyrotropic sign survives the map -- on a
+        PATTERNED gyrotropic grating the transpose IS R / T-visible (the two
+        rows differ in the (1, -1) / (1, 1) pair), unlike on a uniform film.
+        The build doc's ladder: 1.45e-2 .. 1.1e-4 from the unmapped M = 10
+        answer over M = 5 .. 9, converging to it (the stretch costs a rung or
+        two, as Phase A measured)."""
+        cm = _li_stretch()
+>       dev, *_ = _li(8, cmap=cm)
+                  ^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:578: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:529: in _li
+    o, R, T, J = st.solve(jones=True)
+                 ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x00000220B34ACF50>, <lumenairy.elements.pmm.twod_staggered....  -0.j ,  2.  -0.j ]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x00000220B5694710>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+______ test_d6_magnetic_film_under_the_circle_map_matches_the_airy_slab _______
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_magnetic_film_under_the_circle_map_matches_the_airy_slab():
+        """A uniform MAGNETIC film (eps 2, mu = diag(1.8, 1.8, 1.3)) under the
+        3 x 3 circle map against the exact (eps, mu) slab.  Measured 2026-10-03
+        (``d_unit_mag.json``): 1.4e-6 (M = 4), 1.7e-8 (M = 5); bar 1e-7 at M = 5
+        (0.78 decades above).  Fail-before arms (flat in M -- wrong operators,
+        not discretisation): the mu INVERSE taken after quadrature (chi = the
+        inverse of the cell-averaged mu') 0.44; the H partner through -R in
+        every region 1.9e-2 -- the plan's prediction (section 4.4) that a
+        material mu makes the H-partner trap real WITHOUT mixing helpers, since
+        -R then differs between regions.  Bars >= 1e-3 (1.3 / 2.6 decades)."""
+>       assert _mag_film_err(5) <= 1e-7
+               ^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:597: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:152: in _mag_film_err
+    o, R, T, _J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x00000220B34673F0>, <lumenairy.elements.pmm.twod_staggered....0. +0.j, 0. +0.j, 1.3+0.j]]]]), <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x00000220B5662690>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+_________ test_d5_li2003_under_the_identity_map_is_the_unmapped_solve _________
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d5_li2003_under_the_identity_map_is_the_unmapped_solve():
+        """Li's gyrotropic crossed grating (J. Opt. A 5:345 2003, Example 1 --
+        the published Table 1, REFLECTED orders, incident E_x) through the
+        TENSOR route under an IDENTITY TransfiniteMap on the same walls.
+        Bit-for-bit is not available (the quadrature reassociates the sums,
+        plan P1); measured 2026-10-03 (``d_unit_li.json``): R / T / Jones
+        4.5e-14 from the unmapped solve at M = 6 (bar 1e-11, 2.3 decades
+        above), and at M = 8 the identity map reproduces the shipped 8.74e-05
+        table deviation to the printed digits (``d5_li_summary.json``,
+        8.739349639e-05 vs 8.739349637e-05)."""
+        cm = CM.TransfiniteMap(np.array([0.0, 1.2 * _LAM, 2.4 * _LAM]),
+                               np.array([0.0, 0.7 * _LAM, 1.4 * _LAM]))
+        du, Ru, Tu, Ju = _li(6)
+>       di, Ri, Ti, Ji = _li(6, cmap=cm)
+                         ^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:557: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:529: in _li
+    o, R, T, J = st.solve(jones=True)
+                 ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x000002810C8FD7F0>, <lumenairy.elements.pmm.twod_staggered....  -0.j ,  2.  -0.j ]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x000002810C8E06B0>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+_______________ test_d6_the_h_partner_trap_needs_a_material_mu ________________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_the_h_partner_trap_needs_a_material_mu():
+        """Two-sided on the plan's statement: with NO material mu every mapped
+        region's -R is the same geometric operator, so the -R H partner in
+        EVERY region is consistent-wrong and invisible -- measured 2026-10-03
+        (``d_unit_mag.json``): the LC film under the circle map at M = 5 reads
+        2.8147005e-8 correct and 2.8147008e-8 through -R (difference 3.4e-15;
+        bar 1e-12), and the D4 tensor pillar moves 2.7e-14 (``d9_summary.json``)
+        -- while the magnetic film above moves by 1.9e-2."""
+        cm = _circle(_G3["P"])
+>       a = _film(_LC, cm, 5)
+            ^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:649: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:107: in _film
+    _o, R, T, J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x00000220B3467230>, <lumenairy.elements.pmm.twod_staggered.... 2.25000000e+00+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x00000220B5657450>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+_________ test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin __________
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin():
+        """Electromagnetic duality with VACUUM half-spaces: the E_x input of a
+        magnetic disk (eps 1, mu = diag(2, 2, 1)) is the E_y input of the
+        dielectric disk (eps = diag(2, 2, 1), mu 1), order by order -- two
+        DIFFERENT weight paths under the same circle map (the chi blocks vs the
+        eps blocks).  Not a discrete identity: the residual falls with M to the
+        rung-change level.  Measured 2026-10-03 (``d6_summary.json``, 3 x 3 map):
+        5.4e-3, 8.9e-4, 5.8e-4, 8.6e-6, 3.2e-5, 1.2e-5 at M = 4 .. 9 (5 x 5:
+        2.3e-4 .. 2.6e-5 at M = 4 .. 6); the comparison WITHOUT the polarization
+        swap stays at 0.048.  Bars at M = 5: duality <= 3e-3 (0.53 decades above
+        8.9e-4), control >= 1e-2 (0.69 decades under 4.85e-2)."""
+        cm = _circle(_P)
+        one = np.broadcast_to(_EYE3, (3, 3, 3, 3)).copy()
+        mu = one.copy()
+        mu[1, 1] = np.diag([2.0, 2.0, 1.0])
+    
+        def run(eps, mu_c):
+            st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.0,
+                                n_modes=5, n_orders=3, cmap=cm)
+            if mu_c is None:
+                st.add_layer(0.5, eps_cell=eps)
+            else:
+                st.add_layer(0.5, eps_cell=eps, mu_cell=mu_c)
+            st.set_source(1.0)
+            o, R, T, _J = st.solve(jones=True)
+            i = _idx(o)
+            return np.asarray(R)[:, i], np.asarray(T)[:, i]
+>       Rm, Tm = run(one, mu)
+                 ^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:631: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:628: in run
+    o, R, T, _J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x000002810C8FDC50>, <lumenairy.elements.pmm.twod_staggered....  [0.+0.j, 0.+0.j, 1.+0.j]]]]), <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x000002810C8F0E50>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+___ test_d8_conical_tensor_circle_is_reciprocal_and_a_gyrotropic_one_is_not ___
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d8_conical_tensor_circle_is_reciprocal_and_a_gyrotropic_one_is_not():
+        """Reciprocity is an independent identity the solver does not impose:
+        for a RECIPROCAL medium (the LC is real symmetric) the channel
+        (25 deg, 40 deg) -> reflected order (-1, 0) and its reversal have the
+        same Jones singular values.  Measured 2026-10-03 (``d_unit_oblique.json``,
+        3 x 3 circle, M = 5): LC 1.2e-4 (bar 1e-3, 0.94 decades above; the build
+        doc's ladder falls with M); the WRONG pairing (the reversed run's
+        specular channel) 0.12; the GYROTROPIC disk (eps != eps^T, physically
+        non-reciprocal) 2.1e-2 -- the identity has teeth on both a pairing
+        error and the material (bars >= 1e-2 and >= 3e-3).  Closure (lossless)
+        <= 3e-2 (8.1e-3 measured, the M = 5 discretisation level)."""
+        tr, pr = _reverse(25.0, 40.0, -1, 0)
+        sv = {}
+        for name, t in (("lc", _LC30), ("gyro", _GYRO)):
+>           stf, of, Rf, Tf = _d8(t, 25.0, 40.0)
+                              ^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:782: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:764: in _d8
+    o, R, T, _J = st.solve()
+                  ^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x000002810C8FDD30>, <lumenairy.elements.pmm.twod_staggered.... 1.00000000e+00+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x000002817FE27980>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+____ test_d9_mixed_sign_is_rt_blind_on_a_stretched_film_and_jones_visible _____
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d9_mixed_sign_is_rt_blind_on_a_stretched_film_and_jones_visible():
+        """The mixed (e12', e21') weights negated: on the LC film under the
+        a = 0.05 p stretch (diagonal J) it flips the director's in-plane angle,
+        which the efficiencies of a uniform film cannot see.  Measured
+        2026-10-03 (``d_unit_mut.json``, M = 5): R / T 1.21966e-7 both arms
+        (difference 1.4e-14; bar 1e-12), Jones 3.0e-8 correct vs 9.8e-3
+        mutated (bars 1e-7 / >= 1e-3)."""
+        cs = _stretch(_G3["P"], 0.05)
+>       good = _film(_LC, cs, 5)
+               ^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:828: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:107: in _film
+    _o, R, T, J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x000002810C8FDB70>, <lumenairy.elements.pmm.twod_staggered.... 2.25000000e+00+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x000002810C8FDA90>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+_______ test_d1_tensor_route_at_eps_times_identity_is_the_scalar_route ________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d1_tensor_route_at_eps_times_identity_is_the_scalar_route():
+        """The two expressions of ONE formula agree: a scalar cell promoted to
+        ``eps I`` through the general congruence equals the scalar route.
+        Measured 2026-10-03 (``d2_scalar.json``, M = 5): operators 1.1e-15
+        (shear) / 3.1e-15 (circle) relative, R / T / Jones 6.0e-15 / 1.3e-14.
+        Bars 1e-12 (2.5 decades above).  Fail-before: the tensor route with
+        the mixed weights negated moves the operators by 0.13 (shear) / 0.97
+        (circle) (``d_unit_scalar_mixed.json``) -- the scalar cell carries a
+        mixed e12' = -eps g12 / sqrt(g) under a sheared map."""
+        k0 = 2 * np.pi
+        for cm in (_shear(_P), _circle(_P)):
+            e = np.ones((3, 3), complex)
+            e[1, 1] = 4.0
+            e33 = np.zeros((3, 3, 3, 3), complex)
+            for k in range(3):
+                e33[..., k, k] = e
+            s1 = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 5, e,
+                                        k0=k0, cmap=cm)
+>           s2 = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 5, e33,
+                                        k0=k0, cmap=cm)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:335: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x000001597046ACF0>, <lumenairy.elements.pmm.twod_staggered....0.j, 0.+0.j, 1.+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x000001596B8CC9D0>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+________________ test_d7_vacuum_painted_with_mu_one_is_vacuum _________________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d7_vacuum_painted_with_mu_one_is_vacuum():
+        """A physical identity across the two routes: layer 2 painted with a
+        vacuum Rect that carries an explicit mu = I (the magnetic TENSOR route
+        under the map) equals a uniform vacuum layer 2 (the scalar route) on
+        the same merged map.  Measured 2026-10-03 (``d_unit_stack.json``, M = 3):
+        3.1e-15 (bar 1e-9, 5.5 decades above); fail-before: the same Rect with
+        mu = 1.1 moves R / T / Jones by 2.3e-2 (bar >= 1e-3)."""
+>       a = _d7(3, _LC30, "vac_mu")
+            ^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:716: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:683: in _d7
+    o, R, T, J = st.solve(retain_internal=retain, jones=True)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x00000220B3467070>, <lumenairy.elements.pmm.twod_staggered.... 1.00000000e+00+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x00000220B31CD400>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+______ test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route ______
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route():
+        """``compile_shapes(..., with_mu=True)`` returns the permeability grid as
+        a fifth output, painted like eps (a shape without mu paints 1, the
+        background takes ``background_mu``); the four-output form REFUSES a
+        magnetic layer (it would drop mu silently).  The shapes route with mu
+        equals ``compile_shapes(with_mu=True)`` + ``cmap=`` + ``eps_cell=`` +
+        ``mu_cell=`` BYTE FOR BYTE (``d_unit_shapes.json``: bytes equal)."""
+        sh = [Circle(0.6, 0.6, 0.36, _LC30, mu=np.diag([1.5, 1.5, 1.0]))]
+        with pytest.raises(ValueError, match="with_mu=True"):
+            compile_shapes(_P, _P, sh, 1.0)
+        eps, xw, yw, cm, mu = compile_shapes(_P, _P, sh, 1.0, background_mu=1.2,
+                                             with_mu=True)
+        assert mu.shape == (3, 3, 3, 3)
+        assert np.allclose(mu[1, 1], np.diag([1.5, 1.5, 1.0]))
+        assert np.allclose(mu[0, 0], 1.2 * _EYE3)
+        assert compile_shapes(_P, _P, [Circle(0.6, 0.6, 0.36, 4.0)], 1.0,
+                              with_mu=True)[4] is None
+>       a = pmm_jones_2d_staggered(_P, _P, None, 1.45, 1.0, 0.5, 1.0, n_modes=4,
+                                   n_orders=3, shapes=sh, background_eps=1.0,
+                                   background_mu=1.2)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:855: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+lumenairy\elements\pmm\twod_staggered.py:5009: in pmm_jones_2d_staggered
+    return stack.solve(jones=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x000002810C8FEDD0>, <lumenairy.elements.pmm.twod_staggered....0. +0.j, 0. +0.j, 1.2+0.j]]]]), <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x000002810C87F6C0>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+____________ test_d9_no_sg_e33_is_caught_only_off_normal_incidence ____________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d9_no_sg_e33_is_caught_only_off_normal_incidence():
+        """sqrt(g) dropped from eps'_33 changes only the div(D) = 0 Schur term,
+        which a plane wave at NORMAL incidence never exercises (E_z = 0).
+        Measured 2026-10-03 (``d_unit_no_sg_e33.json``, LC film under the
+        circle map): normal incidence M = 5: 2.81462e-8 mutated vs 2.81470e-8
+        correct (blind: the gate must be oblique -- recorded, asserted <= 1e-12
+        on the difference); CONICAL (25, 40), M = 6: correct 8.7e-8 (bar 1e-6),
+        mutated 1.2e-4, flat in M (bar >= 1e-5)."""
+        cm = _circle(_G3["P"])
+        th, ph = np.deg2rad(25.0), np.deg2rad(40.0)
+>       good = _film(_LC, cm, 6, theta=th, phi=ph)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:811: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:107: in _film
+    _o, R, T, J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x00000220B32ABD90>, <lumenairy.elements.pmm.twod_staggered.... 2.25000000e+00+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x00000220B32AB770>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+____ test_d7_tensor_and_magnetic_layers_share_one_map_and_conserve_energy _____
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d7_tensor_and_magnetic_layers_share_one_map_and_conserve_energy():
+        """Measured 2026-10-03 (``d_unit_stack.json``), the 5 x 5 merged map:
+        lossless closure 2.3e-2 (M = 3), 9.2e-4 (M = 4) -- bar 5e-3 at M = 4
+        (0.73 decades above; the discretisation level, falling 1.4 decades per
+        rung).  Absorption with the LC made lossy (LC30 + 0.3i I), M = 3: the
+        two LOSSLESS layers absorb 1.1e-15 (bar 1e-10) against 2.0e-2 with -R as
+        the flux Gram (Phase A's A7 defect; bar >= 1e-3)."""
+>       st, R, T, _J = _d7(4, _LC30, "mag")
+                       ^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_d.py:694: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_d.py:683: in _d7
+    o, R, T, J = st.solve(retain_internal=retain, jones=True)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2413: in solve
+    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
+lumenairy\elements\pmm\twod_staggered.py:2645: in __init__
+    self._init_map_weights()
+lumenairy\elements\pmm\twod_staggered.py:2720: in _init_map_weights
+    self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+lumenairy\elements\pmm\twod_staggered.py:2261: in _stag_map_weights
+    return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = (<lumenairy.elements.pmm.twod_staggered.Basis1D object at 0x0000015972ABFD90>, <lumenairy.elements.pmm.twod_staggered.... 1.00000000e+00+0.j]]]]), None, <lumenairy.elements.pmm.twod_staggered._StagMapQuad object at 0x0000015972B84950>, ...)
+k = {}
+
+    def boom(*a, **k):
+>       raise AssertionError("Phase D kernel reached")
+E       AssertionError: Phase D kernel reached
+
+validation\probe_pmm2d_curved\verify_d\vd_mutplugin.py:43: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d3_tensor_films_under_the_circle_map_are_spectral
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d2_tensor_films_under_a_stretch_and_a_shear_match_berreman
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d3_corner_rule_reaches_roundoff_with_tensor_and_magnetic_weights
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d2_gyrotropic_jones_sees_the_transpose_and_rt_does_not
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d4_tensor_pillar_lands_on_its_converged_answer
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d5_li2003_under_a_stretch_keeps_the_gyrotropic_sign
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_magnetic_film_under_the_circle_map_matches_the_airy_slab
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d5_li2003_under_the_identity_map_is_the_unmapped_solve
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_the_h_partner_trap_needs_a_material_mu
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d8_conical_tensor_circle_is_reciprocal_and_a_gyrotropic_one_is_not
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d9_mixed_sign_is_rt_blind_on_a_stretched_film_and_jones_visible
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d1_tensor_route_at_eps_times_identity_is_the_scalar_route
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d7_vacuum_painted_with_mu_one_is_vacuum
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d9_no_sg_e33_is_caught_only_off_normal_incidence
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d7_tensor_and_magnetic_layers_share_one_map_and_conserve_energy
+17 failed, 9 passed in 164.02s (0:02:44)

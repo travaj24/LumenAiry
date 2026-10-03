@@ -1,0 +1,37 @@
+{
+ "M": 3,
+ "arm": "lossymu",
+ "closure": 0.07241971880565978,
+ "A_layers": [
+  [
+   1.6313379428394218e-15,
+   2.9654547398709085e-15
+  ],
+  [
+   0.03015891558756247,
+   0.06933440095590163
+  ],
+  [
+   1.8125977142660242e-16,
+   -5.560227637257953e-16
+  ]
+ ],
+ "balance": [
+  0.0330659099815519,
+  0.07241971880565978
+ ],
+ "A_lossless_layers": 2.9654547398709085e-15,
+ "sumA_vs_balance": 0.003085317849755742,
+ "map_shape": null,
+ "wall_s": 18.798252100001264,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_d\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

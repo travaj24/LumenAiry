@@ -1,0 +1,259 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+.FFFF...FF.FF....F........                                               [100%]
+================================== FAILURES ===================================
+_______ test_d1_tensor_route_at_eps_times_identity_is_the_scalar_route ________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d1_tensor_route_at_eps_times_identity_is_the_scalar_route():
+        """The two expressions of ONE formula agree: a scalar cell promoted to
+        ``eps I`` through the general congruence equals the scalar route.
+        Measured 2026-10-03 (``d2_scalar.json``, M = 5): operators 1.1e-15
+        (shear) / 3.1e-15 (circle) relative, R / T / Jones 6.0e-15 / 1.3e-14.
+        Bars 1e-12 (2.5 decades above).  Fail-before: the tensor route with
+        the mixed weights negated moves the operators by 0.13 (shear) / 0.97
+        (circle) (``d_unit_scalar_mixed.json``) -- the scalar cell carries a
+        mixed e12' = -eps g12 / sqrt(g) under a sheared map."""
+        k0 = 2 * np.pi
+        for cm in (_shear(_P), _circle(_P)):
+            e = np.ones((3, 3), complex)
+            e[1, 1] = 4.0
+            e33 = np.zeros((3, 3, 3, 3), complex)
+            for k in range(3):
+                e33[..., k, k] = e
+            s1 = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 5, e,
+                                        k0=k0, cmap=cm)
+            s2 = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 5, e33,
+                                        k0=k0, cmap=cm)
+            sc = max(np.abs(s1.Lmat).max(), np.abs(s1.Rmat).max())
+            d = max(np.abs(s1.Lmat - s2.Lmat).max(),
+                    np.abs(s1.Rmat - s2.Rmat).max()) / sc
+>           assert d <= 1e-12, d
+E           AssertionError: np.float64(0.021796981606882797)
+E           assert np.float64(0.021796981606882797) <= 1e-12
+
+tests\unit\test_pmm2d_staggered_curved_d.py:340: AssertionError
+_______ test_d2_tensor_films_under_a_stretch_and_a_shear_match_berreman _______
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d2_tensor_films_under_a_stretch_and_a_shear_match_berreman():
+        """A uniform LC (rotated in-plane uniaxial) and a GYROTROPIC film under
+        the a = 0.05 p sine stretch of both axes, against ``berreman_jones_1d``
+        (R, T and the complex Jones matrix).  Measured 2026-10-03
+        (``d_unit_film.json``): LC 5.1e-6 / 9.9e-10, gyro 7.3e-6 / 1.4e-9 (R / T)
+        at M = 4 / 6, Jones 1.4e-6 / 2.8e-10 and 2.1e-6 / 4.2e-10.  Bars: M = 6
+        <= 1e-8 (0.84 decades above the worst 1.44e-9) and a M = 4 -> 6 drop
+        >= 3 decades (3.7 measured).  The build doc's ladder reaches 6.9e-14 /
+        1.3e-13 at M = 8 and 5.6e-13 at the 33:1 stretch (the stop condition
+        1e-9 by M = 8 is met by four decades).  The SHEARED bilinear map makes
+        the plane-wave field an exact polynomial: <= 6.8e-15 at M = 4, bar 1e-11.
+        Fail-before (the shear distinguishes J^-1 eps J^-T from J^-T eps J^-1,
+        a stretch cannot -- its J is diagonal): the side-swapped congruence on
+        the LC film reads 7.0e-4 (R / T) / 2.6e-3 (Jones) at M = 4."""
+        cs = _stretch(_G3["P"], 0.05)
+        for t in (_LC, _GYRO):
+            r4 = _film(t, cs, 4)
+            r6 = _film(t, cs, 6)
+            assert max(r6[0], r6[1]) <= 1e-8, r6[:2]
+            assert np.log10(r4[0] / r6[0]) >= 3.0, (r4[0], r6[0])
+            rs = _film(t, _shear(_G3["P"]), 4)
+>           assert max(rs[0], rs[1]) <= 1e-11, rs[:2]
+E           AssertionError: (0.00024217483331978595, 0.0019421430460854836)
+E           assert 0.0019421430460854836 <= 1e-11
+E            +  where 0.0019421430460854836 = max(0.00024217483331978595, 0.0019421430460854836)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:373: AssertionError
+___________ test_d3_tensor_films_under_the_circle_map_are_spectral ____________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d3_tensor_films_under_the_circle_map_are_spectral():
+        """The LC and gyrotropic films under the 3 x 3 CIRCLE map (four singular
+        vertices, the Duffy corner rule; a general, non-diagonal J everywhere).
+        Measured 2026-10-03 (``d_unit_film.json``): LC 2.5e-6 -> 7.7e-11 (R / T),
+        2.9e-6 -> 1.7e-10 (Jones); gyro 2.0e-6 -> 4.4e-11, 2.9e-6 -> 1.7e-10 at
+        M = 4 -> 6.  Bars: M = 6 <= 1e-9 (0.77 decades above the worst 1.74e-10)
+        and the R / T drop >= 3 decades (4.4 / 4.6 measured).  The build doc's
+        ladder reaches 2.4e-13 / 1.4e-13 at M = 8 and is spectral at conical
+        incidence too (8.8e-11 / 9.9e-11 at M = 8)."""
+        cm = _circle(_G3["P"])
+        for t in (_LC, _GYRO):
+            r4 = _film(t, cm, 4)
+            r6 = _film(t, cm, 6)
+>           assert max(r6[0], r6[1]) <= 1e-9, r6[:2]
+E           AssertionError: (1.8232713788646215e-05, 6.057142792975896e-05)
+E           assert 6.057142792975896e-05 <= 1e-09
+E            +  where 6.057142792975896e-05 = max(1.8232713788646215e-05, 6.057142792975896e-05)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:416: AssertionError
+_____________ test_d4_tensor_pillar_lands_on_its_converged_answer _____________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d4_tensor_pillar_lands_on_its_converged_answer():
+        """The LC30 disk (r 0.36, director at 30 deg) in air on n = 1.45: the
+        5 x 5 circle map at M = 4 (dof 450) against the CONVERGED tensor answer
+        -- the 3 x 3 map at M = 10, which the INDEPENDENT 5 x 5 topology at M = 7
+        reproduces to 3.1e-6 (``d4_summary.json``).  Measured 2026-10-03: 3.3e-4
+        (bar 1e-3, 0.48 decades above).  The two families the brief names as
+        oracles approach that same answer from far away (build doc ladders): the
+        shipped 2-D tensor RCWA with the EXACT disk form factor at 9 .. 29
+        orders per axis 9.1e-3 .. 3.0e-3 (distance x N within 0.082 .. 0.088 --
+        1 / N; Richardson pairs down to 5.6e-5), and the shipped staggered
+        solver on the 4 / 8 / 16-step staircases 1.7e-2 / 1.4e-2 / 5.4e-3.
+        Fail-before here: the 4-step staircase at M = 4 (the shipped code, no
+        map), 4.8e-2 -- >= 1e-2, 1 decade above the bar."""
+        with open(os.path.join(_PROBE, "d4_curved_c3_M10.json"),
+                  encoding="utf-8") as fh:
+            ref = json.load(fh)
+        ref = np.array(ref["vec"])
+        o, R, T = _lc30_pillar(CM._circle_map_5x5(_P, 0.36)[0], 4)
+        d = float(np.abs(_vec(o, R, T) - ref).max())
+>       assert d <= 1e-3, d
+E       AssertionError: 0.015137761948661274
+E       assert 0.015137761948661274 <= 0.001
+
+tests\unit\test_pmm2d_staggered_curved_d.py:495: AssertionError
+_______________ test_d6_the_h_partner_trap_needs_a_material_mu ________________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_the_h_partner_trap_needs_a_material_mu():
+        """Two-sided on the plan's statement: with NO material mu every mapped
+        region's -R is the same geometric operator, so the -R H partner in
+        EVERY region is consistent-wrong and invisible -- measured 2026-10-03
+        (``d_unit_mag.json``): the LC film under the circle map at M = 5 reads
+        2.8147005e-8 correct and 2.8147008e-8 through -R (difference 3.4e-15;
+        bar 1e-12), and the D4 tensor pillar moves 2.7e-14 (``d9_summary.json``)
+        -- while the magnetic film above moves by 1.9e-2."""
+        cm = _circle(_G3["P"])
+        a = _film(_LC, cm, 5)
+        with _mutate("hgram_R"):
+            b = _film(_LC, cm, 5)
+>       assert abs(a[0] - b[0]) <= 1e-12 and np.abs(a[2] - b[2]).max() <= 1e-12
+E       assert (0.0017689659956038328 <= 1e-12)
+E        +  where 0.0017689659956038328 = abs((3.763360920105985e-05 - 0.0018065996048048927))
+
+tests\unit\test_pmm2d_staggered_curved_d.py:652: AssertionError
+_________ test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin __________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin():
+        """Electromagnetic duality with VACUUM half-spaces: the E_x input of a
+        magnetic disk (eps 1, mu = diag(2, 2, 1)) is the E_y input of the
+        dielectric disk (eps = diag(2, 2, 1), mu 1), order by order -- two
+        DIFFERENT weight paths under the same circle map (the chi blocks vs the
+        eps blocks).  Not a discrete identity: the residual falls with M to the
+        rung-change level.  Measured 2026-10-03 (``d6_summary.json``, 3 x 3 map):
+        5.4e-3, 8.9e-4, 5.8e-4, 8.6e-6, 3.2e-5, 1.2e-5 at M = 4 .. 9 (5 x 5:
+        2.3e-4 .. 2.6e-5 at M = 4 .. 6); the comparison WITHOUT the polarization
+        swap stays at 0.048.  Bars at M = 5: duality <= 3e-3 (0.53 decades above
+        8.9e-4), control >= 1e-2 (0.69 decades under 4.85e-2)."""
+        cm = _circle(_P)
+        one = np.broadcast_to(_EYE3, (3, 3, 3, 3)).copy()
+        mu = one.copy()
+        mu[1, 1] = np.diag([2.0, 2.0, 1.0])
+    
+        def run(eps, mu_c):
+            st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.0,
+                                n_modes=5, n_orders=3, cmap=cm)
+            if mu_c is None:
+                st.add_layer(0.5, eps_cell=eps)
+            else:
+                st.add_layer(0.5, eps_cell=eps, mu_cell=mu_c)
+            st.set_source(1.0)
+            o, R, T, _J = st.solve(jones=True)
+            i = _idx(o)
+            return np.asarray(R)[:, i], np.asarray(T)[:, i]
+        Rm, Tm = run(one, mu)
+        Re, Te = run(mu, None)
+        dual = max(np.abs(Rm[0] - Re[1]).max(), np.abs(Tm[0] - Te[1]).max(),
+                   np.abs(Rm[1] - Re[0]).max(), np.abs(Tm[1] - Te[0]).max())
+        ctrl = max(np.abs(Rm[0] - Re[0]).max(), np.abs(Tm[0] - Te[0]).max())
+>       assert dual <= 3e-3, dual
+E       AssertionError: np.float64(0.031725228931800964)
+E       assert np.float64(0.031725228931800964) <= 0.003
+
+tests\unit\test_pmm2d_staggered_curved_d.py:636: AssertionError
+________________ test_d7_vacuum_painted_with_mu_one_is_vacuum _________________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d7_vacuum_painted_with_mu_one_is_vacuum():
+        """A physical identity across the two routes: layer 2 painted with a
+        vacuum Rect that carries an explicit mu = I (the magnetic TENSOR route
+        under the map) equals a uniform vacuum layer 2 (the scalar route) on
+        the same merged map.  Measured 2026-10-03 (``d_unit_stack.json``, M = 3):
+        3.1e-15 (bar 1e-9, 5.5 decades above); fail-before: the same Rect with
+        mu = 1.1 moves R / T / Jones by 2.3e-2 (bar >= 1e-3)."""
+        a = _d7(3, _LC30, "vac_mu")
+        b = _d7(3, _LC30, "uniform")
+        c = _d7(3, _LC30, "paint11")
+        assert a[0].cmap.fingerprint == b[0].cmap.fingerprint
+    
+        def d(x, y):
+            return max(np.abs(x[1] - y[1]).max(), np.abs(x[2] - y[2]).max(),
+                       np.abs(x[3] - y[3]).max())
+>       assert d(a, b) <= 1e-9, d(a, b)
+E       AssertionError: np.float64(0.00209564094763631)
+E       assert np.float64(0.00209564094763631) <= 1e-09
+E        +  where np.float64(0.00209564094763631) = <function test_d7_vacuum_painted_with_mu_one_is_vacuum.<locals>.d at 0x0000014980A862A0>((<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x0000014980987A80>, array([[0.        , 0.        , 0....array([[ 0.01181374-0.1944401j ,  0.03897215+0.0006854j ],\n       [ 0.03897426+0.00068764j, -0.03527989-0.19575585j]])), (<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x0000014980A75010>, array([[0.        , 0.        , 0....array([[ 0.01105842-0.19639489j,  0.03924783+0.00034123j],\n       [ 0.03924987+0.00034344j, -0.0363012 -0.19736791j]])))
+
+tests\unit\test_pmm2d_staggered_curved_d.py:724: AssertionError
+______ test_d6_magnetic_film_under_the_circle_map_matches_the_airy_slab _______
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_magnetic_film_under_the_circle_map_matches_the_airy_slab():
+        """A uniform MAGNETIC film (eps 2, mu = diag(1.8, 1.8, 1.3)) under the
+        3 x 3 circle map against the exact (eps, mu) slab.  Measured 2026-10-03
+        (``d_unit_mag.json``): 1.4e-6 (M = 4), 1.7e-8 (M = 5); bar 1e-7 at M = 5
+        (0.78 decades above).  Fail-before arms (flat in M -- wrong operators,
+        not discretisation): the mu INVERSE taken after quadrature (chi = the
+        inverse of the cell-averaged mu') 0.44; the H partner through -R in
+        every region 1.9e-2 -- the plan's prediction (section 4.4) that a
+        material mu makes the H-partner trap real WITHOUT mixing helpers, since
+        -R then differs between regions.  Bars >= 1e-3 (1.3 / 2.6 decades)."""
+>       assert _mag_film_err(5) <= 1e-7
+E       assert 0.010427315016147132 <= 1e-07
+E        +  where 0.010427315016147132 = _mag_film_err(5)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:597: AssertionError
+____________ test_d9_no_sg_e33_is_caught_only_off_normal_incidence ____________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d9_no_sg_e33_is_caught_only_off_normal_incidence():
+        """sqrt(g) dropped from eps'_33 changes only the div(D) = 0 Schur term,
+        which a plane wave at NORMAL incidence never exercises (E_z = 0).
+        Measured 2026-10-03 (``d_unit_no_sg_e33.json``, LC film under the
+        circle map): normal incidence M = 5: 2.81462e-8 mutated vs 2.81470e-8
+        correct (blind: the gate must be oblique -- recorded, asserted <= 1e-12
+        on the difference); CONICAL (25, 40), M = 6: correct 8.7e-8 (bar 1e-6),
+        mutated 1.2e-4, flat in M (bar >= 1e-5)."""
+        cm = _circle(_G3["P"])
+        th, ph = np.deg2rad(25.0), np.deg2rad(40.0)
+        good = _film(_LC, cm, 6, theta=th, phi=ph)
+        n_good = _film(_LC, cm, 5)
+        with _mutate("no_sg_e33"):
+            bad = _film(_LC, cm, 6, theta=th, phi=ph)
+            n_bad = _film(_LC, cm, 5)
+>       assert good[0] <= 1e-6 and bad[0] >= 1e-5, (good[0], bad[0])
+E       AssertionError: (6.618228135957249e-05, 0.00013025633902741252)
+E       assert (6.618228135957249e-05 <= 1e-06)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:816: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d1_tensor_route_at_eps_times_identity_is_the_scalar_route
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d2_tensor_films_under_a_stretch_and_a_shear_match_berreman
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d3_tensor_films_under_the_circle_map_are_spectral
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d4_tensor_pillar_lands_on_its_converged_answer
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_the_h_partner_trap_needs_a_material_mu
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d7_vacuum_painted_with_mu_one_is_vacuum
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_magnetic_film_under_the_circle_map_matches_the_airy_slab
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d9_no_sg_e33_is_caught_only_off_normal_incidence
+9 failed, 17 passed in 170.34s (0:02:50)

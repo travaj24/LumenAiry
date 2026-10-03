@@ -1,0 +1,40 @@
+v5_li.py unmapped 6
+v5_li.py unmapped 7
+v5_li.py unmapped 8
+v5_li.py unmapped 10
+v5_li.py unmapped 12
+v5_li.py identity 6
+v5_li.py identity 8
+v5_li.py identity_swap 8
+v5_li.py h2 5
+v5_li.py h2 6
+v5_li.py h2 7
+v5_li.py h2 8
+v5_li.py h2 9
+v5_li.py h2 10
+v5_li.py h2 11
+v5_li.py h2 12
+v5_li.py h2_swap 8
+v5_li.py h2_swap 10
+v5_li.py h2_swap 12
+v5_li.py un4 3
+v5_li.py sh4 3
+v5_li.py un4 4
+v5_li.py sh4 4
+v5_li.py un4 5
+v5_li.py sh4 5
+v5_li.py un4 6
+v5_li.py sh4 6
+v5_li.py un4 7
+v5_li.py sh4 7
+v5_li.py sh4_swap 5
+v5_li.py sh4_swap 6
+v5_li.py sh4_swap 7
+v5_li.py sh4 6 eps_T
+v5_li.py h2 10 eps_T
+v5_li.py sh4 6 eps_side
+v5_li.py h2 10 eps_side
+v5_li.py sh4 6 e33_no_sg
+v5_li.py h2 10 e33_no_sg
+v5_li.py sh4 6 no_inv_sg
+v5_li.py h2 10 no_inv_sg

@@ -1,0 +1,101 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+.......F.F..F.............                                               [100%]
+================================== FAILURES ===================================
+______ test_d6_magnetic_film_under_the_circle_map_matches_the_airy_slab _______
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_magnetic_film_under_the_circle_map_matches_the_airy_slab():
+        """A uniform MAGNETIC film (eps 2, mu = diag(1.8, 1.8, 1.3)) under the
+        3 x 3 circle map against the exact (eps, mu) slab.  Measured 2026-10-03
+        (``d_unit_mag.json``): 1.4e-6 (M = 4), 1.7e-8 (M = 5); bar 1e-7 at M = 5
+        (0.78 decades above).  Fail-before arms (flat in M -- wrong operators,
+        not discretisation): the mu INVERSE taken after quadrature (chi = the
+        inverse of the cell-averaged mu') 0.44; the H partner through -R in
+        every region 1.9e-2 -- the plan's prediction (section 4.4) that a
+        material mu makes the H-partner trap real WITHOUT mixing helpers, since
+        -R then differs between regions.  Bars >= 1e-3 (1.3 / 2.6 decades)."""
+>       assert _mag_film_err(5) <= 1e-7
+E       assert 0.00612139465928389 <= 1e-07
+E        +  where 0.00612139465928389 = _mag_film_err(5)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:597: AssertionError
+_________ test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin __________
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin():
+        """Electromagnetic duality with VACUUM half-spaces: the E_x input of a
+        magnetic disk (eps 1, mu = diag(2, 2, 1)) is the E_y input of the
+        dielectric disk (eps = diag(2, 2, 1), mu 1), order by order -- two
+        DIFFERENT weight paths under the same circle map (the chi blocks vs the
+        eps blocks).  Not a discrete identity: the residual falls with M to the
+        rung-change level.  Measured 2026-10-03 (``d6_summary.json``, 3 x 3 map):
+        5.4e-3, 8.9e-4, 5.8e-4, 8.6e-6, 3.2e-5, 1.2e-5 at M = 4 .. 9 (5 x 5:
+        2.3e-4 .. 2.6e-5 at M = 4 .. 6); the comparison WITHOUT the polarization
+        swap stays at 0.048.  Bars at M = 5: duality <= 3e-3 (0.53 decades above
+        8.9e-4), control >= 1e-2 (0.69 decades under 4.85e-2)."""
+        cm = _circle(_P)
+        one = np.broadcast_to(_EYE3, (3, 3, 3, 3)).copy()
+        mu = one.copy()
+        mu[1, 1] = np.diag([2.0, 2.0, 1.0])
+    
+        def run(eps, mu_c):
+            st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.0,
+                                n_modes=5, n_orders=3, cmap=cm)
+            if mu_c is None:
+                st.add_layer(0.5, eps_cell=eps)
+            else:
+                st.add_layer(0.5, eps_cell=eps, mu_cell=mu_c)
+            st.set_source(1.0)
+            o, R, T, _J = st.solve(jones=True)
+            i = _idx(o)
+            return np.asarray(R)[:, i], np.asarray(T)[:, i]
+        Rm, Tm = run(one, mu)
+        Re, Te = run(mu, None)
+        dual = max(np.abs(Rm[0] - Re[1]).max(), np.abs(Tm[0] - Te[1]).max(),
+                   np.abs(Rm[1] - Re[0]).max(), np.abs(Tm[1] - Te[0]).max())
+        ctrl = max(np.abs(Rm[0] - Re[0]).max(), np.abs(Tm[0] - Te[0]).max())
+>       assert dual <= 3e-3, dual
+E       AssertionError: np.float64(0.20978763173881643)
+E       assert np.float64(0.20978763173881643) <= 0.003
+
+tests\unit\test_pmm2d_staggered_curved_d.py:636: AssertionError
+________________ test_d7_vacuum_painted_with_mu_one_is_vacuum _________________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d7_vacuum_painted_with_mu_one_is_vacuum():
+        """A physical identity across the two routes: layer 2 painted with a
+        vacuum Rect that carries an explicit mu = I (the magnetic TENSOR route
+        under the map) equals a uniform vacuum layer 2 (the scalar route) on
+        the same merged map.  Measured 2026-10-03 (``d_unit_stack.json``, M = 3):
+        3.1e-15 (bar 1e-9, 5.5 decades above); fail-before: the same Rect with
+        mu = 1.1 moves R / T / Jones by 2.3e-2 (bar >= 1e-3)."""
+        a = _d7(3, _LC30, "vac_mu")
+        b = _d7(3, _LC30, "uniform")
+        c = _d7(3, _LC30, "paint11")
+        assert a[0].cmap.fingerprint == b[0].cmap.fingerprint
+    
+        def d(x, y):
+            return max(np.abs(x[1] - y[1]).max(), np.abs(x[2] - y[2]).max(),
+                       np.abs(x[3] - y[3]).max())
+        assert d(a, b) <= 1e-9, d(a, b)
+>       assert d(c, b) >= 1e-3, d(c, b)
+E       AssertionError: np.float64(2.0111318120899715e-15)
+E       assert np.float64(2.0111318120899715e-15) >= 0.001
+E        +  where np.float64(2.0111318120899715e-15) = <function test_d7_vacuum_painted_with_mu_one_is_vacuum.<locals>.d at 0x000001D5434124B0>((<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x000001D54357C140>, array([[0.        , 0.        , 0....array([[ 0.01322713-0.19128398j,  0.03929447+0.00190665j],\n       [ 0.03929647+0.00190923j, -0.03401598-0.19406981j]])), (<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x000001D54357C050>, array([[0.        , 0.        , 0....array([[ 0.01322713-0.19128398j,  0.03929447+0.00190665j],\n       [ 0.03929647+0.00190923j, -0.03401598-0.19406981j]])))
+
+tests\unit\test_pmm2d_staggered_curved_d.py:725: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_magnetic_film_under_the_circle_map_matches_the_airy_slab
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d7_vacuum_painted_with_mu_one_is_vacuum
+3 failed, 23 passed in 240.03s (0:04:00)
