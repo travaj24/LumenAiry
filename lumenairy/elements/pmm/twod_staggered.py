@@ -2011,6 +2011,17 @@ class _StagNodeWeight:
                                            self.p.values())
 
 
+def _stag_scale_weight(W, s):
+    """``s * W`` for a node weight (array or :class:`_StagNodeWeight`);
+    ``s == 1`` returns ``W`` itself (Phase E1: the rotation-gauge sign on the
+    four mapped out-of-plane weights)."""
+    if s == 1.0:
+        return W
+    if isinstance(W, _StagNodeWeight):
+        return _StagNodeWeight(W.t * s, {k: v * s for k, v in W.p.items()})
+    return W * s
+
+
 #: Relative tolerance on the Legendre MOMENTS of the map's geometric weights
 #: that the adaptive node count of :func:`_stag_map_nodes` must meet.  1e-13
 #: sits two to three decades above the moments' own round-off (~1e-16 x the
@@ -2147,7 +2158,7 @@ def _stag_map_eff(eps, sg, g11, g12, g22):
             "c22": g22 / sg, "c33": 1.0 / sg}
 
 
-def _stag_map_eff_tensor(eps, mu, xu, xv, yu, yv):
+def _stag_map_eff_tensor(eps, mu, xu, xv, yu, yv, *, oop=False, tvec=None):
     """The effective-tensor weights of a BLOCK-FORM ``eps`` (and optional
     block-form ``mu``) under the map, from the Jacobian ITSELF at a set of
     nodes -- Phase D of the curved-cell plan
@@ -2178,7 +2189,26 @@ def _stag_map_eff_tensor(eps, mu, xu, xv, yu, yv):
     :func:`_stag_map_eff` (keys ``e11 .. e33``, ``c11 .. c33``).  A scalar
     material with ``mu = None`` keeps the scalar route
     :func:`_stag_map_eff` (bytes of Phases A-C); this function with
-    ``eps = s I`` reproduces it to round-off (unit-gated)."""
+    ``eps = s I`` reproduces it to round-off (unit-gated).
+
+    PHASE E1 (``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``, section
+    1), both keywords additive -- the default call is the Phase D function
+    unchanged:
+
+    * ``oop=True`` adds the four OUT-OF-PLANE entries of the same
+      congruence (``Lambda = blockdiag(J, 1)``, so no ``1 / sg`` on them):
+      ``e'_a3 = adj(J)_ak e_k3`` and ``e'_3b = e_3k adj(J)_bk`` (keys
+      ``e13 e23 e31 e32``).
+    * ``tvec = (t_x, t_y)`` (the INTERNAL shear of a slanted layer, frame
+      ``x = Phi(u, v) + t w``) adds the slant weights of the composite map:
+      ``tau = J^-1 t = adj(J) t / sg`` (keys ``t1 t2``; the shear expressed
+      in ``(u, v)``) and ``kappa = chi_t tau`` (keys ``k1 k2``; the
+      ``chi'_t3`` column of the composite ``chi' = Lambda^T mu^-1 Lambda /
+      sg``, ``Lambda = [[J, t], [0, 1]]``).  ``eps`` must then already be the
+      SHEARED-frame tensor :func:`_slant_congruence` returns: the composite
+      congruence is the map's congruence of the shear's (section 1.3 of the
+      build doc).
+    """
     sg = xu * yv - xv * yu
     # adj(J) rows: A[0] = (y_v, -x_v), A[1] = (-y_u, x_u)
     A = ((yv, -xv), (-yu, xu))
@@ -2193,12 +2223,20 @@ def _stag_map_eff_tensor(eps, mu, xu, xv, yu, yv):
                     acc = acc + A[i][k] * e[..., k, m] * A[j][m]
             out["e" + ki + kj] = acc / sg
     out["e33"] = e[..., 2, 2] * sg
+    if oop:
+        for i, ki in ((0, "1"), (1, "2")):
+            out["e" + ki + "3"] = (A[i][0] * e[..., 0, 2]
+                                   + A[i][1] * e[..., 1, 2])
+            out["e3" + ki] = (e[..., 2, 0] * A[i][0]
+                              + e[..., 2, 1] * A[i][1])
     if mu is None:
         out["c11"] = (xu * xu + yu * yu) / sg
         out["c12"] = (xu * xv + yu * yv) / sg
         out["c21"] = out["c12"]
         out["c22"] = (xv * xv + yv * yv) / sg
         out["c33"] = 1.0 / sg
+        if tvec is not None:
+            _stag_map_slant_weights(out, A, sg, tvec)
         return out
     m11, m12 = mu[..., 0, 0], mu[..., 0, 1]
     m21, m22 = mu[..., 1, 0], mu[..., 1, 1]
@@ -2212,7 +2250,22 @@ def _stag_map_eff_tensor(eps, mu, xu, xv, yu, yv):
                     acc = acc + Jm[k][i] * K[k][m] * Jm[m][j]
             out["c" + ki + kj] = acc / sg
     out["c33"] = 1.0 / (sg * mu[..., 2, 2])
+    if tvec is not None:
+        _stag_map_slant_weights(out, A, sg, tvec)
     return out
+
+
+def _stag_map_slant_weights(out, A, sg, tvec):
+    """Add the slant weights of the composite map ``x = Phi(u, v) + t w`` to
+    the congruence dict ``out`` (in place): ``tau = adj(J) t / sg`` (keys
+    ``t1 t2``) and ``kappa = chi_t tau`` (keys ``k1 k2``, ``chi_t`` the
+    ``c``-keys already in ``out``) -- Phase E1, build doc section 1.3."""
+    tx, ty = float(tvec[0]), float(tvec[1])
+    t1 = (A[0][0] * tx + A[0][1] * ty) / sg
+    t2 = (A[1][0] * tx + A[1][1] * ty) / sg
+    out["t1"], out["t2"] = t1, t2
+    out["k1"] = out["c11"] * t1 + out["c12"] * t2
+    out["k2"] = out["c21"] * t1 + out["c22"] * t2
 
 
 def _stag_map_detj_refuse(sg, where):
@@ -2226,7 +2279,8 @@ def _stag_map_detj_refuse(sg, where):
             f"allowed only at a cell CORNER, the singular vertices).")
 
 
-def _stag_map_weights(bx, by, cmap, eps_cell, rule, mu_cell=None):
+def _stag_map_weights(bx, by, cmap, eps_cell, rule, mu_cell=None, *,
+                      oop=False, tvec=None):
     """Effective-tensor weights at every quadrature node of every ``(u, v)``
     cell, for ``eps_cell`` (and ``mu_cell``) under the map ``cmap``.
 
@@ -2258,6 +2312,12 @@ def _stag_map_weights(bx, by, cmap, eps_cell, rule, mu_cell=None):
     Nx, Ny = bx.N, by.N
     shp = (Nx, Ny, nq, nq)
     if np.ndim(eps_cell) == 4 or mu_cell is not None:
+        if oop or tvec is not None:
+            # Phase E1: the out-of-plane entries and / or the slant weights
+            # of the composite map ride the same congruence (keywords)
+            return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+                                            quad, xg, shp, oop=oop,
+                                            tvec=tvec)
         return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
                                         quad, xg, shp)
     sg = np.empty(shp)
@@ -2307,7 +2367,8 @@ def _stag_map_as33(spec, Nx, Ny):
     return out
 
 
-def _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell, quad, xg, shp):
+def _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell, quad, xg, shp,
+                             **e1kw):
     """The tensor / magnetic branch of :func:`_stag_map_weights`: the
     Jacobian at every node of the tensor rule (and of every corner-rule
     cell), then the ONE congruence :func:`_stag_map_eff_tensor`.  Same
@@ -2331,7 +2392,7 @@ def _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell, quad, xg, shp):
     m33 = None if mu_cell is None else _stag_map_as33(mu_cell, Nx, Ny)
     W = _stag_map_eff_tensor(
         e33[:, :, None, None], None if m33 is None else m33[:, :, None, None],
-        xu, xv, yu, yv)
+        xu, xv, yu, yv, **e1kw)
     if quad is None:
         return W
     P = {k: {} for k in W}
@@ -2341,7 +2402,8 @@ def _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell, quad, xg, shp):
         _X, _Y, pu, pv, qu, qv = cmap.geom_points(sx, sy, U, V)
         _stag_map_detj_refuse(pu * qv - pv * qu, (sx, sy))
         Wp = _stag_map_eff_tensor(
-            e33[sx, sy], None if m33 is None else m33[sx, sy], pu, pv, qu, qv)
+            e33[sx, sy], None if m33 is None else m33[sx, sy], pu, pv, qu, qv,
+            **e1kw)
         for k, v in Wp.items():
             P[k][(sx, sy)] = v
     return {k: _StagNodeWeight(W[k], P[k]) for k in W}
@@ -2579,15 +2641,11 @@ class Granet2DTransverseE:
         self._eps_pre_rotated = False
         self.eps_lab = None
         if self.slanted:
-            if mu_cell is not None:
-                raise NotImplementedError(
-                    "Granet2DTransverseE: slant= together with mu_cell is not "
-                    "implemented -- a sheared cell runs the OUT-OF-PLANE "
-                    "first-order generator, which carries no permeability "
-                    "blocks (it eliminates G3 assuming mu = 1).  The shear's "
-                    "OWN magnetic anisotropy mu^{lm} = g^{lm} is absorbed "
-                    "analytically by the six slant blocks; a MATERIAL mu is "
-                    "not.")
+            # slant x mu_cell is accepted since Phase E1 of the curved-cell
+            # plan: the first-order generator carries the permeability blocks
+            # (chi_t in its E rows, chi33 in the G3 elimination) and the
+            # shear's own metric enters as tau = t and kappa = chi_t t
+            # (build doc docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md)
             cell33 = self.eps_cell
             if cell33.ndim == 2:            # scalar map -> isotropic tensor
                 cell33 = cell33[..., None, None] * np.eye(3, dtype=_C)
@@ -2630,15 +2688,9 @@ class Granet2DTransverseE:
                 raise ValueError(
                     "Granet2DTransverseE: a scalar mu_cell must be nonzero in "
                     "every cell (chi = 1/mu).")
-            if self.offplane:
-                raise NotImplementedError(
-                    "Granet2DTransverseE: mu_cell together with an "
-                    "OUT-OF-PLANE eps_cell (e_xz / e_yz / e_zx / e_zy above "
-                    "the relative 1e-12 floor) is not implemented -- the "
-                    "out-of-plane FIRST-ORDER generator carries no "
-                    "permeability blocks (it eliminates G3 assuming mu = 1).  "
-                    "Magnetic anisotropy is available on the IN-PLANE "
-                    "(block-form) second-order pencil only.")
+            # mu_cell with an OUT-OF-PLANE eps_cell (or a slant) is accepted
+            # since Phase E1: _assemble_oop carries the permeability blocks.
+            # The permeability itself stays BLOCK-FORM (_require_inplane_mu).
             self.mu_cell = mu
             self.magnetic = True
         if self.cmap is not None:
@@ -2662,30 +2714,21 @@ class Granet2DTransverseE:
                 f"fingerprint), got {type(cmap).__name__}.")
         # Phase D: a BLOCK-FORM tensor eps and a block-form mu are routed
         # (the congruence sqrt(g) J^-1 eps J^-T per node,
-        # _stag_map_eff_tensor).  An OUT-OF-PLANE tensor stays refused: the
-        # first-order out-of-plane generator eliminates G3 assuming mu = 1,
-        # and a map makes mu' != 1 everywhere (Phase E).
-        if self.eps_cell.ndim == 4 and _tile_is_offplane(self.eps_cell):
-            raise NotImplementedError(
-                f"{fn}: an OUT-OF-PLANE tensor eps_cell (e_xz / e_yz / e_zx "
-                f"/ e_zy above the relative 1e-12 floor) under a coordinate "
-                f"map is not implemented -- the out-of-plane first-order "
-                f"generator has no permeability blocks and a map makes every "
-                f"region magnetic (Phase E of the curved-cell plan).  "
-                f"BLOCK-FORM tensors are accepted.")
+        # _stag_map_eff_tensor).  Phase E1: an OUT-OF-PLANE tensor eps and a
+        # slant are routed too -- the first-order generator carries the
+        # permeability blocks every mapped region needs (chi_t, chi33 of the
+        # same congruence), and a slant composes with the map as
+        # x = Phi(u, v) + t w (build doc
+        # docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md).  An
+        # OUT-OF-PLANE PERMEABILITY stays refused (as without a map).
         if mu_cell is not None:
             mu_a = np.asarray(mu_cell)
             if mu_a.ndim == 4 and _tile_is_offplane(mu_a):
                 raise NotImplementedError(
                     f"{fn}: an OUT-OF-PLANE mu_cell under a coordinate map is "
-                    f"not implemented (Phase E of the curved-cell plan); "
-                    f"BLOCK-FORM permeability tensors are accepted.")
-        if not _slant_is_zero(_norm_slant_pair(slant, fn)):
-            raise NotImplementedError(
-                f"{fn}: slant= together with a coordinate map is not "
-                f"implemented (the shear composes with the map and needs "
-                f"permeability blocks the out-of-plane generator does not "
-                f"have -- Phase E of the curved-cell plan).")
+                    f"not implemented (out-of-plane permeability is refused "
+                    f"with or without a map); BLOCK-FORM permeability tensors "
+                    f"are accepted.")
         for b, bounds, per, ax in ((self.bx, cmap.u_bounds, cmap.period_x,
                                     "x"),
                                    (self.by, cmap.v_bounds, cmap.period_y,
@@ -2717,6 +2760,16 @@ class Granet2DTransverseE:
         map: the scalar route for a scalar non-magnetic cell (Phases A-C),
         the general congruence for a tensor and / or magnetic one (Phase D;
         ``chi_t`` is the pointwise inverse of ``mu'`` at every node)."""
+        if self.offplane:
+            # Phase E1: the out-of-plane entries of the congruence, and for a
+            # slanted cell (whose eps_cell is already the sheared-frame
+            # tensor, in the rotated gauge) the composite map's slant weights
+            # tau = J^-1 t and kappa = chi_t tau with the INTERNAL rotated t
+            self._mapw = _stag_map_weights(
+                self.bx, self.by, self.cmap, self.eps_cell, self._qrule,
+                mu_cell=self.mu_cell, oop=True,
+                tvec=self._slant_rot if self.slanted else None)
+            return
         self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
                                        self.eps_cell, self._qrule,
                                        mu_cell=self.mu_cell)
@@ -2800,6 +2853,56 @@ class Granet2DTransverseE:
         return (m22 / det, -m12 / det, -m21 / det, m11 / det,
                 1.0 / mu[..., 2, 2])
 
+    # --- the PERMEABILITY blocks (Granet Eqs. 20, 21, 24): ONE implementation
+    #     for the in-plane pencil (_assemble) and the out-of-plane first-order
+    #     generator (_assemble_oop, Phase E1 of the curved-cell plan).  ``chi``
+    #     is the (chi11, chi12, chi21, chi22, chi33) tuple of _chi_maps: per
+    #     cell without a map, per quadrature NODE with one (the routing is
+    #     _eps_weighted's / _eps_dir's).
+    def _chi_R(self, Rmat, chi):
+        """Fill ``Rmat`` (``2 q^2`` square, zeros) with ``R = C[chi_t]C =
+        [[-chi22, chi21], [chi12, -chi11]]`` (Eq. 24 / A39)."""
+        bx, by = self.bx, self.by
+        qq = self.q * self.q
+        chi11, chi12, chi21, chi22 = chi[0], chi[1], chi[2], chi[3]
+        Rmat[:qq, :qq] = -self._eps_weighted(
+            (bx, bx.m_ref, bx.B, bx.B),
+            (by, by.m_ref, by.Btilde, by.Btilde), chi22)
+        Rmat[:qq, qq:] = self._eps_weighted(
+            (bx, bx.m_ref, bx.B, bx.Btilde),
+            (by, by.m_ref, by.Btilde, by.B), chi21)
+        Rmat[qq:, :qq] = self._eps_weighted(
+            (bx, bx.m_ref, bx.Btilde, bx.B),
+            (by, by.m_ref, by.B, by.Btilde), chi12)
+        Rmat[qq:, qq:] = -self._eps_weighted(
+            (bx, bx.m_ref, bx.Btilde, bx.Btilde),
+            (by, by.m_ref, by.B, by.B), chi11)
+        return Rmat
+
+    def _chi_Gw(self, chi33):
+        """``Gw_chi = <Vw| chi33 |Vw>`` (the middle of Eq. 20 / A42)."""
+        bx, by = self.bx, self.by
+        return self._eps_weighted((bx, bx.m_ref, bx.B, bx.B),
+                                  (by, by.m_ref, by.B, by.B), chi33)
+
+    def _chi_Ktz(self, chi):
+        """``K_tz = C[chi_t][d2; -d1]`` (Eq. 21 / A43): row 1 (tested in V1)
+        ``-chi22 d1 + chi21 d2``, row 2 (tested in V2) ``-chi11 d2 + chi12
+        d1``, the derivative on the V3 TRIAL function, ``/ k0``."""
+        bx, by = self.bx, self.by
+        k0 = self.k0
+        chi11, chi12, chi21, chi22 = chi[0], chi[1], chi[2], chi[3]
+        return np.concatenate([
+            (-self._eps_dir(bx, "B", "d", "Btilde",
+                            by, "Btilde", "m", "Btilde", wmap=chi22)
+             + self._eps_dir(bx, "B", "m", "Btilde",
+                             by, "Btilde", "d", "Btilde", wmap=chi21)) / k0,
+            (-self._eps_dir(bx, "Btilde", "m", "Btilde",
+                            by, "B", "d", "Btilde", wmap=chi11)
+             + self._eps_dir(bx, "Btilde", "d", "Btilde",
+                             by, "B", "m", "Btilde", wmap=chi12)) / k0,
+        ], axis=0)
+
     def _assemble(self):
         """Build R (Eq. 24) and L = k^2[eps_t] + S_tt - K_tz eps33^-1 K_zt.
 
@@ -2858,7 +2961,7 @@ class Granet2DTransverseE:
         chi = self._chi_maps()
         magnetic = chi is not None
         if magnetic:
-            chi11, chi12, chi21, chi22, chi33 = chi
+            chi33 = chi[4]
 
         # ----- per-axis 1-D primitive matrices (real inner product) -----
         # Mass (no deriv) between set pairs:
@@ -2887,18 +2990,9 @@ class Granet2DTransverseE:
             # this R is Hermitian NEGATIVE definite, so G = -R stays the
             # Hermitian PD right-hand matrix of the pencil (chi_t = I gives
             # back -blockdiag(G1, G2) to ~1e-16 -- summation order only).
-            Rmat[:qq, :qq] = -self._eps_weighted(
-                (bx, bx.m_ref, bx.B, bx.B),
-                (by, by.m_ref, by.Btilde, by.Btilde), chi22)
-            Rmat[:qq, qq:] = self._eps_weighted(
-                (bx, bx.m_ref, bx.B, bx.Btilde),
-                (by, by.m_ref, by.Btilde, by.B), chi21)
-            Rmat[qq:, :qq] = self._eps_weighted(
-                (bx, bx.m_ref, bx.Btilde, bx.B),
-                (by, by.m_ref, by.B, by.Btilde), chi12)
-            Rmat[qq:, qq:] = -self._eps_weighted(
-                (bx, bx.m_ref, bx.Btilde, bx.Btilde),
-                (by, by.m_ref, by.B, by.B), chi11)
+            # ONE implementation, shared with the out-of-plane generator's
+            # permeability blocks (_assemble_oop, Phase E1): _chi_R.
+            self._chi_R(Rmat, chi)
             # THE PLAIN BLOCK GRAM, kept SEPARATELY.  On the nonmagnetic path
             # -R IS blockdiag(G1, G2) and the shipped code uses the one object
             # for both roles; with chi_t != I they are DIFFERENT operators.
@@ -2976,8 +3070,7 @@ class Granet2DTransverseE:
         # matmul chain object-for-object (bit-identical, gate G1).
         Sw = Gw_inv
         if magnetic:
-            Gw_chi = self._eps_weighted((bx, bx.m_ref, bx.B, bx.B),
-                                        (by, by.m_ref, by.B, by.B), chi33)
+            Gw_chi = self._chi_Gw(chi33)
             Sw = Gw_inv @ Gw_chi @ Gw_inv
         Stt = -Curl.conj().T @ Sw @ Curl            # (2q^2,2q^2), neg-semidef
 
@@ -3009,16 +3102,8 @@ class Granet2DTransverseE:
             # chi21, row 2 chi11 / chi12), and chi_t = I reproduces Grad1 /
             # Grad2 above exactly (to summation order).  The derivative sits on
             # the V3 TRIAL function ("d"), as the eps-free gradient has it.
-            Ktz = np.concatenate([
-                (-self._eps_dir(bx, "B", "d", "Btilde",
-                                by, "Btilde", "m", "Btilde", wmap=chi22)
-                 + self._eps_dir(bx, "B", "m", "Btilde",
-                                 by, "Btilde", "d", "Btilde", wmap=chi21)) / k0,
-                (-self._eps_dir(bx, "Btilde", "m", "Btilde",
-                                by, "B", "d", "Btilde", wmap=chi11)
-                 + self._eps_dir(bx, "Btilde", "d", "Btilde",
-                                 by, "B", "m", "Btilde", wmap=chi12)) / k0,
-            ], axis=0)
+            # ONE implementation, shared with _assemble_oop: _chi_Ktz.
+            Ktz = self._chi_Ktz(chi)
 
         # eps33 mass in V3 (Eq.41): <V3| eps | V3>
         Meps33 = self._eps_weighted(
@@ -3181,10 +3266,31 @@ class Granet2DTransverseE:
         # here would undo it.
         rot = 1.0 if self._eps_pre_rotated else _OOP_ROT_SIGN
         tx, ty = self._slant_rot
-        e11, e12, e13 = e[..., 0, 0], e[..., 0, 1], rot * e[..., 0, 2]
-        e21, e22, e23 = e[..., 1, 0], e[..., 1, 1], rot * e[..., 1, 2]
-        e31, e32 = rot * e[..., 2, 0], rot * e[..., 2, 1]
-        e33 = e[..., 2, 2]
+        # PHASE E1 (curved-cell plan; build doc
+        # docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md): a MAPPED region
+        # (every one is magnetic: chi_t = g / sqrt(g) even in vacuum) or a
+        # MATERIAL mu takes the GENERAL generator of _assemble_oop_general --
+        # chi_t in the two E rows (the pencil's B side becomes -R there),
+        # chi33 in the G3 elimination, the slant through tau / kappa.  A
+        # vertical or slanted unmapped NONMAGNETIC cell keeps the shipped
+        # arithmetic below verbatim (a dispatch, gate E1-1).
+        general = self.cmap is not None or self.magnetic
+        if self.cmap is not None:
+            # the congruence's node weights (_stag_map_eff_tensor with
+            # oop=True); the rotation gauge is linear in the out-of-plane
+            # entries and commutes with the map's blockdiag(J, 1), so it is
+            # applied to the four mapped weights (a slanted cell arrives
+            # pre-rotated: rot = 1)
+            w = self._mapw
+            e11, e12, e21, e22, e33 = (w["e11"], w["e12"], w["e21"],
+                                       w["e22"], w["e33"])
+            e13, e23, e31, e32 = (_stag_scale_weight(w[k], rot)
+                                  for k in ("e13", "e23", "e31", "e32"))
+        else:
+            e11, e12, e13 = e[..., 0, 0], e[..., 0, 1], rot * e[..., 0, 2]
+            e21, e22, e23 = e[..., 1, 0], e[..., 1, 1], rot * e[..., 1, 2]
+            e31, e32 = rot * e[..., 2, 0], rot * e[..., 2, 1]
+            e33 = e[..., 2, 2]
 
         # ----- eps-free geometry: block Grams + the mimetic derivatives -----
         Mtt_x, Mtt_y = self.Mtt_x, self.Mtt_y
@@ -3222,6 +3328,11 @@ class Granet2DTransverseE:
         E3S = np.linalg.solve(
             A33, np.concatenate([-A31, -A32, P23.conj().T, -P13.conj().T],
                                 axis=1))
+        if general:
+            self._assemble_oop_general(
+                (A11, A12, A13, A21, A22, A23), E3S, Z, Ggram1, Ggram2, Gw,
+                CwE1, CwE2, (tx, ty))
+            return
         G3S = np.linalg.solve(Gw, np.concatenate([-CwE1, CwE2, Z, Z], axis=1))
 
         row0 = (-1j * np.concatenate([Z, Z, Z, Ggram1], axis=1)
@@ -3292,6 +3403,119 @@ class Granet2DTransverseE:
         # on the in-plane path.  The second-order operators do not EXIST for an
         # out-of-plane cell, so they are None rather than stale -- every
         # consumer dispatches on ``self.offplane``.
+        self.Agen = np.concatenate([row0, row1, row2, row3], axis=0)
+        self.Bgen = Bgen
+        self.Rmat = None
+        self.Lmat = None
+        self.Et_blocks = None
+        self.Et_offdiag = None
+        self.Stt = None
+        self.Schur = None
+        self.dimtot = 4 * qq
+
+    def _assemble_oop_general(self, Ablk, E3S, Z, Ggram1, Ggram2, Gw, CwE1,
+                              CwE2, tvec):
+        """The first-order generator WITH permeability blocks (Phase E1 of
+        the curved-cell plan; derivation in
+        ``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md`` section 1).
+
+        Covariant Maxwell ``(D x E)^i = mu'^{ij} G_j``, ``(D x G)^i =
+        eps'^{ij} E_j`` with ``G = i Z0 H``.  The constitutive law is used in
+        its INVERSE form on the transverse rows -- ``G_t = chi_t (c_t + tau
+        c3)`` with ``c = D x E`` (``c1 = D2 E3 - D3 E2`` in V2, ``c2 = D3 E1
+        - D1 E3`` in V1, ``c3 = D1 E2 - D2 E1`` in Vw, all three EXACT in
+        their spaces), tested with the PLAIN Grams -- and in its 33 form on
+        the longitudinal one -- ``G_3 = chi33 c3 + tau . G_t``.  Testing the
+        two transverse rows gives::
+
+            q (-R) [e1; e2] = [-i Ggram1 g2 + i Ktz1 e3 + i <V1|k2|Vw> c3 ;
+                               +i Ggram2 g1 + i Ktz2 e3 - i <V2|k1|Vw> c3]
+
+        with ``R = C[chi_t]C`` and ``K_tz = C[chi_t][d2; -d1]`` -- EXACTLY the
+        in-plane pencil's two permeability operators (:meth:`_chi_R`,
+        :meth:`_chi_Ktz`, one implementation) -- and the two G rows keep
+        their shipped form with ``G3`` replaced by the chi33-weighted
+        projection ``Gw^-1 Gw_chi c3`` (the in-plane ``S_tt`` middle
+        operator, :meth:`_chi_Gw`) plus the ``tau . G_t`` half of ``G_3``
+        under the single-derivative bracket, written with the derivative on
+        the CONTINUOUS test function (``+i <D1 V2| tau |G_t>``).  The E3
+        elimination (the pointwise e33-Schur) is untouched: ``D x G`` carries
+        no permeability.
+
+        ``chi_t, chi33`` come from :meth:`_chi_maps` -- the map's node
+        weights of :func:`_stag_map_eff_tensor` (Phase D) or a material
+        ``mu``'s per-cell inverse; ``tau = J^-1 t`` and ``kappa = chi_t tau``
+        are the composite slant weights (keys ``t1 t2 k1 k2``; without a map
+        ``tau = t`` and ``kappa = chi_t t`` per cell).  With ``chi = I`` and
+        ``tau = t`` every block reduces to the shipped generator (``-R =
+        blkdiag(Ggram1, Ggram2)``, ``K_tz = -[P13; P23]``, ``Gw_chi = Gw``,
+        the six slant blocks) -- gate E1-2 measures it under the identity
+        map.
+
+        ``B = blkdiag(-R, Ggram2, Ggram1)``: Hermitian positive definite
+        whenever ``chi_t`` is pointwise (a map's vacuum ``g / sqrt(g)``, a
+        lossless material ``mu``), so :func:`_region_modes_oop` keeps its
+        Cholesky whitening; a non-Hermitian ``chi_t`` (a LOSSY ``mu``) sets
+        ``_bgen_hermitian = False`` and the region eig falls back to QZ.
+        """
+        bx, by = self.bx, self.by
+        k0 = self.k0
+        qq = self.q * self.q
+        A11, A12, A13, A21, A22, A23 = Ablk
+        chi = self._chi_maps()
+        Rm = self._chi_R(np.zeros((2 * qq, 2 * qq), dtype=_C), chi)
+        Ktz = self._chi_Ktz(chi)
+        Gw_chi = self._chi_Gw(chi[4])
+        # c3 = (D x E)^3: the strong curl, exact in Vw (metric-free)
+        C3 = np.linalg.solve(Gw, np.concatenate([-CwE1, CwE2, Z, Z], axis=1))
+        # the G3 of the G rows: the chi33-weighted L2 projection onto Vw
+        # (exact under the bracket: D1 V2 and D2 V1 lie in Vw)
+        G3S = np.linalg.solve(Gw, Gw_chi @ C3)
+        row0 = (-1j * np.concatenate([Z, Z, Z, Ggram1], axis=1)
+                + 1j * (Ktz[:qq] @ E3S))
+        row1 = (1j * np.concatenate([Z, Z, Ggram2, Z], axis=1)
+                + 1j * (Ktz[qq:] @ E3S))
+        row2 = (-1j * np.concatenate([A21, A22, Z, Z], axis=1)
+                - 1j * (A23 @ E3S) + 1j * (CwE2.conj().T @ G3S))
+        row3 = (1j * np.concatenate([A11, A12, Z, Z], axis=1)
+                + 1j * (A13 @ E3S) + 1j * (CwE1.conj().T @ G3S))
+        tx, ty = tvec
+        if tx != 0.0 or ty != 0.0:
+            if self.cmap is not None:
+                w = self._mapw
+                t1, t2, k1, k2 = w["t1"], w["t2"], w["k1"], w["k2"]
+            else:
+                shp = (bx.N, by.N)
+                t1 = np.full(shp, tx, dtype=_C)
+                t2 = np.full(shp, ty, dtype=_C)
+                k1 = chi[0] * tx + chi[1] * ty
+                k2 = chi[2] * tx + chi[3] * ty
+            ew = self._eps_weighted
+            xB, xT = bx.B, bx.Btilde
+            yB, yT = by.B, by.Btilde
+            mx, my = bx.m_ref, by.m_ref
+            K2w = ew((bx, mx, xB, xB), (by, my, yT, yB), k2)     # <V1|k2|Vw>
+            K1w = ew((bx, mx, xT, xB), (by, my, yB, yB), k1)     # <V2|k1|Vw>
+            row0 = row0 + 1j * (K2w @ C3)
+            row1 = row1 - 1j * (K1w @ C3)
+            ed = self._eps_dir
+            T21 = ed(bx, "Btilde", "dL", "Btilde", by, "B", "m", "B",
+                     wmap=t1) / k0                       # <D1 V2| t1 |V2>
+            T22 = ed(bx, "Btilde", "dL", "B", by, "B", "m", "Btilde",
+                     wmap=t2) / k0                       # <D1 V2| t2 |V1>
+            T31 = ed(bx, "B", "m", "Btilde", by, "Btilde", "dL", "B",
+                     wmap=t1) / k0                       # <D2 V1| t1 |V2>
+            T32 = ed(bx, "B", "m", "B", by, "Btilde", "dL", "Btilde",
+                     wmap=t2) / k0                       # <D2 V1| t2 |V1>
+            row2 = row2 + 1j * np.concatenate([Z, Z, T21, T22], axis=1)
+            row3 = row3 + 1j * np.concatenate([Z, Z, T31, T32], axis=1)
+        Bgen = np.zeros((4 * qq, 4 * qq), dtype=_C)
+        Bgen[:2 * qq, :2 * qq] = -Rm
+        Bgen[2 * qq:3 * qq, 2 * qq:3 * qq] = Ggram2
+        Bgen[3 * qq:, 3 * qq:] = Ggram1
+        sR = float(np.max(np.abs(Rm)))
+        self._bgen_hermitian = bool(
+            float(np.max(np.abs(Rm - Rm.conj().T))) <= 1e-12 * sR)
         self.Agen = np.concatenate([row0, row1, row2, row3], axis=0)
         self.Bgen = Bgen
         self.Rmat = None
@@ -4007,6 +4231,15 @@ def _stag_parity_gauge(solver: Granet2DTransverseE):
     # own two-sided gate, not a tolerance.
     if not _slant_is_zero(getattr(solver, "slant", None)):
         return None
+    # Phase E1: the permeability branch of the generator (a coordinate map or
+    # a material mu) is refused here likewise -- its B side carries
+    # -R = C[chi_t]C, and the reduction's sector Cholesky would silently read
+    # a non-Hermitian chi_t as Hermitian; the parity reduction for symmetric
+    # maps is a separate item of the curved-cell plan (section 4.5), not
+    # validated here.
+    if getattr(solver, "cmap", None) is not None or getattr(
+            solver, "magnetic", False):
+        return None
     px = _stag_parity_1d(solver.bx)
     py = _stag_parity_1d(solver.by)
     if px is None or py is None:
@@ -4258,7 +4491,12 @@ def _region_modes_oop(solver: Granet2DTransverseE, *, symmetry=False):
         gauge = _stag_parity_gauge(solver)
         if gauge is not None:
             fac = _stag_block_eig(Amat, Bmat, qq, gauge)
-    if fac is None:
+    if fac is None and not getattr(solver, "_bgen_hermitian", True):
+        # Phase E1: a NON-Hermitian chi_t (a lossy material mu) makes the
+        # E rows' -R block non-Hermitian, so B is not a Gram and cannot be
+        # whitened -- the generalized eig instead
+        qv, X = sla.eig(Amat, Bmat)
+    elif fac is None:
         Lc = np.linalg.cholesky(Bmat)             # Bmat HPD (block Gram)
         Ah = sla.solve_triangular(Lc, Amat, lower=True)
         Ah = sla.solve_triangular(Lc, Ah.conj().T, lower=True).conj().T
@@ -4268,9 +4506,13 @@ def _region_modes_oop(solver: Granet2DTransverseE, *, symmetry=False):
         qv, X = fac
     W = X[:2 * qq, :]                              # [E1; E2]
     Gst = X[2 * qq:, :]                            # [G1; G2] = i Z0 [H1; H2]
-    # flux split on the whitened blocks (see 2. above)
-    L1 = np.linalg.cholesky(Bmat[:qq, :qq]).conj().T
-    L2 = np.linalg.cholesky(Bmat[qq:2 * qq, qq:2 * qq]).conj().T
+    # flux split on the whitened blocks (see 2. above).  The flux form is
+    # the PLAIN block Gram (E_t x H_t is metric-free under a map), read from
+    # the two G rows of B -- which hold it on every branch, while the two E
+    # rows hold -R = C[chi_t]C on the permeability branch (Phase E1); on the
+    # shipped branch the two copies are the same matrices, byte for byte.
+    L1 = np.linalg.cholesky(Bmat[3 * qq:, 3 * qq:]).conj().T
+    L2 = np.linalg.cholesky(Bmat[2 * qq:3 * qq, 2 * qq:3 * qq]).conj().T
     Vfull = np.concatenate([L1 @ W[:qq], L2 @ W[qq:],
                             L2 @ Gst[:qq], L1 @ Gst[qq:]], axis=0)
     nrm = np.linalg.norm(Vfull, axis=0)
@@ -4983,11 +5225,10 @@ def pmm_jones_2d_staggered(
             or background_mu is not None):
         # THE SHAPE LAYER (Phase C): the one-layer stack, byte for byte;
         # per-shape mu= and background_mu= since Phase D
+        # a slant is a LAYER property and rides the shape layer since
+        # Phase E1 (the composite map x = Phi(u, v) + t w)
         bad = [nm for nm, v in (("eps_cell", eps_cell), ("cmap", cmap),
                                 ("mu_cell", mu_cell)) if v is not None]
-        if not _slant_is_zero(_norm_slant_pair(slant,
-                                               "pmm_jones_2d_staggered")):
-            bad.append("slant")
         if bad:
             raise ValueError(
                 f"pmm_jones_2d_staggered: shapes= describes the layer and "
@@ -5002,7 +5243,7 @@ def pmm_jones_2d_staggered(
                                n_orders=int(n_orders), symmetry=symmetry)
         stack.add_layer(float(depth), shapes=shapes,
                         background_eps=background_eps,
-                        background_mu=background_mu,
+                        background_mu=background_mu, slant=slant,
                         max_pencil_dof=max_pencil_dof)
         stack.set_source(float(wavelength), theta=float(theta),
                          phi=float(phi))
@@ -5019,11 +5260,9 @@ def pmm_jones_2d_staggered(
             raise ValueError(
                 f"pmm_jones_2d_staggered: mu_cell grid {mu.shape[:2]} must "
                 f"match the eps_cell grid {cell.shape[:2]}.")
-        if cell.ndim == 4 and _tile_needs_oop("pmm_jones_2d_staggered", cell):
-            raise NotImplementedError(
-                "pmm_jones_2d_staggered: mu_cell together with an "
-                "OUT-OF-PLANE eps_cell is not implemented -- the out-of-plane "
-                "first-order generator carries no permeability blocks.")
+        # mu_cell with an OUT-OF-PLANE eps_cell is accepted since Phase E1
+        # of the curved-cell plan (the first-order generator's permeability
+        # blocks, BUILD_PMM2D_CURVED_E1_2026_10_03.md)
     M = int(degree if n_modes is None else n_modes)
     if M < 3:
         raise ValueError("pmm_jones_2d_staggered: degree / n_modes (the "

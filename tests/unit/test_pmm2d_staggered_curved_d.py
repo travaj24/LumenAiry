@@ -864,27 +864,30 @@ def test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route():
 
 
 def test_d_refusals_keep_out_of_plane_and_raw_mu_cells_out():
-    """Phase E stays refused, naming it: an OUT-OF-PLANE tensor eps or mu
-    under a map (the solver, the stack's uniform layer, a shape).  A raw
-    ``mu_cell`` cannot join a shape stack (its cells would refer to a grid
-    the merge does not know); a UNIFORM ``mu`` layer can."""
+    """An OUT-OF-PLANE PERMEABILITY stays refused under a map (the solver,
+    the stack's uniform layer, a shape) -- it is refused without a map too.
+    An OUT-OF-PLANE PERMITTIVITY under a map is accepted since Phase E1
+    (gates in ``tests/unit/test_pmm2d_staggered_curved_e1.py``; here it only
+    has to build).  A raw ``mu_cell`` cannot join a shape stack (its cells
+    would refer to a grid the merge does not know); a UNIFORM ``mu`` layer
+    can."""
     oop = np.diag([2.0, 2.5, 2.0]).astype(complex)
     oop[0, 2] = oop[2, 0] = 0.3
     cm = _circle(_P)
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 4,
-                               np.broadcast_to(oop, (3, 3, 3, 3)), cmap=cm)
-    with pytest.raises(NotImplementedError, match="Phase E"):
+    s_oop = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 4,
+                                   np.broadcast_to(oop, (3, 3, 3, 3)),
+                                   cmap=cm)
+    assert s_oop.offplane
+    with pytest.raises(NotImplementedError, match="OUT-OF-PLANE"):
         TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 4,
                                np.ones((3, 3), complex),
                                mu_cell=np.broadcast_to(oop, (3, 3, 3, 3)),
                                cmap=cm)
     st = PMM2DStackPure(_P, _P, n_modes=4, cmap=cm)
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        st.add_layer(0.2, eps=oop)
-    with pytest.raises(NotImplementedError, match="Phase E"):
+    st.add_layer(0.2, eps=oop)
+    with pytest.raises(NotImplementedError, match="OUT-OF-PLANE"):
         st.add_layer(0.2, eps=2.0, mu=oop)
-    with pytest.raises(NotImplementedError, match="Phase E"):
+    with pytest.raises(NotImplementedError, match="OUT-OF-PLANE"):
         PMM2DStackPure(_P, _P, n_modes=4).add_layer(
             0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0, mu=oop)],
             background_eps=1.0)

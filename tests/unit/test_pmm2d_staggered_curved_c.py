@@ -435,13 +435,13 @@ def test_c5_refusals_name_both_shapes_and_layers():
                        1.0)
     compile_shapes(_P, _P, [FilletRect(0.6, 0.6, 0.6, 0.6, 1.8e-3, 4.0)], 1.0)
     # scope refusals name their phase (Phase D, 2026-10-03, routes a
-    # BLOCK-FORM tensor on a circle; an OUT-OF-PLANE one stays refused)
+    # BLOCK-FORM tensor on a circle; Phase E1, 2026-10-03, an OUT-OF-PLANE
+    # one too -- accepted now, gates in test_pmm2d_staggered_curved_e1.py)
     oop = np.diag([4.0, 3.0, 3.5]).astype(complex)
     oop[0, 2] = oop[2, 0] = 0.4
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        compile_and_add = PMM2DStackPure(_P, _P, n_modes=4)
-        compile_and_add.add_layer(
-            0.3, shapes=[Circle(0.6, 0.6, 0.3, oop)], background_eps=1.0)
+    compile_and_add = PMM2DStackPure(_P, _P, n_modes=4)
+    compile_and_add.add_layer(
+        0.3, shapes=[Circle(0.6, 0.6, 0.3, oop)], background_eps=1.0)
     with pytest.raises(NotImplementedError, match="Phase E"):
         PMM2DStackPure(_P, _P, layer_grids="per-layer").add_layer(
             0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)], background_eps=1.0)
@@ -815,8 +815,10 @@ def test_c16_tensors_ride_the_identity_map_and_the_curved_map():
     ``tests/unit/test_pmm2d_staggered_curved_d.py``.  Here: the circle and a
     uniform tensor layer under a curved shape map solve and close (lossless,
     M = 4: closure recorded <= 1e-2, the M = 4 discretisation level of the
-    circle, Phase B's ladder), and an OUT-OF-PLANE tensor raises naming
-    Phase E."""
+    circle, Phase B's ladder); an OUT-OF-PLANE tensor on a circle (and a
+    uniform one under the curved map) is accepted since Phase E1 (gates in
+    ``tests/unit/test_pmm2d_staggered_curved_e1.py``) -- here it only has to
+    build."""
     eps_t = np.array([[4.0, 0.3, 0], [0.3, 3.0, 0], [0, 0, 3.5]], complex)
     st, o, R, T, J = _stack([(_DEPTH, ([Rect(0.6, 0.6, 0.4, 0.4, eps_t)],
                                        1.0))], 5)
@@ -839,13 +841,10 @@ def test_c16_tensors_ride_the_identity_map_and_the_curved_map():
     assert np.abs(Ru.sum(1) + Tu.sum(1) - 1.0).max() <= 1e-2
     oop = eps_t.copy()
     oop[1, 2] = oop[2, 1] = 0.25
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        _stack([(_DEPTH, ([Circle(0.6, 0.6, 0.3, oop)], 1.0))], 4)
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        st = PMM2DStackPure(_P, _P, n_modes=4)
-        st.add_layer(0.2, eps=oop)
-        st.add_layer(0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)],
-                     background_eps=1.0)
+    st = PMM2DStackPure(_P, _P, n_modes=4)
+    st.add_layer(0.3, shapes=[Circle(0.6, 0.6, 0.3, oop)], background_eps=1.0)
+    st.add_layer(0.2, eps=oop)
+    assert st.cmap is not None
 
 
 # =========================================================================== #

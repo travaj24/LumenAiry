@@ -11586,7 +11586,7 @@
   "tests/unit/test_pmm2d_staggered_magnetic.py::test_g7_float_noise_in_m13_does_not_trip_the_block_form_guard": 0.17597420001402497,
   "tests/unit/test_pmm2d_staggered_magnetic.py::test_g7_homog_geom_cache_refuses_a_magnetic_region": 0.0038687000051140785,
   "tests/unit/test_pmm2d_staggered_magnetic.py::test_g7_magnetic_half_space_raises": 0.0005305999657139182,
-  "tests/unit/test_pmm2d_staggered_magnetic.py::test_g7_mu_with_an_out_of_plane_eps_raises": 0.0006760000833310187,
+  "tests/unit/test_pmm2d_staggered_magnetic.py::test_g7_mu_with_an_out_of_plane_eps_is_accepted_since_phase_e1": 0.0006760000833310187,
   "tests/unit/test_pmm2d_staggered_magnetic.py::test_g7_out_of_plane_mu_raises": 0.0006387000903487206,
   "tests/unit/test_pmm2d_staggered_magnetic.py::test_g7_shape_and_singularity_guards": 0.0009564999490976334,
   "tests/unit/test_pmm2d_staggered_magnetic.py::test_g9_absorption_budget_closes_for_a_magnetic_layer": 2.507029300031718,

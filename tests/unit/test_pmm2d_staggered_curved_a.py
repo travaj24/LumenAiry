@@ -462,19 +462,22 @@ def test_scope_refusals_name_their_phase():
     st = PMM2DStackPure(_P, _P, n_modes=4, cmap=cm)
     # Phase D (2026-10-03) lifted the BLOCK-FORM tensor and mu refusals these
     # lines used to pin (block-form tensors and mu are routed under a map,
-    # gates in tests/unit/test_pmm2d_staggered_curved_d.py); the
-    # OUT-OF-PLANE tensor and the slant stay refused, naming Phase E
+    # gates in tests/unit/test_pmm2d_staggered_curved_d.py); Phase E1
+    # (2026-10-03) lifted the OUT-OF-PLANE eps and the slant refusals (the
+    # first-order generator's permeability blocks, gates in
+    # tests/unit/test_pmm2d_staggered_curved_e1.py), so those calls are
+    # ACCEPTED now; an out-of-plane PERMEABILITY stays refused
     oop = np.diag([2.0, 2.5, 2.0]).astype(complex)
     oop[0, 2] = oop[2, 0] = 0.3
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        st.add_layer(0.2, eps=oop)
-    with pytest.raises(NotImplementedError, match="Phase E"):
+    with pytest.raises(NotImplementedError, match="OUT-OF-PLANE"):
         st.add_layer(0.2, eps=2.0, mu=oop)
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        st.add_layer(0.2, eps_cell=_cell("stripe"), slant=(0.1, 0.0))
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 4,
-                               np.broadcast_to(oop, (3, 3, 3, 3)), cmap=cm)
+    st.add_layer(0.2, eps=oop)
+    st.add_layer(0.2, eps_cell=_cell("stripe"), slant=(0.1, 0.0))
+    s_oop = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 4,
+                                   np.broadcast_to(oop, (3, 3, 3, 3)),
+                                   cmap=cm)
+    assert s_oop.offplane and s_oop.Agen.shape == (4 * s_oop.q ** 2,) * 2
+    st = PMM2DStackPure(_P, _P, n_modes=4, cmap=cm)
     with pytest.raises(ValueError, match="union-grid|common"):
         st.add_layer(0.2, eps_cell=np.ones((2, 2)))
     with pytest.raises(ValueError, match="wall grid"):
