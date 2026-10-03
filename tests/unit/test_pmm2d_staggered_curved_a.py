@@ -475,8 +475,15 @@ def test_scope_refusals_name_their_phase():
     with pytest.raises(ValueError, match="wall grid"):
         TS.Granet2DTransverseE(_P, _P, 3, 3, 4, _cell("stripe"), cmap=cm)
     st.add_layer(0.2, eps_cell=_cell("stripe"))
-    with pytest.raises(NotImplementedError, match="coordinate map"):
-        st.plot_geometry()
+    # Phase C (2026-10-02) lifted the viewer refusal this line used to pin:
+    # a mapped stack now draws the PHYSICAL images of its cells (gate C11 of
+    # tests/unit/test_pmm2d_staggered_curved_c.py checks the drawn outline
+    # against the analytic curve), so the call must succeed
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    axes = st.plot_geometry()
+    plt.close(axes[0].figure)
 
 
 def test_map_protocol_validation():

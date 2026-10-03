@@ -740,13 +740,21 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         field components with the map's effective tensors (a block-form
         tensor AND magnetic region; see
         :class:`~lumenairy.elements.pmm.twod_staggered.Granet2DTransverseE`).
-        Uniform layers still share the eps-free geometric eig.  In this phase
-        a map takes SCALAR permittivity only, on the shared grid only:
+        Uniform layers still share the eps-free geometric eig.  A map takes
+        SCALAR permittivity only, on the shared grid only:
         ``layer_grids='per-layer'`` (different maps per layer, a curved
-        mortar), a uniform or patterned TENSOR layer, ``mu`` / ``mu_cell``
-        and ``slant`` together with a map all raise ``NotImplementedError``,
-        and so do the two viewers (they would draw the ``(u, v)`` cells, not
-        the physical ones).  A map takes ``(u, v)`` walls: pass PHYSICAL wall
+        mortar -- Phase E), a uniform or patterned TENSOR layer, ``mu`` /
+        ``mu_cell`` (Phase D) and ``slant`` (Phase E) together with a map all
+        raise ``NotImplementedError``.  The two viewers draw the PHYSICAL
+        images of the cells (curved edges as curves).  Under a map the
+        incident plane wave enters through its exact L2 modal decomposition
+        (it is not an exact discrete half-space mode when the map is not
+        polynomial): ``R`` / ``T`` are independent of ``n_orders`` to
+        round-off, while a vacuum spacer on top moves them at the
+        discretisation-error level, falling with ``n_modes``
+        (``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``, gate C9).  The
+        everyday route is ``add_layer(shapes=...)``, which builds the map
+        itself; this keyword is for an explicit map.  A map takes ``(u, v)`` walls: pass PHYSICAL wall
         positions through
         :meth:`~lumenairy.elements.pmm._curvemap.SeparableStretch.from_physical_walls`
         (passing them as ``u_walls`` silently builds a different device,
@@ -1709,6 +1717,9 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         record the solve consumes, so it cannot drift from the physics.
         """
         period = self.period_x if axis == 0 else self.period_y
+        if "shapes" in L and self._shape_walls is not None:
+            # rectangles-only shape layers: the merged (non-uniform) walls
+            return np.asarray(self._shape_walls[axis], dtype=float)
         w = L.get("wx" if axis == 0 else "wy")
         if w is not None and not np.isscalar(w):
             b = np.asarray(w, dtype=float).ravel()
@@ -1733,17 +1744,118 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             return e
         return L.get("eps", L.get("eps33"))
 
-    def _refuse_mapped_view(self, fn):
-        """The viewers draw the solver's rectangles; under a coordinate map
-        those are the ``(u, v)`` cells, not the physical geometry, so a
-        mapped stack is refused rather than drawn wrong (drawing the mapped
-        cells is part of the curved-cell plan's Phase C)."""
-        if self.cmap is not None:
-            raise NotImplementedError(
-                f"PMM2DStackPure.{fn}: this stack carries a coordinate map "
-                f"(cmap=); the viewer would draw the (u, v) cells, not the "
-                f"physical (x, y) geometry the map produces.  Drawing mapped "
-                f"cells is not implemented yet.")
+    def _mapped_cell_outline(self, sx, sy, n=64):
+        """The PHYSICAL outline of ``(u, v)`` cell ``(sx, sy)`` under the
+        stack's map: ``{'b', 'r', 't', 'l'}`` -> ``(n, 2)`` points along its
+        bottom, right, top and left edges (each running counter-clockwise),
+        evaluated through the map itself, so a curved edge is drawn as the
+        curve the solver uses (the transfinite blend reproduces every edge
+        curve exactly on its edge)."""
+        cm = self.cmap
+        u0, u1 = cm.u_bounds[sx], cm.u_bounds[sx + 1]
+        v0, v1 = cm.v_bounds[sy], cm.v_bounds[sy + 1]
+        s = np.linspace(0.0, 1.0, n)
+        out = {}
+        for side, U, V in (("b", u0 + s * (u1 - u0), np.full(n, v0)),
+                           ("r", np.full(n, u1), v0 + s * (v1 - v0)),
+                           ("t", u1 - s * (u1 - u0), np.full(n, v1)),
+                           ("l", np.full(n, u0), v1 - s * (v1 - v0))):
+            X, Y = cm.geom_points(sx, sy, U, V)[:2]
+            out[side] = np.stack([X, Y], 1)
+        return out
+
+    def _plot_mapped_layer(self, ax, L, names, cols, edges, seen):
+        """Draw one layer of a MAPPED stack: every ``(u, v)`` cell as its
+        physical image (curved edges as curves, no wall lines), then the
+        MATERIAL boundaries -- the cell edges between two different
+        permittivities -- as curves.  Returns the boundary lines drawn."""
+        from matplotlib.patches import Polygon
+        cm = self.cmap
+        nx, ny = cm.shape
+        keys = {}
+        polys = {}
+        for i in range(nx):
+            for j in range(ny):
+                e = self._layer_entry(L, i, j)
+                key = _stag_eps_key(e)
+                keys[(i, j)] = key
+                col, hatch = _stag_material_style(e)
+                col = cols.get(names.get(key), col)
+                seen[key] = (col, hatch, edges.get(key, "#1b1b1b"))
+                o = self._mapped_cell_outline(i, j)
+                polys[(i, j)] = o
+                ax.add_patch(Polygon(np.concatenate([o["b"], o["r"], o["t"],
+                                                     o["l"]]),
+                                     closed=True, facecolor=col, hatch=hatch,
+                                     edgecolor=col, lw=0.3))
+        lines = []
+        for i in range(nx):
+            for j in range(ny):
+                # the edge to the right and the edge above (periodic seam:
+                # the cell edge itself, where the material changes across it)
+                for di, dj, side in ((1, 0, "r"), (0, 1, "t")):
+                    k2 = ((i + di) % nx, (j + dj) % ny)
+                    if keys[(i, j)] != keys[k2]:
+                        pts = polys[(i, j)][side]
+                        lines += ax.plot(pts[:, 0], pts[:, 1], "-",
+                                         color="#1b1b1b", lw=0.9)
+        return lines
+
+    def _mapped_section(self, L, axis, cut, n=1025):
+        """``[(a, b, eps), ...]`` -- the material runs along the PHYSICAL
+        line ``y = cut`` (``axis = 0``) or ``x = cut`` (``axis = 1``) through
+        one layer of a mapped stack.  A shape layer is read from its shapes'
+        exact outlines (painted in order); any other layer from the images
+        of the map's cells.  Each boundary is located by bisection on that
+        membership test, to ~1e-12 of the period."""
+        period = self.period_x if axis == 0 else self.period_y
+        if "shapes" in L:
+            bg = L["background_eps"]
+            shapes = L["shapes"]
+
+            def eps_at(t):
+                x, y = (t, cut) if axis == 0 else (cut, t)
+                e = bg
+                for sh in shapes:
+                    if bool(sh.contains(x, y)):
+                        e = sh.eps
+                return e
+        else:
+            from matplotlib.path import Path
+            cm = self.cmap
+            nx, ny = cm.shape
+            cells = []
+            for i in range(nx):
+                for j in range(ny):
+                    o = self._mapped_cell_outline(i, j, 128)
+                    cells.append((Path(np.concatenate([o["b"], o["r"],
+                                                       o["t"], o["l"]])),
+                                  self._layer_entry(L, i, j)))
+
+            def eps_at(t):
+                pt = [[t, cut] if axis == 0 else [cut, t]]
+                for path, e in cells:
+                    if path.contains_points(pt)[0]:
+                        return e
+                return cells[0][1]
+        ts = np.linspace(0.0, period, n)
+        ks = [_stag_eps_key(eps_at(t)) for t in ts]
+        runs, start = [], 0.0
+        cur = eps_at(ts[0])
+        for k in range(1, n):
+            if ks[k] == ks[k - 1]:
+                continue
+            lo, hi = ts[k - 1], ts[k]
+            for _ in range(60):
+                mid = 0.5 * (lo + hi)
+                if _stag_eps_key(eps_at(mid)) == ks[k - 1]:
+                    lo = mid
+                else:
+                    hi = mid
+            runs.append((start, hi, cur))
+            start, cur = hi, eps_at(ts[k])
+        runs.append((start, period, cur))
+        return runs
 
     def plot_geometry(self, axes=None, material_names=None, material_colors=None):
         """Draw each layer's exact-wall ``(x, y)`` cell map, one panel per layer.
@@ -1769,7 +1881,6 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         -------
         list of matplotlib Axes -- use ``axes[0].figure.savefig(...)`` to save.
         """
-        self._refuse_mapped_view("plot_geometry")
         import matplotlib.pyplot as plt
         from matplotlib.patches import Rectangle
         if not self._layers:
@@ -1784,6 +1895,16 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             axes = list(axes[0])
         seen = {}
         for ax, L in zip(axes, self._layers):
+            if self.cmap is not None:
+                # a MAPPED stack (shape layers or an explicit cmap=): draw
+                # the physical images of the cells, outlines as curves
+                self._plot_mapped_layer(ax, L, names, cols, edges, seen)
+                ax.set_xlim(0.0, self.period_x)
+                ax.set_ylim(0.0, self.period_y)
+                ax.set_aspect("equal")
+                ax.set_title(f"t = {L['thickness']:.3g} m", fontsize=8)
+                ax.set_xlabel("x [m]", fontsize=8)
+                continue
             bx = self._layer_bounds(L, 0)
             by = self._layer_bounds(L, 1)
             for i in range(len(bx) - 1):
@@ -1829,7 +1950,6 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         -------
         matplotlib Axes.
         """
-        self._refuse_mapped_view("plot_section")
         import matplotlib.pyplot as plt
         from matplotlib.patches import Polygon, Rectangle
         if not self._layers:
@@ -1853,6 +1973,20 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         z = 0.0
         for L in self._layers:
             t = float(L["thickness"])
+            if self.cmap is not None:
+                # a MAPPED stack: the material along the physical cut line,
+                # its boundaries located to round-off by bisection
+                for x0, x1, e in self._mapped_section(L, axis, cut):
+                    key = _stag_eps_key(e)
+                    col, hatch = _stag_material_style(e)
+                    col = cols.get(names.get(key), col)
+                    edge = edges.get(key, "#1b1b1b")
+                    seen[key] = (col, hatch, edge)
+                    ax.add_patch(Rectangle((x0, -z - t), x1 - x0, t,
+                                           facecolor=col, hatch=hatch,
+                                           edgecolor=edge, lw=0.7))
+                z += t
+                continue
             b = self._layer_bounds(L, axis)
             bo = self._layer_bounds(L, other)
             jj = int(np.clip(np.searchsorted(bo, cut) - 1, 0, len(bo) - 2))
