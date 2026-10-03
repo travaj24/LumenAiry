@@ -1,0 +1,23 @@
+{
+ "shear": {
+  "ops_rel": 1.1167103675619412e-15,
+  "RTJ": 5.995204332975845e-15
+ },
+ "c3": {
+  "ops_rel": 3.0674013686532924e-15,
+  "RTJ": 1.2855244046597603e-14
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_d\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

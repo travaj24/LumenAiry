@@ -1,0 +1,36 @@
+{
+ "unmapped_M6": {
+  "row1": 0.00032413294749418856,
+  "row2": 0.013237115651949353
+ },
+ "identity_M6": {
+  "row1": 0.0003241329474892793,
+  "row2": 0.013237115651959626
+ },
+ "stretch_M8": {
+  "row1": 0.00014048399726454552,
+  "row2": 0.013179473145736366
+ },
+ "swap_M8": {
+  "row1": 0.013178980007785975,
+  "row2": 0.00014096425287479786
+ },
+ "unmapped_M8": {
+  "row1": 8.73934963732878e-05,
+  "row2": 0.013190825489244867
+ },
+ "identity_vs_unmapped_M6": 4.465872116554692e-14,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_d\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

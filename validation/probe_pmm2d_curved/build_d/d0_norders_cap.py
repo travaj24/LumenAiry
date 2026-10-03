@@ -11,9 +11,8 @@ separable projector aliasing one another inside the least-squares overlap)
 does not arise.  Writes d0_norders_cap.json."""
 import sys
 
-import numpy as np
-
 import _common as C
+import numpy as np
 
 out = {}
 for M in (4, 5):

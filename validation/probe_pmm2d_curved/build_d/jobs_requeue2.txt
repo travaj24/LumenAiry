@@ -1,0 +1,12 @@
+d2_film.py ladder c5 lc normal 6
+d2_film.py ladder c5 gyro normal 6
+d4_pillar.py curved c5 8
+d8_oblique.py rung c5 5 35.273101070777486 -28.061368903509003
+d8_oblique.py rung c5 5 40.41363536118677 119.95855709796353
+d8_oblique.py rung c5 4 25.0 0.0
+d8_oblique.py rung c5 4 24.249762398165448 0.0
+d8_oblique.py rung c5 4 25.0 40.0
+d8_oblique.py rung c5 4 35.273101070777486 -28.061368903509003
+d8_oblique.py rung c5 4 40.41363536118677 119.95855709796353
+d8_oblique.py rung c3 6 25.0 40.0 gyro
+d8_oblique.py rung c3 6 35.273101070777486 -28.061368903509003 gyro

@@ -1,0 +1,58 @@
+{
+ "M": 10,
+ "scalar_mapped": {
+  "assembly_best_s": 4.661444299999857,
+  "assembly_all_s": [
+   6.264705800000229,
+   4.806818400000338,
+   4.661444299999857
+  ],
+  "pencil": 1458
+ },
+ "tensor_mapped": {
+  "assembly_best_s": 4.625321299998177,
+  "assembly_all_s": [
+   4.79548910000085,
+   4.625321299998177,
+   5.756945199998881
+  ],
+  "pencil": 1458
+ },
+ "tensor_mu_mapped": {
+  "assembly_best_s": 4.855369200002315,
+  "assembly_all_s": [
+   5.3421839000002365,
+   4.855369200002315,
+   5.404493400001229
+  ],
+  "pencil": 1458
+ },
+ "tensor_unmapped": {
+  "assembly_best_s": 3.1201820999995107,
+  "assembly_all_s": [
+   3.1201820999995107,
+   3.604163100000733,
+   3.222281300000759
+  ],
+  "pencil": 1458
+ },
+ "ratio_to_scalar_mapped": {
+  "scalar_mapped": 1.0,
+  "tensor_mapped": 0.9922506850501932,
+  "tensor_mu_mapped": 1.0416018915001222,
+  "tensor_unmapped": 0.6693595158907307
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_d\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

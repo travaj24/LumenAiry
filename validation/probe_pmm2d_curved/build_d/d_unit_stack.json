@@ -1,0 +1,30 @@
+{
+ "grid_M3": [
+  5,
+  5
+ ],
+ "closure_M3": 0.023146002713781644,
+ "grid_M4": [
+  5,
+  5
+ ],
+ "closure_M4": 0.0009217662659304349,
+ "abs_lossless_layer": 1.0776024351035695e-15,
+ "abs_lossless_layer_minusR": 0.020062247935021673,
+ "abs_sum_vs_balance": 0.020325996714330746,
+ "vac_mu_vs_uniform": 3.1086244689504383e-15,
+ "paint11_vs_uniform": 0.023311196242365544,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_d\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

@@ -1,0 +1,62 @@
+{
+ "M": 8,
+ "scalar_mapped": {
+  "assembly_best_s": 3.310169100001076,
+  "assembly_all_s": [
+   3.6156786999999895,
+   4.353387999999541,
+   3.310169100001076
+  ],
+  "pencil": 882,
+  "region_eig_s": 77.15823000000091
+ },
+ "tensor_mapped": {
+  "assembly_best_s": 4.117257099998824,
+  "assembly_all_s": [
+   4.117257099998824,
+   4.3500633999974525,
+   4.430966200001421
+  ],
+  "pencil": 882,
+  "region_eig_s": 74.80590080000184
+ },
+ "tensor_mu_mapped": {
+  "assembly_best_s": 1.5251090999990993,
+  "assembly_all_s": [
+   1.6853482000005897,
+   1.7789219999976922,
+   1.5251090999990993
+  ],
+  "pencil": 882,
+  "region_eig_s": 77.08428149999963
+ },
+ "tensor_unmapped": {
+  "assembly_best_s": 1.1907881000006455,
+  "assembly_all_s": [
+   1.3319579000017256,
+   1.1907881000006455,
+   1.1927336000007926
+  ],
+  "pencil": 882,
+  "region_eig_s": 60.852351200002886
+ },
+ "ratio_to_scalar_mapped": {
+  "scalar_mapped": 1.0,
+  "tensor_mapped": 1.2438207764061013,
+  "tensor_mu_mapped": 0.4607344984274681,
+  "tensor_unmapped": 0.35973633492024876
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_d\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

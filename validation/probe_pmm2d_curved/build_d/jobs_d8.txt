@@ -1,0 +1,42 @@
+d8_oblique.py rung c3 8 25.0 0.0
+d8_oblique.py rung c3 8 24.249762398165448 0.0
+d8_oblique.py rung c3 8 25.0 40.0
+d8_oblique.py rung c3 8 35.273101070777486 -28.061368903509003
+d8_oblique.py rung c3 8 40.41363536118677 119.95855709796353
+d8_oblique.py rung c3 7 25.0 0.0
+d8_oblique.py rung c3 7 24.249762398165448 0.0
+d8_oblique.py rung c3 7 25.0 40.0
+d8_oblique.py rung c3 7 35.273101070777486 -28.061368903509003
+d8_oblique.py rung c3 7 40.41363536118677 119.95855709796353
+d8_oblique.py rung c3 6 25.0 0.0
+d8_oblique.py rung c3 6 24.249762398165448 0.0
+d8_oblique.py rung c3 6 25.0 40.0
+d8_oblique.py rung c3 6 35.273101070777486 -28.061368903509003
+d8_oblique.py rung c3 6 40.41363536118677 119.95855709796353
+d8_oblique.py rung c3 5 25.0 0.0
+d8_oblique.py rung c3 5 24.249762398165448 0.0
+d8_oblique.py rung c3 5 25.0 40.0
+d8_oblique.py rung c3 5 35.273101070777486 -28.061368903509003
+d8_oblique.py rung c3 5 40.41363536118677 119.95855709796353
+d8_oblique.py rung c5 6 25.0 0.0
+d8_oblique.py rung c5 6 24.249762398165448 0.0
+d8_oblique.py rung c5 6 25.0 40.0
+d8_oblique.py rung c5 6 35.273101070777486 -28.061368903509003
+d8_oblique.py rung c5 6 40.41363536118677 119.95855709796353
+d8_oblique.py rung c5 5 25.0 0.0
+d8_oblique.py rung c5 5 24.249762398165448 0.0
+d8_oblique.py rung c5 5 25.0 40.0
+d8_oblique.py rung c5 5 35.273101070777486 -28.061368903509003
+d8_oblique.py rung c5 5 40.41363536118677 119.95855709796353
+d8_oblique.py rung c5 4 25.0 0.0
+d8_oblique.py rung c5 4 24.249762398165448 0.0
+d8_oblique.py rung c5 4 25.0 40.0
+d8_oblique.py rung c5 4 35.273101070777486 -28.061368903509003
+d8_oblique.py rung c5 4 40.41363536118677 119.95855709796353
+d8_oblique.py rung c3 6 25.0 40.0 gyro
+d8_oblique.py rung c3 6 35.273101070777486 -28.061368903509003 gyro
+d8_oblique.py rung c3 6 40.41363536118677 119.95855709796353 gyro
+d7_stack.py closure 4
+d7_stack.py closure 3
+d7_stack.py absorb 4
+d7_stack.py vacuum 4

@@ -1,0 +1,28 @@
+d4_pillar.py curved c5 8
+d4_pillar.py curved c3 10
+d4_pillar.py curved c5 7
+d4_pillar.py curved c3 9
+d4_pillar.py stair 1 10
+d4_pillar.py rcwa 14
+d4_pillar.py stair 1 9
+d4_pillar.py curved c5 6
+d4_pillar.py curved c3 8
+d4_pillar.py rcwa 12
+d4_pillar.py stair 2 7
+d4_pillar.py stair 1 8
+d4_pillar.py stair 4 4
+d4_pillar.py rcwa 10
+d4_pillar.py curved c3 7
+d4_pillar.py curved c5 5
+d4_pillar.py stair 2 6
+d4_pillar.py rcwa 8
+d4_pillar.py curved c3 6
+d4_pillar.py curved c3 5
+d4_pillar.py curved c5 4
+d4_pillar.py stair 2 5
+d4_pillar.py stair 1 7
+d4_pillar.py stair 1 6
+d4_pillar.py stair 4 3
+d4_pillar.py rcwa 6
+d4_pillar.py rcwa 4
+d4_pillar.py rcwa_scalar 8

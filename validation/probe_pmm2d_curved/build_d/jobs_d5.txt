@@ -1,0 +1,15 @@
+d5_li2003.py stretch 9
+d5_li2003.py stretch 8
+d5_li2003.py stretch 7
+d5_li2003.py stretch 6
+d5_li2003.py stretch 5
+d5_li2003.py unmapped 10
+d5_li2003.py unmapped 9
+d5_li2003.py unmapped 8
+d5_li2003.py unmapped 7
+d5_li2003.py unmapped 6
+d5_li2003.py unmapped 5
+d5_li2003.py identity 8
+d5_li2003.py identity 6
+d5_li2003.py swap 8
+d5_li2003.py swap 6

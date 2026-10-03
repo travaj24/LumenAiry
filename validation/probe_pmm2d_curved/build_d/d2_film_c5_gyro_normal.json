@@ -1,0 +1,39 @@
+{
+ "map": "c5",
+ "tensor": "gyro",
+ "theta": 0.0,
+ "phi": 0.0,
+ "rows": [
+  {
+   "M": 4,
+   "dRT": 3.820496030648712e-09,
+   "dJ": 7.866637920464791e-09,
+   "t": 6.1933212999974785
+  },
+  {
+   "M": 5,
+   "dRT": 4.941935749513959e-12,
+   "dJ": 1.5655032777587754e-11,
+   "t": 43.398850599998696
+  },
+  {
+   "M": 6,
+   "dRT": 6.694644838489694e-14,
+   "dJ": 3.0800248581899806e-14,
+   "t": 143.91816319999998
+  }
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_d\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

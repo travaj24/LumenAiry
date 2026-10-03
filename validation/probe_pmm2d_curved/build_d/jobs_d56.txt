@@ -1,0 +1,37 @@
+d5_li2003.py stretch 12
+d5_li2003.py unmapped 12
+d5_li2003.py stretch 11
+d5_li2003.py unmapped 11
+d5_li2003.py stretch 10
+d6_magnetic.py dual c5 7
+d6_magnetic.py dual c3 9
+d6_magnetic.py dual c5 6
+d6_magnetic.py dual c3 8
+d6_magnetic.py dual c5 5
+d6_magnetic.py dual c3 7
+d6_magnetic.py dual c5 4
+d6_magnetic.py dual c3 6
+d6_magnetic.py dual c3 5
+d6_magnetic.py dual c3 4
+d6_magnetic.py film c3 4
+d6_magnetic.py film c3 5
+d6_magnetic.py film c3 6
+d6_magnetic.py film c3 7
+d6_magnetic.py film c3 8
+d6_magnetic.py film c5 4
+d6_magnetic.py film c5 5
+d6_magnetic.py film c5 6
+d6_magnetic.py film c5 7
+d6_magnetic.py film s15 4
+d6_magnetic.py film s15 5
+d6_magnetic.py film s15 6
+d6_magnetic.py film s15 7
+d6_magnetic.py film s15 8
+d6_magnetic.py stair 1 10
+d6_magnetic.py stair 1 8
+d6_magnetic.py stair 2 7
+d6_magnetic.py stair 2 6
+d6_magnetic.py stair 4 4
+d6_magnetic.py stair 4 3
+d6_magnetic.py stair 1 6
+d6_magnetic.py stair 2 5

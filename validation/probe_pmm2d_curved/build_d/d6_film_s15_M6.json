@@ -1,0 +1,23 @@
+{
+ "map": "s15",
+ "M": 6,
+ "err": 1.5678687712143515e-12,
+ "R00": 0.03213083960900996,
+ "R00_exact": 0.03213083960901813,
+ "jones_offdiag": 8.249013287049328e-15,
+ "closure": 4.8119286333303535e-12,
+ "t": 18.237591500001145,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_d\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

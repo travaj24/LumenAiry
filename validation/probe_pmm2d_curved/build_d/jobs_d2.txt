@@ -1,0 +1,14 @@
+d2_film.py ladder s05 lc normal
+d2_film.py ladder s05 gyro normal
+d2_film.py ladder s15 lc normal
+d2_film.py ladder s15 gyro normal
+d2_film.py ladder shear lc normal
+d2_film.py ladder shear gyro normal
+d2_film.py ladder c3 lc normal
+d2_film.py ladder c3 gyro normal
+d2_film.py ladder c5 lc normal
+d2_film.py ladder c5 gyro normal
+d2_film.py ladder shear lc conical
+d2_film.py ladder shear gyro conical
+d2_film.py ladder c3 lc conical
+d2_film.py ladder c3 gyro conical

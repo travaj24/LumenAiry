@@ -1,0 +1,29 @@
+{
+ "film_M4": 1.4255471274537967e-06,
+ "film_mu_after_M4": 0.519668806611999,
+ "film_hgram_R_M4": 0.018777056800092673,
+ "film_M5": 1.659110715479528e-08,
+ "film_mu_after_M5": 0.44470853143755706,
+ "film_hgram_R_M5": 0.018775859665896344,
+ "lc_film_hgram_R_M5": {
+  "RT": 2.8147008279688635e-08,
+  "J": 3.492284086118496e-08
+ },
+ "lc_film_M5": {
+  "RT": 2.8147004837997258e-08,
+  "J": 3.49228441126828e-08
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_d\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

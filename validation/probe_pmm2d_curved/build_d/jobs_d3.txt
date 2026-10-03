@@ -1,0 +1,5 @@
+d3_quad.py c3 6
+d3_quad.py c3 8
+d3_quad.py c5 5
+d3_quad.py stretch 6
+d3_quad.py stretch 8

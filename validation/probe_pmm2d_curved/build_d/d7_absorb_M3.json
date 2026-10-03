@@ -1,0 +1,58 @@
+{
+ "M": 3,
+ "lossy_tensor": {
+  "A": [
+   [
+    0.029664386269728192,
+    0.029562404624230137
+   ],
+   [
+    -2.4660130994097524e-15,
+    -1.0788105842588164e-15
+   ]
+  ],
+  "balance": [
+   0.03270662147088943,
+   0.03229790012381484
+  ],
+  "lossless_layer": 1,
+  "lossless_layer_abs": 2.4660130994097524e-15,
+  "lossless_layer_abs_minusR": 0.0063547245126526,
+  "sum_vs_balance": 0.0030422352011637045,
+  "sum_vs_balance_minusR": 0.014196251232277041
+ },
+ "lossy_mu": {
+  "A": [
+   [
+    -9.247190339234194e-16,
+    -2.6198474352805626e-15
+   ],
+   [
+    0.17008029577660722,
+    0.1686770324632188
+   ]
+  ],
+  "balance": [
+   0.17258510012107897,
+   0.17090911209845305
+  ],
+  "lossless_layer": 0,
+  "lossless_layer_abs": 2.6198474352805626e-15,
+  "lossless_layer_abs_minusR": 0.006856706419072408,
+  "sum_vs_balance": 0.002504804344472672,
+  "sum_vs_balance_minusR": 0.01104190684276296
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_d\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
