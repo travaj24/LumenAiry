@@ -1,0 +1,76 @@
+{
+ "M": 4,
+ "eqns": {
+  "jacobian": 634,
+  "weights": 666,
+  "shadow_assembly": 852,
+  "far_field": 871,
+  "fold_guard": 640,
+  "full_solve": 3200
+ },
+ "full_solve_primitives": [
+  [
+   "broadcast_in_dim",
+   520
+  ],
+  [
+   "mul",
+   439
+  ],
+  [
+   "convert_element_type",
+   339
+  ],
+  [
+   "slice",
+   283
+  ],
+  [
+   "squeeze",
+   259
+  ],
+  [
+   "add",
+   258
+  ],
+  [
+   "dot_general",
+   212
+  ],
+  [
+   "transpose",
+   108
+  ],
+  [
+   "sub",
+   89
+  ],
+  [
+   "stack",
+   77
+  ],
+  [
+   "select_n",
+   73
+  ],
+  [
+   "concatenate",
+   70
+  ]
+ ],
+ "jit_forward_first_s": 9.175496500000008,
+ "jit_grad_first_s": 24.251705700000457,
+ "lapack_compile_s": {
+  "eig": 0.23220529999525752,
+  "solve": 0.39347339999949327,
+  "inv": 0.3917120000041905,
+  "eig_stable_grad": 0.56253039999865
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_curved_e3\\lumenairy\\__init__.py",
+  "platform": "win32"
+ }
+}
