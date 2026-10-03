@@ -384,6 +384,45 @@ permittivities, depth, and angle via `jax.grad` (see
 `examples/13_rcwa_inverse_design.py`). On thread-oversubscribed machines,
 `la.set_blas_threads(2)` gives a modest (~2–3×) solve speedup.
 
+### Curved cells in the pure 2-D PMM (circles, ellipses, rounded corners)
+
+The no-floor staggered 2-D PMM models CURVED outlines exactly through a
+coordinate map that bends its wall grid; the shape primitives build that map
+from physical geometry.  Shapes in one layer are painted in order onto
+`background_eps`; the stack merges the shapes of all layers into one map.
+
+```python
+import numpy as np
+from lumenairy.elements.pmm import (Circle, Ellipse, FilletRect, Rect,
+                                    PMM2DStackPure, pmm_jones_2d_staggered)
+
+p = 1.2e-6                                     # square period (m)
+# one layer: a circular pillar (n = 2) in air, on n = 1.45
+orders, R, T, J = pmm_jones_2d_staggered(
+    p, p, None, 1.45, 1.0, 0.5e-6, 1.0e-6,
+    shapes=[Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=4.0)], background_eps=1.0,
+    n_modes=8)
+
+# two layers sharing one map: a circular hole in a silicon slab, under a
+# pillar with 60 nm rounded corners
+st = PMM2DStackPure(p, n_substrate=1.45, n_modes=6)
+st.add_layer(0.3e-6, shapes=[Rect(0.6e-6, 0.6e-6, p, p, eps=12.1),
+                             Circle(0.6e-6, 0.6e-6, 0.25e-6, eps=1.0)],
+             background_eps=1.0)
+st.add_layer(0.4e-6, shapes=[FilletRect(0.6e-6, 0.6e-6, 0.7e-6, 0.7e-6,
+                                        0.06e-6, eps=4.0)],
+             background_eps=1.0)
+st.set_source(1.0e-6, theta=np.deg2rad(10.0))
+orders, R, T, J = st.solve()
+st.plot_geometry()                             # the outlines drawn as curves
+```
+
+Notes: `Circle(..., core=0.5)` selects the 5 x 5 layout (better at oblique
+incidence, 2.8x the pencil); a fillet is geometry fidelity (it changes the
+device), not a convergence accelerator; outlines in different layers must not
+cross in plan view (the merge raises, naming both); a tensor material under a
+curved map is not supported yet (rectangles-only layers accept tensors).
+
 ### Phase retrieval (Gerchberg-Saxton CGH design)
 
 ```python

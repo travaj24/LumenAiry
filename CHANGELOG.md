@@ -4,6 +4,81 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- pure 2-D PMM (curved cells, Phase C): the shape primitives and the public API
+
+You can now describe a layer of the pure (no-floor) staggered 2-D PMM by the
+PHYSICAL outlines of its features -- a circle, an ellipse, a rectangle with
+rounded corners, a sinusoidal wall -- and the solver models those outlines
+EXACTLY instead of as a staircase of rectangles:
+
+```python
+from lumenairy.elements.pmm import Circle, FilletRect, PMM2DStackPure
+
+st = PMM2DStackPure(1.2e-6, n_substrate=1.45, n_modes=7)
+st.add_layer(0.5e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.3e-6, eps=4.0)],
+             background_eps=1.0)
+st.add_layer(0.2e-6, shapes=[FilletRect(0.6e-6, 0.6e-6, 0.9e-6, 0.9e-6,
+                                        0.09e-6, eps=2.25)],
+             background_eps=1.0)
+st.set_source(1.0e-6)
+orders, R, T, jones = st.solve()
+```
+
+The primitives (`Rect`, `FilletRect`, `Circle`, `Ellipse`, `SinusoidalWall`,
+in `lumenairy.elements.pmm`) lay out the solver's wall grid and coordinate
+map themselves: every corner, 45-degree point and fillet tangency point
+becomes a grid vertex at its own physical position, and every arc an exact
+grid edge, so the walls always sit where the physical boundaries are -- the
+trap of handing a map the wrong walls (a different device, or a much slower
+convergence) cannot be reached through them.  Within one layer the shapes are
+painted in order onto `background_eps` (a circular hole in a slab is
+`[Rect(..., eps=12.1), Circle(..., eps=1.0)]`).  The STACK merges the shapes
+of all its layers into ONE wall grid and ONE map, shared by every layer and
+both half-spaces; two layers may share a curve, and the merge refuses -- at
+the `add_layer` that causes it, naming both shapes and their layers --
+outlines that cross in plan view, two different curves on one cell edge, a
+map that folds between two outlines that come too close, and segments below
+the solver's sliver contract (a fillet radius below 1.414e-3 of the period is
+refused with the advice to use a sharp corner).
+`pmm_jones_2d_staggered(..., eps_cell=None, shapes=[...],
+background_eps=...)` is the single-layer convenience (byte-identical to the
+one-layer stack); `compile_shapes(...)` returns the `eps_cell`, walls and map
+for the explicit `cmap=` route; the stack viewers now draw curved cells as
+curves.  This is Phase C of `docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`;
+build doc and every number: `docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md`.
+
+A rounded corner is GEOMETRY FIDELITY, not a convergence accelerator: a fillet
+of 0.2 of the side moves the zeroth-order transmission of a pillar by 7.4e-3
+(about 700 times the convergence level, and a same-area square is no
+substitute), but the efficiencies stay capped near 1e-5 per refinement step
+by the pillar's top and bottom rim, exactly as for a sharp pillar.  Use a
+fillet because the fabricated device has one.
+
+* NO SHIPPED ANSWER MOVES.  Without `shapes=` / `cmap=` the solver runs the
+  shipped code: 109 / 109 SHA-256 hashes on Phase B's fixture set and
+  181 / 181 on the Phase A verifier's (operators, modes, far projectors,
+  R / T / Jones, absorption, over every dispatch branch) are byte-identical
+  to the Phase-B commit `91d00288`.  No `Migration-Guide.md` entry is needed.
+* The primitives build EXACTLY the maps the Phase B gates were measured on
+  (same fingerprint), and the shapes route reproduces the explicit-map solve
+  to the bit: the circle lands on the independent 3-D finite-element oracle
+  as before: 7.8e-6 per diffraction order at `M = 11`,
+  inside the oracle's own 8.3e-6 mesh spread.
+* Under a curved map the incident plane wave now enters through its EXACT
+  modal decomposition (an L2 projection, renormalised on the specular
+  order) instead of an under-determined least-squares fit: the round-off
+  floor of the curved solve drops from 6.8e-10 to 8.0e-15 at `M = 6`, and
+  `R` / `T` no longer depend on `n_orders` (2.9e-7 before, below 1e-15
+  after).  A vacuum spacer on top of a curved stack still moves `R` / `T` at
+  the discretisation level (2.0e-6 at `M = 6`, falling with `M`): the
+  half-space modes under a curved map are not plane waves.  Unmapped solves
+  keep the shipped least-squares overlap bit for bit.
+* Known limits: a TENSOR (or magnetic) material under a curved map raises
+  (Phase D -- rectangles-only layers, which need no map, accept tensors);
+  out-of-plane tensors, `slant=`, per-layer grids and the JAX twin under a map
+  are Phase E; `pmm_efficiency_2d_staggered` takes no shapes (it raises and
+  points at the Jones entry); shapes must lie inside the unit cell.
+
 ### Added -- pure 2-D PMM (curved cells, Phase B): transfinite maps -- circles, ellipses, fillets and sinusoidal walls as exact grid lines
 
 The pure (no-floor) staggered 2-D PMM can now solve cells whose material

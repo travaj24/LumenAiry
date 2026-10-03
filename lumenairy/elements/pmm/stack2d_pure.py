@@ -50,6 +50,18 @@ throughout (uniform and in-plane layers and the half-spaces entering as
 ``[[W, W], [V, -V]]``).  ``retain_internal`` / :meth:`layer_absorption` work
 on that path too.  The half-spaces stay isotropic.
 
+CURVED patterns -- circles, ellipses, rounded corners, sinusoidal walls --
+are modelled exactly through a coordinate map owned by the STACK:
+``add_layer(shapes=[...], background_eps=...)`` describes a layer by the
+physical outlines of its features (:mod:`lumenairy.elements.pmm.shapes2d`),
+and the stack merges every shape layer into ONE wall grid and ONE map shared
+by every layer and both half-spaces (each interface stays a square match);
+``PMM2DStackPure(cmap=...)`` takes an explicit map instead.  Under a curved
+map the layers are SCALAR (tensor / magnetic materials are Phase D of the
+curved-cell plan, out-of-plane / slant / per-layer maps Phase E); a stack of
+rectangles only needs no map and runs the unmapped solver on the merged
+walls.  ``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``.
+
 A layer may also be MAGNETIC: ``add_layer(..., mu=scalar | (3,3))`` or
 ``add_layer(..., mu_cell=(Nx,Ny) | (Nx,Ny,3,3))`` gives it a BLOCK-FORM
 relative permeability, which enters the SAME second-order pencil through

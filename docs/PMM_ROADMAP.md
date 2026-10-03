@@ -18,7 +18,7 @@ Legend: ✅ shipped · 🔄 in flight · ⬜ planned · ❌ open/known-hard ·
 | **1-D oblique + slant** | ❌ cross-term unresolved | ❌ | ❌ | ❌ |
 | **2-D vertical** (rect pillars) | ✅ `pmm_efficiency_2d` (FMM-floored) + ✅ `pmm_efficiency_2d_staggered` (no-floor) | ✅ (via `eps_cell` grid; staggered) | ✅ `pmm_jones_2d` (FMM-floored, incl. out-of-plane) + ✅ `pmm_jones_2d_staggered` (no-floor, FULL (3,3) incl. out-of-plane) | ✅ (via the `eps_cell` tensor grid, both engines) |
 | **2-D slanted** | ✅ `PMM2DStackHybrid(slant=)` (FMM-floored) + ✅ `pmm_jones_2d_staggered(slant=)` / `PMM2DStackPure.add_layer(slant=)` (no-floor) | ✅ (via the `eps_cell` grid, both engines) | ✅ hybrid (IN-PLANE tensors only) + ✅ staggered (FULL (3,3) incl. out-of-plane) | ✅ (via the `eps_cell` tensor grid) |
-| **2-D curved** (cylinder/ellipse) | ⬜ planned (hard) | ⬜ | ⬜ | ⬜ |
+| **2-D curved** (circle / ellipse / fillet / sinusoid) | ✅ `pmm_jones_2d_staggered(shapes=)` / `PMM2DStackPure.add_layer(shapes=)` (no-floor; shape primitives `Rect`, `FilletRect`, `Circle`, `Ellipse`, `SinusoidalWall`, or an explicit `cmap=`) | ✅ (per-cell scalar under the map) | ⬜ tensors under a curved map = curved-cell Phase D | ⬜ (curved-cell Phase D) |
 
 Plus: `PMMStack` (multilayer 1-D), `grating_convergence_class` /
 `classify_from_grating` (Li-Granet edge convergence predictor).
@@ -241,12 +241,27 @@ criterion is stationarity in EVERY `n_modes`, never in one.
 Experiment: `docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md`.
 Build: `docs/audits/BUILD_PMM2D_STAGGERED_MORTAR_2026_09_11.md`.
 
-### Phase E — 2-D curved (cylinder/ellipse) — **hard**
-Granet's transfinite curved-quad mapping (Sec.3A): geometric construction of
-curved elements on the boundary + **within-element Gauss-Legendre quadrature**
-for the position-dependent metric + full position-varying tensor operator.
-Unlocks the cylinder anchor (n_eff 1.200502441) and spectral convergence on
-smooth boundaries. **Reuses Phase C.** **Difficulty:** hard (~3-5 rounds).
+### Phase E — 2-D curved (cylinder/ellipse) — **BUILT 2026-10-02 (scalar cells), curved-cell Phases A-C**
+Granet's transfinite curved-quad mapping (Sec.3A) on the pure staggered PMM:
+a z-independent coordinate map owned by the STACK, the covariant effective
+tensors, a 2-D Gauss quadrature of every weighted block with a Duffy corner
+rule at the four singular vertices of each closed curve, the cofactor far
+field, and the exact modal decomposition of the incident wave.  Shape
+primitives (`Rect`, `FilletRect`, `Circle`, `Ellipse`, `SinusoidalWall`)
+lay out the walls and the map from PHYSICAL geometry; the stack merges every
+layer's shapes into one map.  A circular pillar lands on an independent 3-D
+finite-element oracle to 1.9e-6 per order (`M = 12`; the exact-form-factor
+RCWA at 29 x 29 orders is 3.3e-3 away).  Plan:
+`docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`; builds:
+`docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md`,
+`docs/audits/BUILD_PMM2D_CURVED_B_2026_10_02.md`,
+`docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md`.  Still open: tensors and
+magnetic materials under a curved map (curved-cell Phase D), out-of-plane
+tensors / slant / per-layer maps / the JAX twin under a map (curved-cell
+Phase E, approved 2026-10-02).  The convergence of the EFFICIENCIES stays
+rim-capped (~1e-5 per rung) for curved pillars as for square ones: the
+in-plane curvature is resolved spectrally, the pillar's top and bottom rim
+is not (a z-direction question).
 
 ### Phase F — exhaustive codebase audit
 Bugs / physics / adversarial sweep (explicitly requested earlier; long-pending).
