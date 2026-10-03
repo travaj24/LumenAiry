@@ -726,12 +726,32 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         parity-breaking tensor, and every in-plane or scalar layer -- runs the
         dense path BIT-FOR-BIT, which is what ``symmetry=False`` forces
         everywhere.  Default ``'auto'`` (equivalent to ``True``).
+    cmap : optional
+        A COORDINATE MAP ``(x, y) = Phi(u, v)`` for curved cells (the
+        curved-cell map; :mod:`lumenairy.elements.pmm._curvemap`), owned by
+        the STACK: ONE map shared by every layer and by both half-spaces, so
+        every interface stays a square modal match.  ``None`` (the default)
+        is the unmapped stack, BIT-IDENTICAL to before.  With a map the
+        stack's union grid IS the map's ``(u, v)`` wall grid
+        (``cmap.shape`` cells), every patterned layer's ``eps_cell`` gives
+        the permittivity of those ``(u, v)`` cells, and every region --
+        vacuum and uniform layers included -- is solved on the covariant
+        field components with the map's effective tensors (a block-form
+        tensor AND magnetic region; see
+        :class:`~lumenairy.elements.pmm.twod_staggered.Granet2DTransverseE`).
+        Uniform layers still share the eps-free geometric eig.  In this phase
+        a map takes SCALAR permittivity only, on the shared grid only:
+        ``layer_grids='per-layer'`` (different maps per layer, a curved
+        mortar), a uniform or patterned TENSOR layer, ``mu`` / ``mu_cell``
+        and ``slant`` together with a map all raise ``NotImplementedError``,
+        and so do the two viewers (they would draw the ``(u, v)`` cells, not
+        the physical ones).
     """
 
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
                  n_substrate=1.0, n_modes=8, degree=None, n_orders=7,
                  mu_superstrate=None, mu_substrate=None, symmetry="auto",
-                 layer_grids="shared", window_halfwidth=None):
+                 layer_grids="shared", window_halfwidth=None, cmap=None):
         # The half-spaces are NONMAGNETIC (mu = 1) and isotropic: the Rayleigh
         # far field normalises with the vacuum wave impedance.  Accepting the
         # keyword and RAISING is the loud form of that restriction (a silently
@@ -787,9 +807,72 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 "of freedom); drop the keyword.")
         self._layers = []          # dicts: kind, thickness, eps | eps_cell
         self._grid = None          # common (Nx, Ny) set by the first patterned layer
+        # THE CURVED-CELL MAP (stack-owned).  None = the shipped stack; the
+        # map, when given, fixes the union grid up front.
+        self.cmap = None
+        if cmap is not None:
+            self._init_map(cmap)
         self._src = None
         self._modal = None         # per-order amplitudes of the last solve (B)
         self._internal = None      # partial cascades for layer_absorption (C3)
+
+    def _init_map(self, cmap):
+        """Validate a stack-owned coordinate map (Phase A of the curved-cell
+        plan) and make its ``(u, v)`` wall grid the union grid."""
+        fn = "PMM2DStackPure"
+        if self.layer_grids != "shared":
+            raise NotImplementedError(
+                f"{fn}: cmap= with layer_grids='per-layer' is not implemented "
+                f"-- per-layer grids under a map need a curved (non-separable) "
+                f"mortar between the layers' partitions, which is Phase E of "
+                f"the curved-cell plan.  Use the default layer_grids='shared' "
+                f"(one map, one grid, every interface a square match).")
+        if not callable(getattr(cmap, "geom", None)) or not hasattr(
+                cmap, "fingerprint"):
+            raise TypeError(
+                f"{fn}: cmap must follow the map protocol of "
+                f"lumenairy.elements.pmm._curvemap (geom(sx, sy, U, V) and "
+                f"fingerprint), got {type(cmap).__name__}.")
+        for per, mper, ax in ((self.period_x, cmap.period_x, "x"),
+                              (self.period_y, cmap.period_y, "y")):
+            if abs(float(mper) - per) > 1e-12 * per:
+                raise ValueError(
+                    f"{fn}: the map's {ax}-period {mper!r} differs from the "
+                    f"stack's {per!r}.")
+        nx, ny = cmap.shape
+        if nx != ny:
+            raise ValueError(
+                f"{fn}: the map's (u, v) wall grid must be SQUARE (Nx == Ny; "
+                f"the staggered basis requires it), got {nx} x {ny}.")
+        self.cmap = cmap
+        self._grid = (nx, ny)
+
+    def _require_map_scope(self, *, eps=None, eps_cell=None, mu=None,
+                           mu_cell=None, slant=None):
+        """Refuse, under a map, every layer kind Phase A does not cover."""
+        if self.cmap is None:
+            return
+        fn = "PMM2DStackPure.add_layer"
+        if mu is not None or mu_cell is not None:
+            raise NotImplementedError(
+                f"{fn}: mu / mu_cell under a coordinate map is not "
+                f"implemented yet (a material permeability under the map is "
+                f"Phase D of the curved-cell plan).")
+        if not _slant_is_zero(_norm_slant_pair(slant, fn)):
+            raise NotImplementedError(
+                f"{fn}: slant= under a coordinate map is not implemented (the "
+                f"shear composes with the map -- Phase E of the curved-cell "
+                f"plan).")
+        spec = eps if eps is not None else eps_cell
+        a = np.asarray(spec)
+        tensor = (eps is not None and a.ndim != 0) or (
+            eps_cell is not None and a.ndim == 4)
+        if tensor:
+            raise NotImplementedError(
+                f"{fn}: a TENSOR permittivity under a coordinate map is not "
+                f"implemented yet (the congruence sqrt(g) J^-1 eps J^-T on a "
+                f"tensor is Phase D of the curved-cell plan); pass a scalar "
+                f"eps or a scalar (Nx, Ny) eps_cell.")
 
     # ------------------------------------------------------------------ build
     def add_layer(self, thickness, *, eps=None, eps_cell=None, mu=None,
@@ -924,6 +1007,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 "eps_cell (patterned).")
         _pl = self._perlayer_spec(eps, eps_cell, x_walls, y_walls, grid,
                                   n_modes)
+        self._require_map_scope(eps=eps, eps_cell=eps_cell, mu=mu,
+                                mu_cell=mu_cell, slant=slant)
         t = float(thickness)
         if not t > 0:
             raise ValueError("PMM2DStackPure.add_layer: thickness must be > 0.")
@@ -1466,6 +1551,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             return e
         return L.get("eps", L.get("eps33"))
 
+    def _refuse_mapped_view(self, fn):
+        """The viewers draw the solver's rectangles; under a coordinate map
+        those are the ``(u, v)`` cells, not the physical geometry, so a
+        mapped stack is refused rather than drawn wrong (drawing the mapped
+        cells is part of the curved-cell plan's Phase C)."""
+        if self.cmap is not None:
+            raise NotImplementedError(
+                f"PMM2DStackPure.{fn}: this stack carries a coordinate map "
+                f"(cmap=); the viewer would draw the (u, v) cells, not the "
+                f"physical (x, y) geometry the map produces.  Drawing mapped "
+                f"cells is not implemented yet.")
+
     def plot_geometry(self, axes=None, material_names=None, material_colors=None):
         """Draw each layer's exact-wall ``(x, y)`` cell map, one panel per layer.
 
@@ -1490,6 +1587,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         -------
         list of matplotlib Axes -- use ``axes[0].figure.savefig(...)`` to save.
         """
+        self._refuse_mapped_view("plot_geometry")
         import matplotlib.pyplot as plt
         from matplotlib.patches import Rectangle
         if not self._layers:
@@ -1549,6 +1647,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         -------
         matplotlib Axes.
         """
+        self._refuse_mapped_view("plot_section")
         import matplotlib.pyplot as plt
         from matplotlib.patches import Polygon, Rectangle
         if not self._layers:
@@ -1751,6 +1850,11 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         if self.layer_grids != "shared" or getattr(self, "_stag_cost_ack",
                                                    False):
             return
+        if self.cmap is not None:
+            # the MAP owns the grid (its (u, v) walls are not a uniform
+            # lattice a caller could shrink), so there is no followable
+            # redundancy advice to give
+            return
         # ONCE per geometry: a wavelength/angle sweep calls solve() many times
         # on one stack and the advice cannot change between them.  A new
         # PATTERNED layer clears the latch (it can change the joint minimum); a
@@ -1828,15 +1932,37 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
         # Shared eps-free geometric eig -> both half-spaces AND every uniform
         # layer (degeneracy-safe; all share the eigenvectors W0).
-        sol_h = Granet2DTransverseE(px, py, Nx, Ny, M,
+        cmap = self.cmap
+        if cmap is None:
+            gx, gy, mkw = Nx, Ny, {}
+        else:
+            # THE CURVED-CELL MAP: every region is solved on the map's
+            # (u, v) wall grid with the map's effective tensors
+            gx, gy, mkw = cmap.u_walls, cmap.v_walls, {"cmap": cmap}
+        sol_h = Granet2DTransverseE(px, py, gx, gy, M,
                                     np.full((Nx, Ny), eps_sup),
-                                    alpha0x=a0x, alpha0y=a0y, k0=k0)
+                                    alpha0x=a0x, alpha0y=a0y, k0=k0, **mkw)
         geom = _homog_geom_cache(sol_h)
         bx, by = sol_h.bx, sol_h.by
         # C3: the block field Gram (geometry-only -- eps-free, shared by every
         # region on the union grid) is the flux bilinear form layer_absorption
         # integrates with; retain it before dropping the assembly.
-        G_gram = (-sol_h.Rmat).copy() if retain_internal else None
+        if not retain_internal:
+            G_gram = None
+        elif cmap is None:
+            G_gram = (-sol_h.Rmat).copy()
+        else:
+            # Under a map the z-flux in the (u, v) frame is
+            # INT (E'_u H'_v* - E'_v H'_u*) du dv -- METRIC-FREE (the 2-D
+            # cross product of covariant components carries det J, which
+            # cancels the area element) -- so the flux form is the PLAIN
+            # block Gram, not -R = C[chi_t]C (gate A7 measures the
+            # difference).
+            _qq = sol_h.q * sol_h.q
+            G1g, G2g = sol_h.Ggram_blocks
+            G_gram = np.zeros_like(sol_h.Rmat)
+            G_gram[:_qq, :_qq] = G1g
+            G_gram[_qq:, _qq:] = G2g
         del sol_h
         Wsup, Vsup, _ls = _homog_region_modes(geom, eps_sup)
         Wsub, Vsub, _lb = _homog_region_modes(geom, eps_sub)
@@ -1889,12 +2015,16 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 key = ((cell.shape, cell.tobytes(), sl) if mcell is None else
                        (cell.shape, cell.tobytes(), mcell.shape,
                         mcell.tobytes(), sl))
+                if cmap is not None:
+                    # the map is part of the geometry a cached eig depends on
+                    key = key + (cmap.fingerprint,)
                 cached = eig_cache.get(key)
                 if cached is None:
-                    sol = Granet2DTransverseE(px, py, Nx, Ny, M, cell,
+                    sol = Granet2DTransverseE(px, py, gx, gy, M, cell,
                                               alpha0x=a0x, alpha0y=a0y, k0=k0,
                                               mu_cell=mcell,
-                                              slant=sl if slanted else None)
+                                              slant=sl if slanted else None,
+                                              **mkw)
                     if sol.offplane:
                         cached = _region_modes_oop(sol,
                                                    symmetry=self.symmetry)
@@ -1970,11 +2100,19 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         order_x = np.tile(ox, len(oy))
         order_y = np.repeat(oy, len(ox))
         Nfo = len(order_x)
-        P1, P2 = _far_projector_2d(bx, by, ox, oy, a0x, a0y)
         qq = (Nx * (M - 1)) * (Ny * (M - 1))
-
-        Hsup = _pmm2d_project_orders(P1, P2, Wsup, qq)
-        Hsub = _pmm2d_project_orders(P1, P2, Wsub, qq)
+        if cmap is None:
+            P1, P2 = _far_projector_2d(bx, by, ox, oy, a0x, a0y)
+            Hsup = _pmm2d_project_orders(P1, P2, Wsup, qq)
+            Hsub = _pmm2d_project_orders(P1, P2, Wsub, qq)
+        else:
+            # the pulled-back projector with the COFACTOR det J * J^-T
+            # (twod_staggered._far_projector_mapped); the incident overlap
+            # below inherits it through Hsup
+            P1, P2, P12, P21 = _far_projector_2d(bx, by, ox, oy, a0x, a0y,
+                                                 cmap=cmap)
+            Hsup = _pmm2d_project_orders(P1, P2, Wsup, qq, P12, P21)
+            Hsub = _pmm2d_project_orders(P1, P2, Wsub, qq, P12, P21)
         kxv = kx0 + order_x * (wl / px)
         kyv = ky0 + order_y * (wl / py)
         kz_ref, kz_trn, kz_inc, safe_r, safe_t = _pmm2d_order_kz(

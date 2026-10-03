@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: b763bd79862d3df98cd2d9b04021b67901afa24e7175a57bb0866863937fe4a3
-token_sha256: a9e89c675c0ae1fa50a46f2ea38380d51228aec28d2737a13872fb2f1335e417
+ast_sha256: 3de0aa3c463ff30c7a7dca43168a67008fb5c5bf5443aa54f4d370761cb0d173
+token_sha256: 40c777d99d23065051670fa060f67423e353cdb4d2a917dae36ae91dc8de15a9
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- deferred shared-grid advisory passes stacklevel=4 so it reports at the caller's solve(), not at this file (WP-A22 item 8b)
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-09-21 -- geometry viewers added: plot_geometry, plot_section, material_key and the physics-keyed styling helpers (AUDIT_PMM2D_PURE_VIEWER_2026_09_21)
+re_recorded: 2026-10-02 -- the curved-cell map, Phase A: PMM2DStackPure(cmap=) -- a stack-owned coordinate map on the shared-grid solve (mapped homogeneous solver + geometric eig, plain flux Gram, cofactor far field), its scope refusals (per-layer, tensor, mu, slant, viewers) (BUILD_PMM2D_CURVED_A_2026_10_02)
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d_pure.py`
