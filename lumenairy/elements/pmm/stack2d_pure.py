@@ -73,10 +73,24 @@ carry both) are joined by the CURVED MORTAR, a non-separable cross-mass
 integrated over the physical cell
 (:mod:`lumenairy.elements.pmm._curvemortar`); when the outlines do fit one
 map the stack runs it exactly as ``'shared'`` does.
+
+DIFFERENTIABLE (Phase E3): ``PMM2DStackPure(..., backend='jax')`` solves the
+shared-grid in-plane cascade by a JAX twin
+(:mod:`lumenairy.elements.pmm._jax_twod_staggered`) built from the concrete
+stack -- the REFERENCE at which the wall grid, its topology and the
+quadrature are frozen -- and ``solve(params=...)`` evaluates it on a
+dictionary (:meth:`PMM2DStackPure.jax_params`) whose materials, thicknesses,
+half-space indices and SHAPE OBJECTS may carry JAX values, so ``jax.grad``
+reaches a circle's radius.  A parameter that changes the topology (walls
+merging or separating, a fold, a sliver, a fillet radius reaching zero) is
+refused when concrete and returns NaN when traced; out-of-plane tensors,
+slanted layers and per-layer maps have no twin and raise, naming the phase
+(``docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md``).
 ``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``,
 ``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``,
 ``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``,
-``docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md``.
+``docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md``,
+``docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md``.
 
 A layer may also be MAGNETIC: ``add_layer(..., mu=scalar | (3,3))`` or
 ``add_layer(..., mu_cell=(Nx,Ny) | (Nx,Ny,3,3))`` gives it a BLOCK-FORM
@@ -834,12 +848,32 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         (passing them as ``u_walls`` silently builds a different device,
         Phase A verifier D6), or describe the geometry with
         ``add_layer(shapes=...)``, which places every wall itself.
+    backend : {'numpy', 'jax'}, optional
+        ``'numpy'`` (the default) is the solver above, unchanged.  ``'jax'``
+        (Phase E3 of the curved-cell plan) makes :meth:`solve` run the
+        DIFFERENTIABLE twin of the shared-grid cascade
+        (:class:`~lumenairy.elements.pmm._jax_twod_staggered.StagJaxTwin`):
+        the stack is built exactly as for NumPy, from CONCRETE values -- they
+        are the REFERENCE at which every discrete decision is frozen (the
+        wall grid and its topology, the quadrature node counts, the corner
+        cells, the wavelength and the angles) -- and ``solve(params=...)``
+        then evaluates on a parameter dictionary whose leaves may be JAX
+        values: layer permittivities / permeabilities, thicknesses, the
+        half-space indices, and the SHAPE objects themselves, so a
+        ``Circle(cx, cy, r, eps)`` with a traced ``r`` traces
+        (:meth:`jax_params` returns the reference dictionary to edit).
+        Returns JAX ``R`` / ``T`` / Jones; composes with ``jax.jit`` and
+        ``jax.grad``.  In-plane cells only: an out-of-plane tensor, ``slant``
+        and ``layer_grids='per-layer'`` raise (Phases E1 / E2), as do
+        ``retain_internal`` and :meth:`layer_absorption`.  Requires JAX with
+        ``jax_enable_x64`` (``LUMENAIRY_DISABLE_JAX`` turns the backend off).
     """
 
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
                  n_substrate=1.0, n_modes=8, degree=None, n_orders=7,
                  mu_superstrate=None, mu_substrate=None, symmetry="auto",
-                 layer_grids="shared", window_halfwidth=None, cmap=None):
+                 layer_grids="shared", window_halfwidth=None, cmap=None,
+                 backend="numpy"):
         # The half-spaces are NONMAGNETIC (mu = 1) and isotropic: the Rayleigh
         # far field normalises with the vacuum wave impedance.  Accepting the
         # keyword and RAISING is the loud form of that restriction (a silently
@@ -918,6 +952,21 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         self._src = None
         self._modal = None         # per-order amplitudes of the last solve (B)
         self._internal = None      # partial cascades for layer_absorption (C3)
+        # Phase E3: the JAX twin (built lazily from this concrete stack and
+        # dropped by every geometry / source change)
+        if backend not in ("numpy", "jax"):
+            raise ValueError(
+                f"PMM2DStackPure: backend must be 'numpy' or 'jax', got "
+                f"{backend!r}.")
+        if backend == "jax":
+            from ...backend import JAX_AVAILABLE
+            if not JAX_AVAILABLE:
+                raise ImportError(
+                    "PMM2DStackPure(backend='jax'): JAX is not available "
+                    "(not installed, or switched off by the "
+                    "LUMENAIRY_DISABLE_JAX environment variable).")
+        self.backend = backend
+        self._jax_twin = None
 
     def _init_map(self, cmap):
         """Validate a stack-owned coordinate map (Phase A of the curved-cell
@@ -1225,6 +1274,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         the stack's (``PMM2DStackPure(..., cmap=)``)."""
         self._modal = None      # geometry change supersedes retained amplitudes
         self._internal = None
+        self._jax_twin = None   # Phase E3: the frozen twin is per geometry
         if (shapes is not None or background_eps is not None
                 or background_mu is not None):
             if cmap is not None:
@@ -2385,9 +2435,33 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         ``theta`` and azimuth ``phi`` (radians)."""
         self._modal = None      # source change supersedes retained amplitudes
         self._internal = None
+        self._jax_twin = None   # Phase E3: the frozen twin is per source
         self._src = dict(wl=float(wavelength), theta=float(theta),
                          phi=float(phi))
         return self
+
+    # ------------------------------------------------------------- JAX twin
+    def jax_twin(self, *, geometry="auto"):
+        """The frozen JAX twin of this stack (Phase E3): a
+        :class:`~lumenairy.elements.pmm._jax_twod_staggered.StagJaxTwin`
+        built from the CURRENT concrete geometry and source, cached until
+        the next :meth:`add_layer` / :meth:`set_source`.  ``geometry``:
+        ``'auto'`` (a stack with a map or shape layers takes the mapped
+        route that traced shape parameters need), ``'mapped'`` (force it --
+        e.g. to trace the walls of an ``eps_cell`` stack), ``'static'``."""
+        tw = getattr(self, "_jax_twin", None)
+        if tw is None or tw._geometry != geometry:
+            from ._jax_twod_staggered import StagJaxTwin
+            tw = StagJaxTwin(self, geometry=geometry)
+            tw._geometry = geometry
+            self._jax_twin = tw
+        return tw
+
+    def jax_params(self):
+        """The REFERENCE parameter dictionary of :meth:`jax_twin` -- edit its
+        leaves (JAX values, shape objects with JAX parameters) and pass it to
+        ``solve(params=...)``."""
+        return self.jax_twin().params()
 
     def _source_prep(self):
         """Source/wavelength preamble shared by the shared-grid and per-layer
@@ -2542,7 +2616,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         _validate_stag_cost("PMM2DStackPure.solve", int(self.M), *cells,
                             check=("warn",), stacklevel=4)
 
-    def solve(self, *, jones=True, retain_internal=False):
+    def solve(self, *, jones=True, retain_internal=False, params=None):
         """Cascade the stack and return the diffraction efficiencies.
 
         Returns ``(orders, R, T, jones)`` (default) or ``(orders, R, T)`` when
@@ -2562,6 +2636,19 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             raise ValueError("PMM2DStackPure.solve: call set_source(...) first.")
         if not self._layers:
             raise ValueError("PMM2DStackPure.solve: add at least one layer.")
+        if getattr(self, "backend", "numpy") == "jax":
+            # Phase E3: the differentiable twin (params: see jax_params)
+            if retain_internal:
+                raise NotImplementedError(
+                    "PMM2DStackPure.solve(retain_internal=True): the JAX twin "
+                    "does not retain the partial cascades (layer_absorption "
+                    "is NumPy-only); use backend='numpy'.")
+            out = self.jax_twin().solve(params)
+            return out if jones else out[:3]
+        if params is not None:
+            raise ValueError(
+                "PMM2DStackPure.solve: params= is the JAX twin's input; build "
+                "the stack with backend='jax'.")
         self._warn_stag_shared_redundancy()
         _check_stack_slant(self._layers, "PMM2DStackPure.solve")
         _slanted_stack = any(not _slant_is_zero(L.get("slant"))

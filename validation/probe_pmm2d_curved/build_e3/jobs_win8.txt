@@ -1,0 +1,2 @@
+f8_frozen_vs_moving.py
+f10_compile_size.py 4 jit

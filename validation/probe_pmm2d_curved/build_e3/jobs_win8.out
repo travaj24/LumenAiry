@@ -1,0 +1,2 @@
+done f8_frozen_vs_moving.py rc=1
+done f10_compile_size.py 4 jit rc=0

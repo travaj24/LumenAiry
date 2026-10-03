@@ -1,0 +1,51 @@
+{
+ "M": 3,
+ "ellipse_fold_scan": {
+  "0.28": "ok",
+  "0.30": "ok",
+  "0.32": "ok",
+  "0.34": "REFUSED: compile_shapes: the merged map FOLDS (det J <= 0, min -1.044",
+  "0.36": "REFUSED: compile_shapes: the merged map FOLDS (det J <= 0, min -6.583"
+ },
+ "ellipse_fold": {
+  "numpy_mapped": true,
+  "ref_parity": [
+   9.194034422677078e-16,
+   3.039235529911366e-15,
+   3.498881777296493e-15
+  ],
+  "bad_traced": [
+   NaN,
+   NaN
+  ],
+  "good_traced": [
+   0.4119144188622862,
+   0.033660836612257355
+  ],
+  "bad_concrete": "refused: PMM2DStackPure (JAX): the shapes at these parameter values are refused by the merge (compile_shapes: the merged map FOLD"
+ },
+ "roundoff_rects": {
+  "numpy_mapped": false,
+  "ref_parity": [
+   1.1136924715771102e-15,
+   3.774758283725532e-15,
+   4.242156220644677e-15
+  ],
+  "bad_traced": [
+   NaN,
+   NaN
+  ],
+  "good_traced": [
+   0.7489286144641528,
+   -1.2853728973190406
+  ],
+  "bad_concrete": "refused: PMM2DStackPure (JAX): the shapes at these parameter values are refused by the merge (compile_shapes: the merged u-walls "
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_curved_e3\\lumenairy\\__init__.py",
+  "platform": "win32"
+ }
+}

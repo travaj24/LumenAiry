@@ -1,0 +1,56 @@
+square_w 3 gap 1e-06 split 1e-07 vsFDtwin 1.88e-10 vsFDnumpy 1.93e-10 run 0.27s
+square_w 3 gap 0.0 split 0.0 vsFDtwin 3.11e-03 vsFDnumpy 3.11e-03 run 0.14s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M3_final_win.json
+square_w 4 gap 1e-06 split 1e-07 vsFDtwin 4.86e-10 vsFDnumpy 4.22e-10 run 1.18s
+square_w 4 gap 0.0 split 0.0 vsFDtwin 2.50e-01 vsFDnumpy 2.50e-01 run 0.53s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M4_final_win.json
+square_w 5 gap 1e-06 split 1e-07 vsFDtwin 1.60e-09 vsFDnumpy 1.12e-09 run 6.54s
+square_w 5 gap 0.0 split 0.0 vsFDtwin 1.39e-01 vsFDnumpy 1.39e-01 run 0.75s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M5_final_win.json
+ellipse_a 3 gap 1e-06 split 1e-07 vsFDtwin 8.63e-11 vsFDnumpy 5.06e-04 run 0.21s
+ellipse_a 3 gap 0.0 split 0.0 vsFDtwin 6.53e-03 vsFDnumpy 7.03e-03 run 0.12s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_ellipse_a_M3_final_win.json
+ellipse_a 4 gap 1e-06 split 1e-07 vsFDtwin 5.13e-11 vsFDnumpy 7.87e-05 run 0.72s
+ellipse_a 4 gap 0.0 split 0.0 vsFDtwin 2.99e-03 vsFDnumpy 2.99e-03 run 0.43s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_ellipse_a_M4_final_win.json
+rect_nonsq_w 3 gap 1e-06 split 1e-07 vsFDtwin 3.40e-11 vsFDnumpy 3.00e-11 run 0.42s
+rect_nonsq_w 3 gap 0.0 split 0.0 vsFDtwin 3.38e-11 vsFDnumpy 3.00e-11 run 0.17s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_rect_nonsq_w_M3_final_win.json
+square_wh 3 gap 1e-06 split 1e-07 vsFDtwin 4.11e-11 vsFDnumpy 1.33e-11 run 0.19s
+square_wh 3 gap 0.0 split 0.0 vsFDtwin 4.11e-11 vsFDnumpy 1.33e-11 run 0.08s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_wh_M3_final_win.json
+fillet_sq_w 3 gap 1e-06 split 1e-07 vsFDtwin 4.14e-09 vsFDnumpy 2.02e-05 run 2.25s
+fillet_sq_w 3 gap 0.0 split 0.0 vsFDtwin 2.86e-01 vsFDnumpy 2.86e-01 run 0.80s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_fillet_sq_w_M3_final_win.json
+square_w 3 rule on grad change 1.57e-10 3.28e-10 value change 1.7e-15 1.2e-15
+square_w 3 rule off grad change 2.26e-01 1.71e-01 value change 1.7e-15 1.2e-15
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r5_gauge_square_w_M3_win.json
+delta 1e-10  on 8.09e-11  off 2.51e-09
+delta 1e-09  on 1.21e-10  off 1.07e-10
+delta 1e-08  on 3.64e-11  off 9.99e-12
+delta 1e-06  on 2.69e-11  off 5.85e-12
+delta 0.0001  on 5.82e-11  off 6.01e-11
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r6_offsym_M3_win.json
+square_w 4 rule on grad change 7.81e-10 2.06e-09 value change 4.2e-15 5.1e-15
+square_w 4 rule off grad change 2.72e-01 3.54e-01 value change 4.2e-15 5.1e-15
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r5_gauge_square_w_M4_win.json
+sinusoid {'eager_ref': ['02f2c2f7da07cf09', 'dcca2a40f1b0fd94', '10388d0c90806b4c'], 'eager_traced': ['8bb30181dc814df8', 'b5c8288dfe641964', '3fd571d0498604d9'], 'jit': ['88c7e7f843e10687', 'd3a7dcfcb39d7020', '5b0b13dfa93eb5b2'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+square_pillar {'eager_ref': ['73f49ad8601e2bfe', '5fc412d37d720153', 'daa61fc391c86127'], 'eager_traced': ['bac9e85d2fd4b607', '552c71592106bacd', '2b7c88ed9b7bfc88'], 'jit': ['1015ff406f978edf', 'e4a8b0ef8e363143', '899619818536a28c'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+ellipse_sym {'eager_ref': ['08098fbb1c61a544', '6d4731cb48aaee06', '036815c076cc8697'], 'eager_traced': ['e5668bc39bf47efb', '1486326b072da91d', '1c432207067f375c'], 'jit': ['718df34eaed6e152', 'c7c4395e4b4d833c', 'a9d6f0c2d73e4cec'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+rect_oblique {'eager_ref': ['193ed84d7b3aa4dc', '5359f1162b6bf259', '5de640f0e60c257b'], 'eager_traced': ['0a974656880aed6a', '7be0d803629484e1', '30e082e3f9f00a7b'], 'jit': ['debdf535129e2f2e', '08fe0bf477713b3d', 'a352621f5ed47f07'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+circle_tensor_magnetic_two_layer {'eager_ref': ['c6e015b62591227c', '9986d2147099b58e', '051987d5df4d9d02']}
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r3_fwd_bytes_post_M4_win.json
+{'oracle': -39.59262059721951, 'rule': -39.592620685186965, 'plain': -51.62459495661935, 'rule_rel': 2.22181446924999e-09, 'plain_rel': 0.30389436662459307}
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r9_matrix_oracle_win.json
+ellipse_a 3 rule on grad change 6.59e-11 7.32e-11 value change 2.7e-15 1.4e-15
+ellipse_a 3 rule off grad change 2.66e-02 2.44e-01 value change 2.7e-15 1.4e-15
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r5_gauge_ellipse_a_M3_win.json
+sinusoid {'eager_ref': ['e35f92430f184c49', 'b0916b38b531c249', '23b6758206c3b1a4'], 'eager_traced': ['46ec54b840f9a18d', 'f9a123e7c346bb9d', '51455cbc4864683c'], 'jit': ['dc9dbe7b9d6aa7ec', 'a01fd320f86bd4c6', 'e2abad888e14d5d5'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+square_pillar {'eager_ref': ['f25dc402e9beb042', '4862ecfb77c6533e', '0c380b5ee7805a8f'], 'eager_traced': ['cf7d606ec430faf3', 'fc3de548f15695ae', '62d61d1db8e4f21b'], 'jit': ['01cb13f29d1ad0e3', 'd562bd11977ad5b3', 'c54ed1edae6e52f8'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+ellipse_sym {'eager_ref': ['56a07c5ec322f593', 'e7e899aeb57df3af', '536f67ade6816d8a'], 'eager_traced': ['2b8a06deff77d90c', '6a6fb548e77ef5bb', '5b33357eb56f4af6'], 'jit': ['6d4d957e3e9ea048', 'db2b51f83e5978b6', 'ad934d5320d53774'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+rect_oblique {'eager_ref': ['75cc142aafd04a07', 'acb5143c8a87d390', 'd11e0a7373df7f07'], 'eager_traced': ['e60bc49e2d0bf5f0', '44d8ef309facc668', '08109ab9af2fb07d'], 'jit': ['b41e7d336571849d', '0c6eb0bb16a8b751', 'e16fae5cba7e0845'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+circle_tensor_magnetic_two_layer {'eager_ref': ['e2a206f6c21745b2', 'cbe5a18fca57c705', '25e79096c01d5b69']}
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r3_fwd_bytes_post_M3_win.json
+fillet_sq_w 3 rule on grad change 9.63e-10 1.02e-09 value change 2.0e-13 2.7e-13
+fillet_sq_w 3 rule off grad change 5.17e-01 2.81e+00 value change 2.0e-13 2.7e-13
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r5_gauge_fillet_sq_w_M3_win.json

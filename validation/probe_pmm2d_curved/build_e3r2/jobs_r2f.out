@@ -1,0 +1,52 @@
+square_w 4 gap 1e-06 split 3e-08 vsFDtwin 2.18e-09 vsFDnumpy 2.24e-09 run 0.94s
+square_w 4 gap 1e-06 split 1e-07 vsFDtwin 4.86e-10 vsFDnumpy 4.22e-10 run 1.83s
+square_w 4 gap 1e-06 split 3e-07 vsFDtwin 1.92e-10 vsFDnumpy 1.27e-10 run 1.19s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M4_scanF_win.json
+square_w 5 gap 1e-06 split 3e-08 vsFDtwin 2.27e-09 vsFDnumpy 2.34e-09 run 2.99s
+square_w 5 gap 1e-06 split 1e-07 vsFDtwin 1.60e-09 vsFDnumpy 1.12e-09 run 2.38s
+square_w 5 gap 1e-06 split 3e-07 vsFDtwin 1.22e-09 vsFDnumpy 1.15e-09 run 3.96s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M5_scanF_win.json
+  File "C:\tmp\lum_curved_e3b\lumenairy\elements\pmm\shapes2d.py", line 830, in bbox
+    ex = np.hypot(self.a * ca, self.b * sa)
+jax.errors.TracerArrayConversionError: The numpy.ndarray conversion method __array__() was called on traced array with shape float64[]
+See https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError
+--------------------
+For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+  File "C:\tmp\lum_curved_e3b\lumenairy\elements\pmm\shapes2d.py", line 830, in bbox
+    ex = np.hypot(self.a * ca, self.b * sa)
+jax.errors.TracerArrayConversionError: The numpy.ndarray conversion method __array__() was called on traced array with shape float64[]
+See https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError
+--------------------
+For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+square_w 6 gap 1e-06 split 3e-08 vsFDtwin 6.14e-09 vsFDnumpy nan run 11.36s
+square_w 6 gap 1e-06 split 1e-07 vsFDtwin 2.12e-09 vsFDnumpy nan run 12.71s
+square_w 6 gap 1e-06 split 3e-07 vsFDtwin 1.24e-09 vsFDnumpy nan run 11.03s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M6_scanF_win.json
+square_w 3 gap 1e-06 split 3e-08 vsFDtwin 4.70e-10 vsFDnumpy 5.67e-10 run 0.16s
+square_w 3 gap 1e-06 split 1e-07 vsFDtwin 1.88e-10 vsFDnumpy 1.93e-10 run 0.22s
+square_w 3 gap 1e-06 split 3e-07 vsFDtwin 1.05e-10 vsFDnumpy 4.75e-11 run 0.33s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M3_scanF_win.json
+rect_nonsq_w 3 gap 1e-06 split 3e-08 vsFDtwin 3.39e-11 vsFDnumpy 3.00e-11 run 0.22s
+rect_nonsq_w 3 gap 1e-06 split 1e-07 vsFDtwin 3.40e-11 vsFDnumpy 3.00e-11 run 0.40s
+rect_nonsq_w 3 gap 1e-06 split 3e-07 vsFDtwin 3.38e-11 vsFDnumpy 3.00e-11 run 0.43s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_rect_nonsq_w_M3_scanF_win.json
+square_wh 3 gap 1e-06 split 3e-08 vsFDtwin 4.11e-11 vsFDnumpy 1.33e-11 run 0.20s
+square_wh 3 gap 1e-06 split 1e-07 vsFDtwin 4.11e-11 vsFDnumpy 1.33e-11 run 0.26s
+square_wh 3 gap 1e-06 split 3e-07 vsFDtwin 4.11e-11 vsFDnumpy 1.33e-11 run 0.15s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_wh_M3_scanF_win.json
+fillet_sq_w 3 gap 1e-06 split 3e-08 vsFDtwin 4.34e-09 vsFDnumpy 2.02e-05 run 3.36s
+fillet_sq_w 3 gap 1e-06 split 1e-07 vsFDtwin 4.14e-09 vsFDnumpy 2.02e-05 run 2.64s
+fillet_sq_w 3 gap 1e-06 split 3e-07 vsFDtwin 4.08e-09 vsFDnumpy 2.02e-05 run 1.06s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_fillet_sq_w_M3_scanF_win.json
+square_wh 4 gap 1e-06 split 3e-08 vsFDtwin 7.44e-11 vsFDnumpy 7.90e-12 run 1.38s
+square_wh 4 gap 1e-06 split 1e-07 vsFDtwin 7.44e-11 vsFDnumpy 7.99e-12 run 1.03s
+square_wh 4 gap 1e-06 split 3e-07 vsFDtwin 7.45e-11 vsFDnumpy 7.99e-12 run 0.59s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_wh_M4_scanF_win.json
+fillet_sq_w 4 gap 1e-06 split 3e-08 vsFDtwin 6.99e-10 vsFDnumpy nan run 8.69s
+fillet_sq_w 4 gap 1e-06 split 1e-07 vsFDtwin 6.33e-10 vsFDnumpy nan run 7.57s
+fillet_sq_w 4 gap 1e-06 split 3e-07 vsFDtwin 6.44e-10 vsFDnumpy nan run 11.82s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_fillet_sq_w_M4_scanF_win.json
+fillet_sq_w 5 gap 1e-06 split 3e-08 vsFDtwin 1.03e-08 vsFDnumpy nan run 47.29s
+fillet_sq_w 5 gap 1e-06 split 1e-07 vsFDtwin 1.03e-08 vsFDnumpy nan run 34.29s
+fillet_sq_w 5 gap 1e-06 split 3e-07 vsFDtwin 1.03e-08 vsFDnumpy nan run 34.82s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_fillet_sq_w_M5_scanF_win.json

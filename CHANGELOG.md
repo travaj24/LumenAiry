@@ -158,6 +158,120 @@ map inverted by Newton at each node.
   merge refuses (the Phase C verifier's supercells, V-D3) have NO route yet:
   putting them in two layers is a different device (0.4 .. 0.5 apart in
   R / T), not a workaround; the hybrid merge is deferred.
+### Added -- pure 2-D PMM: a JAX twin of the pure staggered path, differentiable in shape parameters
+
+The pure (no-floor) staggered 2-D PMM -- `PMM2DStackPure` and
+`pmm_jones_2d_staggered` -- now has a differentiable JAX twin.  Build the
+stack as usual with `backend='jax'`, then ask for gradients with respect to
+the layer permittivities and permeabilities, the thicknesses, the half-space
+indices, and the SHAPE PARAMETERS of its curved cells: a circle's radius, a
+fillet's corner radius, a sinusoidal wall's amplitude, a rectangle's width,
+a liquid-crystal director angle inside a circle.
+
+```python
+import jax
+import jax.numpy as jnp
+from lumenairy.elements.pmm import Circle, PMM2DStackPure
+
+jax.config.update("jax_enable_x64", True)
+st = PMM2DStackPure(1.2, 1.2, n_superstrate=1.0, n_substrate=1.45,
+                    n_modes=6, n_orders=2, backend="jax")
+st.add_layer(0.5, shapes=[Circle(0.6, 0.6, 0.36, eps=4.0)], background_eps=1.0)
+st.set_source(1.0)                     # lengths in units of the wavelength here
+p0 = st.jax_twin().p0                  # index of the (0, 0) order
+
+def t00(r):
+    p = st.jax_params()
+    p["layers"][0]["shapes"] = [Circle(0.6, 0.6, r, eps=4.0)]
+    orders, R, T, J = st.solve(params=p)
+    return T[0, p0]
+
+dT_dr = jax.jit(jax.grad(t00))(0.36)   # compiles once, re-runs at any radius
+```
+
+What it means physically.  The solver describes a circle by bending its grid
+so the circle is an exact grid line.  The JAX twin keeps that grid's LAYOUT
+fixed -- which cells exist, where the four corner points of the circle sit
+in the grid, how finely each cell is integrated -- at the geometry you built
+the stack with (the "reference"), and lets the radius move the physical
+IMAGE of every cell.  The bent grid, its local stretch and shear, and so the
+whole solve are then smooth functions of the radius, and JAX differentiates
+them exactly.  Measured: the circle-radius gradient matches a converged
+finite difference of the same solve to 2.3e-8 relative at `n_modes = 6`,
+and the finite difference of the ordinary NumPy solver (whose grid moves
+with the radius) to 7.8e-8; a rectangle's width gradient matches the NumPy
+solver to 1.3e-9.  Forward results agree with NumPy to 1e-14 .. 5e-13 on 22
+fixtures (the round-off of the eigen-solver stage itself) -- at normal
+incidence for every fixture, and at oblique / conical incidence for every
+fixture except a rectangles-only `shapes=` stack, where the two routes differ
+at the discretisation level and converge with `n_modes` (see the limits).  A compiled
+gradient re-runs in 1-5 s on a 3 x 3 grid at `n_modes = 5 .. 6`, faster than
+one NumPy solve of the same cell (3 - 5x that on a symmetric cell, see the
+degenerate-mode limit below); the first compilation takes 15-130 s.
+The NumPy path is unchanged byte for byte (156 of 156 hashes).
+
+Known limits:
+
+* The reference fixes the TOPOLOGY.  A parameter that changes it -- two
+  walls merging or separating, a segment narrower than 1e-3 of the period,
+  a shape folding the grid, a fillet radius reaching zero (the corner points
+  vanish) -- is a non-differentiable event of the discretisation: refused
+  with a message when the value is concrete, NaN when it is traced.  Rebuild
+  the stack at the new geometry to cross it.
+* Away from the reference a curved shape is solved on a re-parametrised grid,
+  which differs from the NumPy solve built at that geometry at the level of
+  the incident field's representation error (5.5e-6 at `n_modes = 4` for a
+  radius change of 0.03 of the period, falling with `n_modes`).
+* `period`, `wavelength`, `theta` and `phi` are static (they set the
+  basis' Bloch phase); at oblique incidence so is the superstrate index.
+* In-plane cells only: out-of-plane tensors, `slant` and
+  `layer_grids='per-layer'` raise, naming Phases E1 / E2 of the curved-cell
+  plan; `retain_internal` / `layer_absorption` stay NumPy-only.
+* x64 required (`jax.config.update("jax_enable_x64", True)`); CPU only
+  (`jnp.linalg.eig`); `LUMENAIRY_DISABLE_JAX` turns the backend off (the
+  stack and `pmm_jones_2d_staggered(backend='jax')` raise `ImportError`,
+  each naming itself).
+* A symmetric cell (a square or circular pillar, centred) has exactly
+  degenerate Bloch-mode pairs.  A parameter that BREAKS the symmetry there
+  (a square pillar's width alone, a circle deformed into an ellipse, a
+  square fillet's width) splits them to first order, and the eigenvector
+  derivative alone cannot see that splitting (it gave 0.3 - 75 % errors,
+  different on different BLAS builds, before this release's round 2).  The
+  twin therefore differentiates its eigen-solves TOGETHER with everything
+  downstream of them: where eigenvalues coincide to 1e-6 of the spectrum,
+  the reverse pass evaluates the derivative at slightly separated copies of
+  the cluster and combines them (a fourth-order rule).  Measured against
+  finite differences at `n_modes = 3`: square width 1.9e-10, ellipse 8.6e-11,
+  square fillet 4.1e-9 relative (WSL 4.4e-10 / 1.8e-11 / 4.0e-9); the
+  gradient no longer depends on how the eigen-solver happened to pick its
+  basis inside a degenerate pair; forward values are unchanged byte for
+  byte.  Cost: a gradient through a degenerate cluster (any centred
+  symmetric pillar, the circle included) takes 2.9 - 5.0x the time it took
+  before (`n_modes = 3 .. 5`; four lifted eigen-solves and downstream
+  passes) and about twice the compile time; a cell without one pays
+  nothing.
+  The library's OTHER JAX twins do not use this rule yet: the RCWA JAX path
+  returns a symmetry-breaking gradient at a symmetric cell 23 - 47 % wrong,
+  and the 1-D PMM twin `d / d(angle)` at EXACTLY normal incidence 28 - 590 %
+  wrong (measured and pinned in the build record's round 2; evaluate those
+  off the symmetric point, or use the pure staggered stack).
+* Reverse mode only (`jax.grad`, `jax.jacrev`, `jax.vjp`): forward mode
+  (`jax.jvp`, `jax.jacfwd`, `jax.hessian`) raises `TypeError` and a second
+  derivative (nested `jax.grad`) raises `NotImplementedError` -- the
+  eigen-solves carry a first-order custom VJP.
+* At oblique / conical incidence a rectangles-only `shapes=` stack is solved
+  by the twin on an identity coordinate map (the curved-cell incident
+  projection), not on the NumPy stack's unmapped route: the two differ by
+  the incident representation error (2.5e-4 at `n_modes = 3`, 3.8e-5 /
+  6.5e-7 / 6.9e-9 at 4 / 5 / 6 on T, 0.3 rad), converging with `n_modes`;
+  at normal incidence they agree to round-off.
+  `jax_twin(geometry='static')` reproduces the NumPy route exactly (no traced
+  walls).
+* Call it under `jax.jit`: the eager (un-jitted) twin dispatches ~3 200
+  small operations one by one and is 13-54x slower than NumPy.
+
+Build record: `docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md`; tests:
+`tests/unit/test_pmm2d_staggered_curved_e3.py`.
 
 ### Added -- pure 2-D PMM (curved cells, Phase D): anisotropic and magnetic materials inside curved cells
 

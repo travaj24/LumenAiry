@@ -1,0 +1,33 @@
+square_w 3 gap 1e-06 split 1e-07 vsFDtwin 4.43e-10 vsFDnumpy 4.45e-10 run 0.19s
+square_w 3 gap 0.0 split 0.0 vsFDtwin 3.82e-02 vsFDnumpy 3.82e-02 run 0.42s
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r2_dev_square_w_M3_final_wsl.json
+rect_nonsq_w 3 gap 1e-06 split 1e-07 vsFDtwin 3.38e-11 vsFDnumpy 3.00e-11 run 0.20s
+rect_nonsq_w 3 gap 0.0 split 0.0 vsFDtwin 3.38e-11 vsFDnumpy 3.00e-11 run 0.33s
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r2_dev_rect_nonsq_w_M3_final_wsl.json
+square_w 4 gap 1e-06 split 1e-07 vsFDtwin 1.31e-09 vsFDnumpy 1.32e-09 run 1.02s
+square_w 4 gap 0.0 split 0.0 vsFDtwin 6.86e-02 vsFDnumpy 6.86e-02 run 0.30s
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r2_dev_square_w_M4_final_wsl.json
+ellipse_a 3 gap 1e-06 split 1e-07 vsFDtwin 1.78e-11 vsFDnumpy 5.06e-04 run 0.19s
+ellipse_a 3 gap 0.0 split 0.0 vsFDtwin 2.84e-02 vsFDnumpy 2.84e-02 run 0.09s
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r2_dev_ellipse_a_M3_final_wsl.json
+square_wh 3 gap 1e-06 split 1e-07 vsFDtwin 4.30e-11 vsFDnumpy 1.18e-11 run 0.16s
+square_wh 3 gap 0.0 split 0.0 vsFDtwin 4.29e-11 vsFDnumpy 1.18e-11 run 0.09s
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r2_dev_square_wh_M3_final_wsl.json
+delta 1e-10  on 1.88e-11  off 8.15e-10
+delta 1e-09  on 6.58e-11  off 2.79e-11
+delta 1e-08  on 7.36e-11  off 2.29e-11
+delta 1e-06  on 6.40e-11  off 5.83e-11
+delta 0.0001  on 2.88e-11  off 2.63e-11
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r6_offsym_M3_wsl.json
+fillet_sq_w 3 gap 1e-06 split 1e-07 vsFDtwin 3.99e-09 vsFDnumpy 2.02e-05 run 1.81s
+fillet_sq_w 3 gap 0.0 split 0.0 vsFDtwin 7.51e-01 vsFDnumpy 7.51e-01 run 0.55s
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r2_dev_fillet_sq_w_M3_final_wsl.json
+square_w 3 rule on grad change 4.34e-10 3.41e-10 value change 2.6e-15 1.4e-15
+square_w 3 rule off grad change 2.41e-01 1.07e-01 value change 2.6e-15 1.4e-15
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r5_gauge_square_w_M3_wsl.json
+sinusoid {'eager_ref': ['8d559494d4ab4a40', '72a44152d8661f93', '67b0ef89707a510b'], 'eager_traced': ['7415162f84175b20', 'bf4ee5591e40d0a2', '5109753ff052bf79'], 'jit': ['690710cd9f62b713', '3bdf75425a2512fb', '72477b312f449bec'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+square_pillar {'eager_ref': ['033da78b9756f33f', '7795f005df57c034', 'bd30de7193ad9ba7'], 'eager_traced': ['d8c6cd67abdc332b', '169e4f338180971e', 'a70f06f7b103ed43'], 'jit': ['05d9996a07e76c38', 'e7d8166f64e0e1d2', '63c9779f32e2aa0e'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+ellipse_sym {'eager_ref': ['7a9e64d6f4c39735', 'd4dd4fcd21a29d09', '8e6338568359d443'], 'eager_traced': ['570cdcf4133538ec', '0e70d5d43ec75a75', 'f94a0ad0705feb77'], 'jit': ['7c141db3e1d8dbcf', 'cc92e2fa658349f9', '9acd7e4ac40c3bcb'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+rect_oblique {'eager_ref': ['9cd8ab49b9e14f88', '3f06a74b35d6b070', '2173f4ada8384c28'], 'eager_traced': ['99f87ec861d88335', 'ae1d80ae88000f3f', '6ee971ea290cb860'], 'jit': ['fc5d1c050bcf79d8', '630fc9b923d9511c', '6647e11a33f964b5'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+circle_tensor_magnetic_two_layer {'eager_ref': ['9d6e40da34ea01e5', '0e073d88fb1f33fd', '9f9a69e6839e2fce']}
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r3_fwd_bytes_post_M3_wsl.json

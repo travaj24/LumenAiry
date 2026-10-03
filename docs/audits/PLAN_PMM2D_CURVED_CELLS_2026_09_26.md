@@ -319,6 +319,21 @@ the nine orders `|m|, |n| <= 1` (the (+-1, +-1) orders are evanescent in air
 and propagate in the substrate).  Errors are `max |dR, dT|` over the nine
 orders and both polarizations unless stated.
 
+**Campaign-wide note on M-ladders (added 2026-10-03, Phase E3 round 2;
+explained by the E3 verifier, `VERIFY_PMM2D_CURVED_E3_2026_10_03.md`
+section 5).**  On a cell whose sub-cells are centred on mirror planes of the
+periodic structure (a centred pillar is one), at normal incidence, the
+excited `E_x` and `E_y` are EVEN about those planes.  Raising the degree `M`
+by one adds one polynomial per cell whose parity about the cell centre
+alternates; when it is odd it is orthogonal to the excited sector and the
+answer does not move (a selection rule, not convergence).  `E_x` and `E_y`
+live in the two staggered sets, whose added function has opposite parity at
+a given step, so TE pairs `M = 3/4, 5/6, ...` and TM pairs `4/5, 6/7, ...`
+(identical to <= 1e-13 on a stripe); oblique incidence in the mirrored
+direction breaks the pairing.  A ladder that steps `M` by one therefore
+shows a zero change every other rung on such cells: judge convergence on
+PAIRS of rungs (`M -> M + 2`), never on one step.
+
 ### 3.1 P1 -- identity: the quadrature assembly reproduces the shipped kron assembly
 
 `p1_identity.py` -> `p1_identity.json`.  3 x 3 centred pillar, integer grid

@@ -1,0 +1,168 @@
+{
+ "M": 4,
+ "smooth_path": [
+  {
+   "r": 0.3,
+   "value": [
+    0.027291186236987362,
+    0.22446168895461288
+   ],
+   "AD": [
+    0.06355734893019896,
+    -2.329633236026668
+   ],
+   "FD_rich": [
+    0.06355734894014325,
+    -2.329633236053368
+   ],
+   "AD_vs_FD_rel": [
+    1.564617711872853e-10,
+    1.1461021052845104e-11
+   ],
+   "twin_vs_numpy_at_r": 7.384007352867483e-06
+  },
+  {
+   "r": 0.33,
+   "value": [
+    0.029278971979969117,
+    0.16225955158491145
+   ],
+   "AD": [
+    0.06652123447718929,
+    -1.8180741908652176
+   ],
+   "FD_rich": [
+    0.06652123444754228,
+    -1.8180741908930194
+   ],
+   "AD_vs_FD_rel": [
+    4.456773437496981e-10,
+    1.529187369399781e-11
+   ],
+   "twin_vs_numpy_at_r": 3.871325481907828e-06
+  },
+  {
+   "r": 0.36,
+   "value": [
+    0.031222298269423226,
+    0.11510087703071888
+   ],
+   "AD": [
+    0.06243680200917106,
+    -1.3311627574870344
+   ],
+   "FD_rich": [
+    0.06243680204961496,
+    -1.3311627574939457
+   ],
+   "AD_vs_FD_rel": [
+    6.477573626896704e-10,
+    5.19197245715309e-12
+   ],
+   "twin_vs_numpy_at_r": 2.098321516541546e-14
+  },
+  {
+   "r": 0.39,
+   "value": [
+    0.03292703429557108,
+    0.08225167120759311
+   ],
+   "AD": [
+    0.047755726916176376,
+    -0.8560725636157785
+   ],
+   "FD_rich": [
+    0.0477557269276604,
+    -0.8560725637010211
+   ],
+   "AD_vs_FD_rel": [
+    2.4047423849349334e-10,
+    9.9574024887898e-11
+   ],
+   "twin_vs_numpy_at_r": 3.0450302992424128e-06
+  },
+  {
+   "r": 0.42,
+   "value": [
+    0.03374360422849212,
+    0.0643466410650865
+   ],
+   "AD": [
+    -0.0007860070087258466,
+    -0.3188542617956504
+   ],
+   "FD_rich": [
+    -0.0007860070351661093,
+    -0.3188542619215146
+   ],
+   "AD_vs_FD_rel": [
+    3.363871003274716e-08,
+    3.9473898572475673e-10
+   ],
+   "twin_vs_numpy_at_r": 4.226520045114146e-06
+  }
+ ],
+ "fold": {
+  "good_value": [
+   0.01533590804511378,
+   0.4093939814576466
+  ],
+  "good_grad": 5.755060307306587,
+  "bad_traced_value": [
+   NaN,
+   NaN
+  ],
+  "bad_traced_grad": NaN,
+  "concrete": "refused: PMM2DStackPure (JAX): the shapes at these parameter values are refused by the merge (Circle(cx=0.6, cy=0.6, r=0.62): the shape must lie at least the sliver widt",
+  "concrete_good": "accepted"
+ },
+ "tangency": {
+  "good_value": [
+   0.0032546359179491825,
+   0.4884622497241958
+  ],
+  "good_grad": -0.8933823046286314,
+  "bad_traced_value": [
+   NaN,
+   NaN
+  ],
+  "bad_traced_grad": NaN,
+  "concrete": "refused: PMM2DStackPure (JAX): these shape parameters change the TOPOLOGY of the merged wall grid (walls merging or separating, a different number of segments, singular ",
+  "concrete_good": "accepted"
+ },
+ "sliver": {
+  "good_value": [
+   0.03803303262493059,
+   0.1115072224847299
+  ],
+  "good_grad": -1.0075944428705967,
+  "bad_traced_value": [
+   NaN,
+   NaN
+  ],
+  "bad_traced_grad": NaN,
+  "concrete": "refused: PMM2DStackPure (JAX): the shapes at these parameter values are refused by the merge (compile_shapes: the merged u-walls np.float64(0.0) and np.float64(0.0004999",
+  "concrete_good": "accepted"
+ },
+ "duffy": {
+  "good_value": [
+   0.03504445963258935,
+   0.35840165136842245
+  ],
+  "good_grad": 0.2658026042790298,
+  "bad_traced_value": [
+   NaN,
+   NaN
+  ],
+  "bad_traced_grad": NaN,
+  "concrete": "refused: PMM2DStackPure (JAX): these shape parameters change the TOPOLOGY of the merged wall grid (walls merging or separating, a different number of segments, singular ",
+  "concrete_good": "accepted"
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_curved_e3\\lumenairy\\__init__.py",
+  "platform": "win32"
+ }
+}

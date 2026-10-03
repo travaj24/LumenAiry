@@ -1,0 +1,8 @@
+circle_edge_sliver NaN at the event, finite at the control | concrete: refused: PMM2DStackPure (JAX): the shapes at these parameter | numpy: refused: Circle(cx=0.6, cy=0.6, r=0.5995 | event T00 nan
+circle_bulge NaN at the event, finite at the control | concrete: refused: PMM2DStackPure (JAX): the shapes at these parameter | numpy: refused: Circle(cx=0.6, cy=0.6, r=0.61): | event T00 nan
+fillet_sliver NaN at the event, finite at the control | concrete: refused: PMM2DStackPure (JAX): the shapes at these parameter | numpy: refused: FilletRect(cx=0.6, cy=0.6, w=0. | event T00 nan
+sine_edge_sliver NaN at the event, finite at the control | concrete: refused: PMM2DStackPure (JAX): the shapes at these parameter | numpy: refused: SinusoidalWall(axis='x', x0=0.6 | event T00 nan
+sine_past_edge NaN at the event, finite at the control | concrete: refused: PMM2DStackPure (JAX): the shapes at these parameter | numpy: refused: SinusoidalWall(axis='x', x0=0.6 | event T00 nan
+circle_in_rect_cross NaN at the event, finite at the control | concrete: refused: PMM2DStackPure (JAX): the shapes at these parameter | numpy: refused: compile_shapes: the outlines of | event T00 nan
+two_circles_approach NaN at the event, finite at the control | concrete: refused: PMM2DStackPure (JAX): the shapes at these parameter | numpy: refused: compile_shapes: the outlines of | event T00 nan
+timeout: the monitored command dumped core

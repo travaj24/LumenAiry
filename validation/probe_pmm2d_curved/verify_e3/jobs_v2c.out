@@ -1,0 +1,15 @@
+done v2_frozen.py fillet 7 numpy nofar pt=4 rc=0
+done v2_frozen.py fillet 7 numpy nofar pt=5 rc=0
+done v2_frozen.py fillet 7 numpy nofar pt=6 rc=0
+done v2_frozen.py fillet 7 numpy nofar pt=2 rc=0
+done v2_frozen.py fillet 7 numpy nofar pt=1 rc=0
+done v2_frozen.py fillet 7 numpy nofar pt=0 rc=0
+done v2_frozen.py fillet 7 numpy nofar pt=3 rc=0
+done v2_frozen.py fillet 6 numpy nofar pt=1 rc=0
+done v2_frozen.py fillet 6 numpy nofar pt=4 rc=0
+done v2_frozen.py fillet 6 twin nofar rc=124
+done v2_frozen.py fillet 6 numpy nofar pt=0 rc=0
+done v2_frozen.py fillet 6 numpy nofar pt=6 rc=0
+done v2_frozen.py fillet 6 numpy nofar pt=2 rc=0
+done v2_frozen.py fillet 6 numpy nofar pt=3 rc=0
+done v2_frozen.py fillet 6 numpy nofar pt=5 rc=0

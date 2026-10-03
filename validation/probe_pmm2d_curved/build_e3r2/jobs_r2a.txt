@@ -1,0 +1,8 @@
+r2_dev.py 4 square_w 1e-6 3e-9 1e-6 1e-8 1e-6 3e-8 0 0
+r2_dev.py 5 square_w 1e-6 3e-9 1e-6 1e-8 1e-6 3e-8 0 0
+r2_dev.py 3 ellipse_a 1e-6 3e-9 1e-6 1e-8 1e-6 3e-8 0 0
+r2_dev.py 4 ellipse_a 1e-6 3e-9 1e-6 1e-8 1e-6 3e-8 0 0
+r2_dev.py 3 fillet_sq_w 1e-6 3e-9 1e-6 1e-8 1e-6 3e-8 0 0
+r2_dev.py 3 rect_nonsq_w 1e-6 3e-9 1e-6 1e-8 1e-6 3e-8 0 0
+r2_dev.py 3 square_wh 1e-6 3e-9 1e-6 1e-8 1e-6 3e-8 0 0
+r2_dev.py 4 square_wh 1e-6 3e-9 1e-6 1e-8 1e-6 3e-8 0 0

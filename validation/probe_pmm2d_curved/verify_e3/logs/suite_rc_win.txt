@@ -1,0 +1,2 @@
+suite A rc=0
+suite B rc=0

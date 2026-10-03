@@ -1,0 +1,38 @@
+{
+ "M": 7,
+ "peak_MB": {
+  "start": 137.73828125,
+  "template": 353.39453125,
+  "fwd_compiled": 877.57421875,
+  "grad_compiled": 1450.42578125,
+  "end": 5286.578125
+ },
+ "template_s": 37.583745399999316,
+ "fwd_compile_plus_run_s": 64.46904070000164,
+ "fwd_run_s": [
+  6.564581799997541,
+  9.596447100004298,
+  19.53929189999326
+ ],
+ "traces_after_fwd_sweep": 1,
+ "fwd_cache_size": 1,
+ "grad_compile_plus_run_s": 106.62455490000139,
+ "grad_run_s": [
+  8.684241400005703,
+  10.645715800004837,
+  19.06598379999923
+ ],
+ "traces_after_grad_sweep": 1,
+ "grad_cache_size": 1,
+ "vmap_grad_compile_plus_run_s": 97.39669380000123,
+ "traces_vmap": 1,
+ "numpy_solve_s": 69.05832070000179,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e3\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

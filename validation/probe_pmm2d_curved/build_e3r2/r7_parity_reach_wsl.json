@@ -1,0 +1,63 @@
+{
+ "M": 3,
+ "fixtures": {
+  "circle": {
+   "twin_numpy": 6.7307270867900115e-15,
+   "reach": 7.299716386910404e-15,
+   "ratio": 0.9220532319391636
+  },
+  "circle_conical": {
+   "twin_numpy": 1.3739009929736312e-14,
+   "reach": 1.2129186544029835e-14,
+   "ratio": 1.1327231121281465
+  },
+  "circle_tensor_magnetic_two_layer": {
+   "twin_numpy": 5.2812231021436645e-15,
+   "reach": 6.716849298982197e-15,
+   "ratio": 0.7862649386735425
+  },
+  "fillet": {
+   "twin_numpy": 4.8627768478581856e-14,
+   "reach": 7.072120666862247e-14,
+   "ratio": 0.6875981161695447
+  },
+  "magnetic_tensor": {
+   "twin_numpy": 2.0539125955565396e-15,
+   "reach": 2.3012824894430616e-15,
+   "ratio": 0.8925078103095512
+  },
+  "multilayer": {
+   "twin_numpy": 1.8672881944351473e-14,
+   "reach": 1.8515111858293106e-14,
+   "ratio": 1.0085211521953457
+  },
+  "scalar_conical_lossy": {
+   "twin_numpy": 1.4155343563970746e-15,
+   "reach": 2.6645352591003757e-15,
+   "ratio": 0.53125
+  },
+  "scalar_pillar": {
+   "twin_numpy": 2.0261570199409107e-15,
+   "reach": 3.1363800445660672e-15,
+   "ratio": 0.6460176991150443
+  },
+  "sinusoid": {
+   "twin_numpy": 2.6645352591003757e-15,
+   "reach": 9.992007221626409e-16,
+   "ratio": 2.6666666666666665
+  },
+  "tensor_lc": {
+   "twin_numpy": 3.3306690738754696e-16,
+   "reach": 1.3322676295501878e-15,
+   "ratio": 0.25
+  }
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_curved_e3b/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

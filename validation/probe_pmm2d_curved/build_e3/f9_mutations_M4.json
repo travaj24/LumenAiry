@@ -1,0 +1,29 @@
+{
+ "M": 4,
+ "clean_parity": [
+  2.2599110083287854e-15,
+  1.2254086634300165e-14,
+  3.127845336678037e-14
+ ],
+ "cofactor": [
+  0.005530044307483117,
+  0.0661783272565348,
+  0.016464787331656315
+ ],
+ "nq_reread": "TracerArrayConversionError",
+ "gauge_host": "TracerArrayConversionError",
+ "dT_dcx_centred_clean": 5.520583989948591e-14,
+ "plain_eig": "NotImplementedError: Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input th",
+ "dT_dcx_centred_unregularised": -2.5701663020072374e-14,
+ "dT_dr_unregularised": -1.3311627574870355,
+ "dT_dr_clean": -1.3311627574868643,
+ "no_guard_fold_value": 0.5030970813052262,
+ "guard_fold_value": NaN,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_curved_e3\\lumenairy\\__init__.py",
+  "platform": "win32"
+ }
+}

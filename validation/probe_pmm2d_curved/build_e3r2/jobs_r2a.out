@@ -1,0 +1,40 @@
+square_w 4 gap 1e-06 split 3e-09 vsFDtwin 1.10e-09 vsFDnumpy 9.59e-10 run 1.03s
+square_w 4 gap 1e-06 split 1e-08 vsFDtwin 9.93e-10 vsFDnumpy 9.29e-10 run 1.04s
+square_w 4 gap 1e-06 split 3e-08 vsFDtwin 5.80e-09 vsFDnumpy 5.85e-09 run 0.49s
+square_w 4 gap 0.0 split 0.0 vsFDtwin 2.50e-01 vsFDnumpy 2.50e-01 run 0.25s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M4_scan_win.json
+square_w 5 gap 1e-06 split 3e-09 vsFDtwin 1.88e-09 vsFDnumpy 2.36e-09 run 3.07s
+square_w 5 gap 1e-06 split 1e-08 vsFDtwin 7.61e-09 vsFDnumpy 7.68e-09 run 1.77s
+square_w 5 gap 1e-06 split 3e-08 vsFDtwin 7.77e-08 vsFDnumpy 7.77e-08 run 1.75s
+square_w 5 gap 0.0 split 0.0 vsFDtwin 1.39e-01 vsFDnumpy 1.39e-01 run 0.76s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M5_scan_win.json
+ellipse_a 3 gap 1e-06 split 3e-09 vsFDtwin 5.94e-11 vsFDnumpy 5.06e-04 run 0.15s
+ellipse_a 3 gap 1e-06 split 1e-08 vsFDtwin 9.55e-11 vsFDnumpy 5.06e-04 run 0.31s
+ellipse_a 3 gap 1e-06 split 3e-08 vsFDtwin 5.94e-10 vsFDnumpy 5.06e-04 run 0.21s
+ellipse_a 3 gap 0.0 split 0.0 vsFDtwin 6.53e-03 vsFDnumpy 7.03e-03 run 0.10s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_ellipse_a_M3_scan_win.json
+ellipse_a 4 gap 1e-06 split 3e-09 vsFDtwin 1.51e-10 vsFDnumpy 7.87e-05 run 0.49s
+ellipse_a 4 gap 1e-06 split 1e-08 vsFDtwin 3.60e-09 vsFDnumpy 7.87e-05 run 0.54s
+ellipse_a 4 gap 1e-06 split 3e-08 vsFDtwin 3.27e-08 vsFDnumpy 7.86e-05 run 0.78s
+ellipse_a 4 gap 0.0 split 0.0 vsFDtwin 2.99e-03 vsFDnumpy 2.99e-03 run 0.26s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_ellipse_a_M4_scan_win.json
+rect_nonsq_w 3 gap 1e-06 split 3e-09 vsFDtwin 3.52e-11 vsFDnumpy 2.85e-11 run 0.12s
+rect_nonsq_w 3 gap 1e-06 split 1e-08 vsFDtwin 5.05e-11 vsFDnumpy 2.72e-11 run 0.19s
+rect_nonsq_w 3 gap 1e-06 split 3e-08 vsFDtwin 1.84e-10 vsFDnumpy 1.61e-10 run 0.15s
+rect_nonsq_w 3 gap 0.0 split 0.0 vsFDtwin 3.38e-11 vsFDnumpy 3.00e-11 run 0.14s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_rect_nonsq_w_M3_scan_win.json
+square_wh 3 gap 1e-06 split 3e-09 vsFDtwin 4.32e-11 vsFDnumpy 1.54e-11 run 0.12s
+square_wh 3 gap 1e-06 split 1e-08 vsFDtwin 6.45e-11 vsFDnumpy 3.67e-11 run 0.18s
+square_wh 3 gap 1e-06 split 3e-08 vsFDtwin 2.52e-10 vsFDnumpy 2.24e-10 run 0.16s
+square_wh 3 gap 0.0 split 0.0 vsFDtwin 4.11e-11 vsFDnumpy 1.33e-11 run 0.08s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_wh_M3_scan_win.json
+square_wh 4 gap 1e-06 split 3e-09 vsFDtwin 2.27e-10 vsFDnumpy 1.55e-10 run 0.52s
+square_wh 4 gap 1e-06 split 1e-08 vsFDtwin 1.77e-09 vsFDnumpy 1.69e-09 run 1.14s
+square_wh 4 gap 1e-06 split 3e-08 vsFDtwin 1.53e-08 vsFDnumpy 1.52e-08 run 0.48s
+square_wh 4 gap 0.0 split 0.0 vsFDtwin 7.44e-11 vsFDnumpy 8.06e-12 run 0.22s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_wh_M4_scan_win.json
+fillet_sq_w 3 gap 1e-06 split 3e-09 vsFDtwin 1.37e-01 vsFDnumpy 1.37e-01 run 0.89s
+fillet_sq_w 3 gap 1e-06 split 1e-08 vsFDtwin 1.83e+00 vsFDnumpy 1.83e+00 run 0.94s
+fillet_sq_w 3 gap 1e-06 split 3e-08 vsFDtwin 7.10e+01 vsFDnumpy 7.10e+01 run 0.85s
+fillet_sq_w 3 gap 0.0 split 0.0 vsFDtwin 2.86e-01 vsFDnumpy 2.86e-01 run 0.42s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_fillet_sq_w_M3_scan_win.json

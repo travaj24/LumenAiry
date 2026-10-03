@@ -110,6 +110,8 @@ import hashlib
 import numpy as np
 from numpy.polynomial.legendre import leggauss
 
+from ...backend import is_jax_array
+
 __all__ = ["Arc", "CellMap", "EdgeCurve", "EllipseArc", "IdentityMap", "Line",
            "RefinedMap", "SeparableStretch", "SineStretch", "Sinusoid",
            "TransfiniteMap"]
@@ -120,6 +122,50 @@ __all__ = ["Arc", "CellMap", "EdgeCurve", "EllipseArc", "IdentityMap", "Line",
 #: these at round-off (~1e-16); 1e-12 leaves four decades for the arithmetic
 #: of user-supplied curves and still refuses any real (>= 1e-9 p) defect.
 _MAP_VALIDATE_TOL = 1e-12
+
+
+# --------------------------------------------------------------------------- #
+# TRACED PARAMETERS (Phase E3, the JAX twin of the pure staggered solver).
+# An edge curve or a transfinite map whose parameters are JAX values (a shape
+# radius under ``jax.grad`` / ``jax.jit``) keeps them as they are -- no
+# ``float()``, no concrete validation -- and evaluates with ``jax.numpy``.
+# Every NumPy-parameter object takes the shipped code path, byte for byte.
+# --------------------------------------------------------------------------- #
+def _any_traced(*vals):
+    """True when any of ``vals`` (scalars, arrays, or tuples / lists of them)
+    is a JAX value (concrete or traced)."""
+    for v in vals:
+        if isinstance(v, (list, tuple)):
+            if _any_traced(*v):
+                return True
+        elif is_jax_array(v):
+            return True
+    return False
+
+
+def _xp_of(*vals):
+    """``jax.numpy`` when any of ``vals`` is a JAX value, else ``numpy``."""
+    if _any_traced(*vals):
+        import jax.numpy as jnp
+        return jnp
+    return np
+
+
+def _num(v):
+    """``float(v)`` for a concrete value; a JAX value is kept as it is."""
+    return v if _any_traced(v) else float(v)
+
+
+def _vec2(P):
+    """A length-2 point: ``np.asarray(P, float)`` for concrete input (the
+    shipped conversion), a ``jax.numpy`` vector when any entry is traced."""
+    if _any_traced(P):
+        import jax.numpy as jnp
+        if isinstance(P, (list, tuple)):
+            return jnp.stack([jnp.asarray(c, dtype=jnp.float64)
+                              for c in P]).reshape(2)
+        return jnp.asarray(P, dtype=jnp.float64).reshape(2)
+    return np.asarray(P, dtype=float).reshape(2)
 
 
 def _resolve_walls(walls, period, axis):
@@ -529,23 +575,24 @@ class Line(EdgeCurve):
     given a curve is this line between its two vertex images."""
 
     def __init__(self, P, Q):
-        self.P = np.asarray(P, dtype=float).reshape(2)
-        self.Q = np.asarray(Q, dtype=float).reshape(2)
+        self.P = _vec2(P)
+        self.Q = _vec2(Q)
 
     def __call__(self, s):
         s = np.atleast_1d(np.asarray(s, dtype=float))
         d = self.Q - self.P
+        xp = _xp_of(d)
         return (self.P[None, :] + s[:, None] * d[None, :],
-                np.broadcast_to(d[None, :], (s.size, 2)).copy())
+                xp.broadcast_to(d[None, :], (s.size, 2)).copy())
 
     def key(self):
         return ("Line", tuple(self.P), tuple(self.Q))
 
     def piece(self, s0, s1):
-        if s0 == 0.0 and s1 == 1.0:
+        if not _any_traced(s0, s1) and s0 == 0.0 and s1 == 1.0:
             return self
         d = self.Q - self.P
-        return Line(self.P + float(s0) * d, self.P + float(s1) * d)
+        return Line(self.P + _num(s0) * d, self.P + _num(s1) * d)
 
 
 class Arc(EdgeCurve):
@@ -556,10 +603,12 @@ class Arc(EdgeCurve):
     joins two given grid-vertex images about a given centre."""
 
     def __init__(self, center, radius, theta0, theta1):
-        self.center = np.asarray(center, dtype=float).reshape(2)
-        self.radius = float(radius)
-        self.theta0 = float(theta0)
-        self.theta1 = float(theta1)
+        self.center = _vec2(center)
+        self.radius = _num(radius)
+        self.theta0 = _num(theta0)
+        self.theta1 = _num(theta1)
+        if _any_traced(self.center, self.radius, self.theta0, self.theta1):
+            return                  # traced (Phase E3): no concrete checks
         if not self.radius > 0.0:
             raise ValueError(f"Arc: radius must be > 0, got {radius!r}.")
         if self.theta0 == self.theta1:
@@ -571,6 +620,15 @@ class Arc(EdgeCurve):
         ``Q`` (its sweep is below 180 degrees).  Both points must sit on one
         circle about ``center`` (and on ``radius``, if given) to
         :data:`_EDGE_END_TOL` relative -- otherwise there is no such arc."""
+        if _any_traced(P, Q, center, radius):
+            # traced (Phase E3): the same arc, no concrete checks
+            xp = _xp_of(P, Q, center, radius)
+            P, Q, c = _vec2(P), _vec2(Q), _vec2(center)
+            r = (xp.hypot(*(P - c)) if radius is None else radius)
+            t0 = xp.arctan2(P[1] - c[1], P[0] - c[0])
+            t1 = xp.arctan2(Q[1] - c[1], Q[0] - c[0])
+            dt = (t1 - t0 + np.pi) % (2.0 * np.pi) - np.pi
+            return cls(c, r, t0, t0 + dt)
         P = np.asarray(P, dtype=float).reshape(2)
         Q = np.asarray(Q, dtype=float).reshape(2)
         c = np.asarray(center, dtype=float).reshape(2)
@@ -593,11 +651,12 @@ class Arc(EdgeCurve):
 
     def __call__(self, s):
         s = np.atleast_1d(np.asarray(s, dtype=float))
+        xp = _xp_of(self.center, self.radius, self.theta0, self.theta1)
         sw = self.theta1 - self.theta0
         th = self.theta0 + s * sw
-        cs, sn = np.cos(th), np.sin(th)
-        val = self.center[None, :] + self.radius * np.stack([cs, sn], 1)
-        der = (self.radius * sw) * np.stack([-sn, cs], 1)
+        cs, sn = xp.cos(th), xp.sin(th)
+        val = self.center[None, :] + self.radius * xp.stack([cs, sn], 1)
+        der = (self.radius * sw) * xp.stack([-sn, cs], 1)
         return val, der
 
     def key(self):
@@ -605,11 +664,11 @@ class Arc(EdgeCurve):
                 self.theta1)
 
     def piece(self, s0, s1):
-        if s0 == 0.0 and s1 == 1.0:
+        if not _any_traced(s0, s1) and s0 == 0.0 and s1 == 1.0:
             return self
         sw = self.theta1 - self.theta0
-        return Arc(self.center, self.radius, self.theta0 + float(s0) * sw,
-                   self.theta0 + float(s1) * sw)
+        return Arc(self.center, self.radius, self.theta0 + _num(s0) * sw,
+                   self.theta0 + _num(s1) * sw)
 
 
 class EllipseArc(EdgeCurve):
@@ -621,7 +680,12 @@ class EllipseArc(EdgeCurve):
     ``a = b``; the point at ``t = 45`` degrees is ``(a, b) / sqrt 2``.)"""
 
     def __init__(self, center, semi_axes, t0, t1, angle=0.0):
-        self.center = np.asarray(center, dtype=float).reshape(2)
+        self.center = _vec2(center)
+        if _any_traced(center, semi_axes, t0, t1, angle):
+            # traced (Phase E3): the parameters as given, no concrete checks
+            self.a, self.b = (_num(v) for v in semi_axes)
+            self.t0, self.t1, self.angle = _num(t0), _num(t1), _num(angle)
+            return
         a, b = (float(v) for v in semi_axes)
         if not (a > 0.0 and b > 0.0):
             raise ValueError(f"EllipseArc: semi-axes must be > 0, got "
@@ -635,14 +699,15 @@ class EllipseArc(EdgeCurve):
 
     def __call__(self, s):
         s = np.atleast_1d(np.asarray(s, dtype=float))
+        xp = _xp_of(self.center, self.a, self.b, self.t0, self.t1, self.angle)
         sw = self.t1 - self.t0
         t = self.t0 + s * sw
-        ca, sa = np.cos(self.angle), np.sin(self.angle)
-        px, py = self.a * np.cos(t), self.b * np.sin(t)
-        dx, dy = -self.a * np.sin(t) * sw, self.b * np.cos(t) * sw
-        val = self.center[None, :] + np.stack([ca * px - sa * py,
+        ca, sa = xp.cos(self.angle), xp.sin(self.angle)
+        px, py = self.a * xp.cos(t), self.b * xp.sin(t)
+        dx, dy = -self.a * xp.sin(t) * sw, self.b * xp.cos(t) * sw
+        val = self.center[None, :] + xp.stack([ca * px - sa * py,
                                                sa * px + ca * py], 1)
-        der = np.stack([ca * dx - sa * dy, sa * dx + ca * dy], 1)
+        der = xp.stack([ca * dx - sa * dy, sa * dx + ca * dy], 1)
         return val, der
 
     def key(self):
@@ -650,11 +715,11 @@ class EllipseArc(EdgeCurve):
                 self.t1, self.angle)
 
     def piece(self, s0, s1):
-        if s0 == 0.0 and s1 == 1.0:
+        if not _any_traced(s0, s1) and s0 == 0.0 and s1 == 1.0:
             return self
         sw = self.t1 - self.t0
         return EllipseArc(self.center, (self.a, self.b),
-                          self.t0 + float(s0) * sw, self.t0 + float(s1) * sw,
+                          self.t0 + _num(s0) * sw, self.t0 + _num(s1) * sw,
                           angle=self.angle)
 
 
@@ -673,38 +738,43 @@ class Sinusoid(EdgeCurve):
         if along not in ("x", "y"):
             raise ValueError(f"Sinusoid: along must be 'x' or 'y', got "
                              f"{along!r}.")
-        self.base = float(base)
-        self.amplitude = float(amplitude)
-        self.period = float(period)
-        self.t0 = float(t0)
-        self.t1 = float(t1)
-        self.phase = float(phase)
+        self.base = _num(base)
+        self.amplitude = _num(amplitude)
+        self.period = _num(period)
+        self.t0 = _num(t0)
+        self.t1 = _num(t1)
+        self.phase = _num(phase)
         self.along = along
+        if _any_traced(self.base, self.amplitude, self.period, self.t0,
+                       self.t1, self.phase):
+            return                  # traced (Phase E3): no concrete checks
         if not self.period > 0.0 or self.t0 == self.t1:
             raise ValueError("Sinusoid: period must be > 0 and t0 != t1.")
 
     def __call__(self, s):
         s = np.atleast_1d(np.asarray(s, dtype=float))
+        xp = _xp_of(self.base, self.amplitude, self.period, self.t0, self.t1,
+                    self.phase)
         sw = self.t1 - self.t0
         t = self.t0 + s * sw
         k = 2.0 * np.pi / self.period
-        w = self.base + self.amplitude * np.sin(k * t + self.phase)
-        dw = self.amplitude * k * np.cos(k * t + self.phase) * sw
-        dt = np.full_like(t, sw)
+        w = self.base + self.amplitude * xp.sin(k * t + self.phase)
+        dw = self.amplitude * k * xp.cos(k * t + self.phase) * sw
+        dt = xp.full_like(t, sw) if xp is np else xp.zeros_like(t) + sw
         if self.along == "y":
-            return np.stack([w, t], 1), np.stack([dw, dt], 1)
-        return np.stack([t, w], 1), np.stack([dt, dw], 1)
+            return xp.stack([w, t], 1), xp.stack([dw, dt], 1)
+        return xp.stack([t, w], 1), xp.stack([dt, dw], 1)
 
     def key(self):
         return ("Sinusoid", self.base, self.amplitude, self.period, self.t0,
                 self.t1, self.phase, self.along)
 
     def piece(self, s0, s1):
-        if s0 == 0.0 and s1 == 1.0:
+        if not _any_traced(s0, s1) and s0 == 0.0 and s1 == 1.0:
             return self
         sw = self.t1 - self.t0
-        return self.between(self.t0 + float(s0) * sw,
-                            self.t0 + float(s1) * sw)
+        return self.between(self.t0 + _num(s0) * sw,
+                            self.t0 + _num(s1) * sw)
 
     def between(self, t0, t1):
         """The piece between the running coordinates ``t0`` and ``t1`` given
@@ -712,6 +782,25 @@ class Sinusoid(EdgeCurve):
         so a piece cut at a wall position needs no ``s`` arithmetic)."""
         return Sinusoid(self.base, self.amplitude, self.period, t0, t1,
                         phase=self.phase, along=self.along)
+
+
+class _MemoCurve:
+    """An edge curve of a TRACED map with its evaluations memoised by the
+    (concrete) parameter array -- Phase E3 compile-size economy; the values
+    are the wrapped curve's own."""
+
+    __slots__ = ("curve", "memo")
+
+    def __init__(self, curve):
+        self.curve = curve
+        self.memo = {}
+
+    def __call__(self, s):
+        key = np.asarray(s, dtype=float).tobytes()
+        hit = self.memo.get(key)
+        if hit is None:
+            hit = self.memo[key] = self.curve(s)
+        return hit
 
 
 class TransfiniteMap(CellMap):
@@ -859,9 +948,45 @@ class TransfiniteMap(CellMap):
             # check, never skipped)
             self.validate(n=12)
 
+    @classmethod
+    def _traced(cls, u_bounds, v_bounds, vertex_images, curved_edges,
+                singular_vertices):
+        """A TRACED transfinite map (Phase E3, the JAX twin): the ``(u, v)``
+        wall grid ``u_bounds`` / ``v_bounds`` is CONCRETE (the twin's frozen
+        grid), the ``(Nx + 1, Ny + 1, 2)`` ``vertex_images`` and the
+        ``curved_edges`` curves may be functions of JAX shape parameters.
+        Nothing is validated here (validation needs concrete values -- the
+        twin builds its NumPy reference map through the validating
+        constructor and guards the traced one by ``det J`` at every node);
+        ``singular_vertices`` is the reference map's list (a TOPOLOGICAL
+        property, frozen with the grid).  :meth:`geom` / :meth:`geom_points`
+        are the shipped Gordon-Hall blend, unchanged."""
+        self = cls.__new__(cls)
+        self.u_walls = self.u_bounds = np.asarray(u_bounds, dtype=float)
+        self.v_walls = self.v_bounds = np.asarray(v_bounds, dtype=float)
+        self.period_x = float(self.u_bounds[-1])
+        self.period_y = float(self.v_bounds[-1])
+        self.vertex_images = vertex_images
+        self.curved_edges = dict(curved_edges)
+        self._sing = list(singular_vertices)
+        self._memo = {}
+        return self
+
     def edge(self, kind, i, j):
         """The curve of edge ``(kind, i, j)`` -- the given curve, or the
         straight :class:`Line` between its two vertex images."""
+        memo = getattr(self, "_memo", None)
+        if memo is not None:
+            # a TRACED map (Phase E3): each grid edge is evaluated ONCE per
+            # node set per trace although two cells share it
+            hit = memo.get(("e", kind, i, j))
+            if hit is None:
+                hit = memo[("e", kind, i, j)] = _MemoCurve(
+                    self._edge_curve(kind, i, j))
+            return hit
+        return self._edge_curve(kind, i, j)
+
+    def _edge_curve(self, kind, i, j):
         c = self.curved_edges.get((kind, i, j))
         if c is not None:
             return c
@@ -886,6 +1011,8 @@ class TransfiniteMap(CellMap):
         points exactly, so this arises only for hand-built maps; the remedy
         is to make the corner exactly singular or to keep it well away from
         singular."""
+        if getattr(self, "_sing", None) is not None:
+            return list(self._sing)          # a traced map: the frozen list
         out = []
         Nx, Ny = self.shape
         one = np.array([0.0, 1.0])
@@ -924,6 +1051,17 @@ class TransfiniteMap(CellMap):
         Vi = self.vertex_images
         P00, P10 = Vi[sx, sy], Vi[sx + 1, sy]
         P01, P11 = Vi[sx, sy + 1], Vi[sx + 1, sy + 1]
+        du = self.u_bounds[sx + 1] - self.u_bounds[sx]
+        dv = self.v_bounds[sy + 1] - self.v_bounds[sy]
+        return self._gh(Bv, Bd, Tv, Td, Lv, Ld, Rv, Rd, P00, P10, P01, P11,
+                        S, Tt, du, dv)
+
+    @staticmethod
+    def _gh(Bv, Bd, Tv, Td, Lv, Ld, Rv, Rd, P00, P10, P01, P11, S, Tt, du,
+            dv):
+        """The Gordon-Hall formula itself -- ONE body for the per-cell
+        :meth:`_blend` and the batched traced :meth:`prefetch` (Phase E3);
+        the operands may carry any leading batch shape."""
         Phi = ((1 - Tt) * Bv + Tt * Tv + (1 - S) * Lv + S * Rv
                - ((1 - S) * (1 - Tt) * P00 + S * (1 - Tt) * P10
                   + (1 - S) * Tt * P01 + S * Tt * P11))
@@ -931,10 +1069,75 @@ class TransfiniteMap(CellMap):
               - ((1 - Tt) * (P10 - P00) + Tt * (P11 - P01)))
         Pt = (-Bv + Tv + (1 - S) * Ld + S * Rd
               - ((1 - S) * (P01 - P00) + S * (P11 - P10)))
-        du = self.u_bounds[sx + 1] - self.u_bounds[sx]
-        dv = self.v_bounds[sy + 1] - self.v_bounds[sy]
         return (Phi[..., 0], Phi[..., 1], Ps[..., 0] / du, Pt[..., 0] / dv,
                 Ps[..., 1] / du, Pt[..., 1] / dv)
+
+    def prefetch(self, requests, grid=True):
+        """Batched evaluation for a TRACED map (Phase E3): ``requests`` is a
+        list of ``(sx, sy, U, V)``; every one is evaluated in ONE broadcast
+        of :meth:`_gh` (edges memoised) and stored in the map's memo under
+        the key :meth:`geom` (``grid``) / :meth:`geom_points` look up, so the
+        per-cell calls that follow are slices.  A no-op on a concrete map.
+        All requests must share the node count."""
+        memo = getattr(self, "_memo", None)
+        if memo is None or not requests:
+            return
+        tag = "g" if grid else "p"
+        todo = [(sx, sy, U, V) for sx, sy, U, V in requests
+                if (tag, sx, sy, np.asarray(U).tobytes(),
+                    np.asarray(V).tobytes()) not in memo]
+        groups = {}
+        for req in todo:
+            groups.setdefault((np.size(req[2]), np.size(req[3])),
+                              []).append(req)
+        for grp in groups.values():
+            self._prefetch_group(grp, grid, tag, memo)
+
+    def _prefetch_group(self, todo, grid, tag, memo):
+        import jax.numpy as jnp
+        cols = {k: [] for k in ("Bv", "Bd", "Tv", "Td", "Lv", "Ld", "Rv",
+                                "Rd", "P00", "P10", "P01", "P11", "S", "T",
+                                "du", "dv")}
+        Vi = self.vertex_images
+        for sx, sy, U, V in todo:
+            sl, tl = self._local(sx, sy, U, V)
+            if not grid:
+                sl, tl = sl.ravel(), tl.ravel()
+            for nm, (kind, i, j, arg) in (
+                    ("B", ("h", sx, sy, sl)), ("T", ("h", sx, sy + 1, sl)),
+                    ("L", ("v", sx, sy, tl)), ("R", ("v", sx + 1, sy, tl))):
+                val, der = self.edge(kind, i, j)(arg)
+                cols[nm + "v"].append(jnp.asarray(val))
+                cols[nm + "d"].append(jnp.asarray(der))
+            cols["P00"].append(Vi[sx, sy])
+            cols["P10"].append(Vi[sx + 1, sy])
+            cols["P01"].append(Vi[sx, sy + 1])
+            cols["P11"].append(Vi[sx + 1, sy + 1])
+            cols["S"].append(sl)
+            cols["T"].append(tl)
+            cols["du"].append(self.u_bounds[sx + 1] - self.u_bounds[sx])
+            cols["dv"].append(self.v_bounds[sy + 1] - self.v_bounds[sy])
+        st = {k: (jnp.stack([jnp.asarray(a) for a in v])
+                  if k not in ("S", "T", "du", "dv") else np.stack(v))
+              for k, v in cols.items()}
+        P = [st[k][:, None, None, :] if grid else st[k][:, None, :]
+             for k in ("P00", "P10", "P01", "P11")]
+        if grid:
+            S, Tt = st["S"][:, :, None, None], st["T"][:, None, :, None]
+            Bv, Bd, Tv, Td = (st[k][:, :, None, :] for k in ("Bv", "Bd", "Tv",
+                                                             "Td"))
+            Lv, Ld, Rv, Rd = (st[k][:, None, :, :] for k in ("Lv", "Ld", "Rv",
+                                                             "Rd"))
+            du, dv = st["du"][:, None, None], st["dv"][:, None, None]
+        else:
+            S, Tt = st["S"][:, :, None], st["T"][:, :, None]
+            Bv, Bd, Tv, Td, Lv, Ld, Rv, Rd = (st[k] for k in (
+                "Bv", "Bd", "Tv", "Td", "Lv", "Ld", "Rv", "Rd"))
+            du, dv = st["du"][:, None], st["dv"][:, None]
+        out = self._gh(Bv, Bd, Tv, Td, Lv, Ld, Rv, Rd, *P, S, Tt, du, dv)
+        for c, (sx, sy, U, V) in enumerate(todo):
+            memo[(tag, sx, sy, np.asarray(U).tobytes(),
+                  np.asarray(V).tobytes())] = tuple(a[c] for a in out)
 
     def _local(self, sx, sy, U, V):
         u0, u1 = self.u_bounds[sx], self.u_bounds[sx + 1]
@@ -944,10 +1147,33 @@ class TransfiniteMap(CellMap):
         return s, t
 
     def geom(self, sx, sy, U, V):
+        memo = getattr(self, "_memo", None)
+        if memo is not None:
+            # a TRACED map (Phase E3): one evaluation per (cell, node set) per
+            # trace -- the assembly, the fold guard, the far field and the
+            # incident load ask for the same nodes, and every repeat would be
+            # ~150 more traced operations per cell to compile
+            key = ("g", sx, sy, np.asarray(U).tobytes(),
+                   np.asarray(V).tobytes())
+            hit = memo.get(key)
+            if hit is None:
+                s, t = self._local(sx, sy, U, V)
+                hit = memo[key] = self._blend(sx, sy, s, t, True)
+            return hit
         s, t = self._local(sx, sy, U, V)
         return self._blend(sx, sy, s, t, True)
 
     def geom_points(self, sx, sy, U, V):
+        memo = getattr(self, "_memo", None)
+        if memo is not None:
+            key = ("p", sx, sy, np.asarray(U).tobytes(),
+                   np.asarray(V).tobytes())
+            hit = memo.get(key)
+            if hit is None:
+                s, t = self._local(sx, sy, U, V)
+                hit = memo[key] = self._blend(sx, sy, s.ravel(), t.ravel(),
+                                              False)
+            return hit
         s, t = self._local(sx, sy, U, V)
         return self._blend(sx, sy, s.ravel(), t.ravel(), False)
 
@@ -999,6 +1225,20 @@ class RefinedMap(CellMap):
                                      self.period_y, "v")
         self.validate()
 
+    @classmethod
+    def _traced(cls, base, reference):
+        """The refinement of the TRACED map ``base`` on the concrete fine
+        grid of the NumPy ``reference`` refinement (Phase E3): the same
+        owner tables, no validation (see :meth:`TransfiniteMap._traced`)."""
+        self = cls.__new__(cls)
+        self.base = base
+        self.u_walls = self.u_bounds = reference.u_bounds
+        self.v_walls = self.v_bounds = reference.v_bounds
+        self.period_x, self.period_y = reference.period_x, reference.period_y
+        self._owner_u = reference._owner_u
+        self._owner_v = reference._owner_v
+        return self
+
     @staticmethod
     def _owners(fine, coarse, period, axis):
         """Index of the base segment holding each fine segment; refuses a
@@ -1020,6 +1260,13 @@ class RefinedMap(CellMap):
     def geom_points(self, sx, sy, U, V):
         return self.base.geom_points(int(self._owner_u[sx]),
                                      int(self._owner_v[sy]), U, V)
+
+    def prefetch(self, requests, grid=True):
+        """Phase E3: the base map's batched evaluation, on the owner cells."""
+        fn = getattr(self.base, "prefetch", None)
+        if fn is not None:
+            fn([(int(self._owner_u[sx]), int(self._owner_v[sy]), U, V)
+                for sx, sy, U, V in requests], grid=grid)
 
     @property
     def singular_vertices(self):

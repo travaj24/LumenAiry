@@ -4507,6 +4507,10 @@ def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
 # an exact degeneracy for reach (measured: 1e-13 takes theta=1e-8 from 43% to
 # ~5%, while removing the floor entirely makes the exactly degenerate point
 # 7.7x WORSE -- 1.71e-02 against 2.22e-03).
+# The resolution, where the CONSUMER of the eigenpairs is available as a
+# function, is :func:`_jax_eig_cluster_adjoint` below (the pure staggered
+# 2-D PMM twin uses it; the other twins do not yet -- a maintainer item of
+# docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md, "Round 2").
 
 # Fraction of ``max|lam|`` below which an eigenvalue splitting is treated as
 # unresolved by the eigenvector VJP (see the block comment above).
@@ -4579,6 +4583,270 @@ def _jax_eig_stable():
     # loss (observed: a 3x error on the eig-path gradient).  So it is omitted.
     _JAX_EIG_STABLE = _eig_raw
     return _eig_raw
+
+
+
+# ---------------------------------------------------------------------------
+# Degenerate eigenvalue CLUSTERS: the adjoint of "eig AND its consumer"
+# (V-E3-1 of the curved-cell Phase E3 verification, 2026-10-03)
+# ---------------------------------------------------------------------------
+# The KNOWN LIMIT above is sharper than "no F can recover it": at an exactly
+# degenerate cluster NO reverse-mode rule written at the eig boundary can be
+# correct, because the cotangent the consumer hands to eig does not contain
+# the information.  Let L(A) = h(eig(A)) with h invariant under a change of
+# basis inside a degenerate cluster (an S-matrix, a matrix function), and
+# write its first-order change in eigen-coordinates as
+#     dL = sum_ij (V^-1 dA V)_ij B_ji .
+# The eig cotangent carries lam_bar_i = B_ii and, h being basis-invariant
+# inside the cluster, NOTHING of the in-cluster off-diagonal B_ij: those
+# entries enter only through the consumer's response to a SPLITTING of the
+# cluster.  Two consumers with equal diagonal and different off-diagonal
+# in-cluster B hand eig IDENTICAL cotangents and have different gradients
+# (pinned by ``test_e3r2_no_eig_level_rule_can_see_the_in_cluster_block``).
+# Degenerate perturbation theory says the same: the in-cluster coupling
+# V_c^-1 dA V_c must be diagonalised and the consumer evaluated in THAT
+# basis, which depends on dA -- so the rule must wrap eig and its consumer.
+#
+# :func:`_jax_eig_cluster_adjoint` does that, with the consumer as a closure:
+#   * forward: eig and the consumer, the same operations as without the rule
+#     (the values are byte-identical);
+#   * reverse, no cluster: the standard VJP (the consumer's at the eigenpairs,
+#     then :func:`_jax_eig_stable`'s);
+#   * reverse, with a cluster (a pairwise gap <= gap_rel * max|lam|): LIFT
+#     every cluster by the cluster-confined matrix
+#         N = sum_c Q_c Y_c Q_c^H P_c
+#     (P_c the cluster's spectral projector, Q_c an orthonormal basis of
+#     the cluster, Y_c a traceless unit-RMS Hermitian compression of a fixed
+#     random matrix; the lift moves eigenvalues along the REAL axis by
+#     -+ d for a pair, so a forward-branch selector downstream is not
+#     crossed -- see _eig_cluster_lift), evaluate the standard VJP of eig + consumer at
+#     A + d N and at A - d N (d = split_rel * max|lam|) and average.  N
+#     leaves every eigenpair OUTSIDE the clusters exactly unchanged and
+#     resolves every cluster into d-separated eigenvalues, so at the lifted
+#     points the standard VJP's divided differences carry the in-cluster
+#     coupling; L being smooth in A, the centred average is
+#     grad L(A) + O(d^2), with a round-off of O(eps_mach / split_rel).  The
+#     consumer's cotangents for its OTHER inputs are taken at the exact point.
+# Gauge: N is built from the clusters' spectral projectors, not from the
+# basis LAPACK picked inside a cluster, so the gradient does not depend on
+# that basis (the defect V-E3-1 was exactly that dependence;
+# ``test_e3r2_gradient_is_invariant_under_a_rotation_inside_each_cluster``).
+# Cost, with a cluster: two more eigs and two more consumer passes (forward
+# and reverse) per gradient; without one, none.
+#
+# The two constants (measured in ``validation/probe_pmm2d_curved/build_e3r2/``
+# and recorded in ``docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md``,
+# "Round 2"): ``gap_rel`` is where the standard VJP stops being accurate (the
+# W9 envelope above: 2.5e-9 relative at a splitting of 1e-6, 1.5e-11 at
+# 1e-4), so a pair closer than it is treated as a cluster; ``split_rel`` is
+# the lift, below gap_rel so a lifted member never approaches an eigenvalue
+# outside its cluster, and large enough that eps_mach / split_rel is small.
+_EIG_CLUSTER_GAP_REL = 1e-6
+_EIG_CLUSTER_SPLIT_REL = 1e-7
+
+#: The centred stencils of the lifted average: (lift multiple, weight).
+#: Order 2: the plain +-d average (error O(d^2)); order 4: Richardson over
+#: +-d and +-2d (error O(d^4)).
+_EIG_CLUSTER_STENCILS = {
+    2: ((1.0, 0.5), (-1.0, 0.5)),
+    4: ((1.0, 2.0 / 3.0), (-1.0, 2.0 / 3.0), (2.0, -1.0 / 6.0),
+        (-2.0, -1.0 / 6.0)),
+}
+_EIG_CLUSTER_ORDER = 4
+#: The anchor-distance factor of :func:`_eig_cluster_lift`.
+_EIG_CLUSTER_ANCHOR_K = 0.25
+
+_JAX_EIG_CLUSTER_VJP = None
+
+
+def _eig_cluster_lift(lam, V, G, gap_rel, split_rel, anchors=()):
+    """``(d N, any_cluster)`` for the eigenpairs ``(lam, V)`` of ``G^-1 L``
+    (JAX; ``G`` Hermitian positive definite, or ``None`` for the identity): the
+    cluster-confined lift of :func:`_jax_eig_cluster_adjoint` (zero when no
+    pairwise gap is below ``gap_rel * max|lam|``).
+
+    On each cluster ``c`` (eigenvectors ``V_c``, ``G``-Gram
+    ``S_c = V_c^H G V_c``, ``G``-orthonormal basis ``Q_c = V_c S_c^-1/2``):
+    ``Y_c`` = the compression ``Q_c^H H Q_c`` of a fixed random Hermitian
+    ``H``, made TRACELESS and scaled to a unit root-mean-square eigenvalue,
+    and ``N = sum_c Q_c Y_c Q_c^H G P_c`` (``P_c`` the spectral projector).
+
+    * ``N`` maps into the cluster and annihilates every other eigenvector:
+      every other eigenpair is unchanged.
+    * Its cluster block in the basis ``V_c`` is ``S_c^-1/2 Y_c S_c^1/2``,
+      similar to the Hermitian ``Y_c``: the lift moves an exactly
+      degenerate cluster's eigenvalues along the REAL axis (for every
+      pencil, Hermitian or not), and a cluster of a HERMITIAN pencil that
+      merges several distinct eigenvalues stays real too (their
+      eigenvectors are ``G``-orthogonal, so ``S_c`` commutes with them) --
+      a real eigenvalue stays real and a forward-branch selector
+      downstream (``sqrt`` onto the forward branch, decided from the sign of
+      ``Im``) picks the same branch at the lifted points as at the exact one.
+    * The shifts have zero mean and unit RMS: a PAIR splits into exactly
+      ``-+ d`` (``d = split_rel * max|lam|``), and no member of a ``k``-cluster
+      moves more than ``sqrt(k) d`` -- far below ``gap_rel``, so a lifted
+      member never approaches an eigenvalue outside its cluster.
+    * ``anchors`` are the points of the eigenvalue plane where the CONSUMER
+      is not smooth (the branch point of a ``sqrt``); a cluster at distance
+      ``a`` from the nearest one is lifted by
+      ``min(d, _EIG_CLUSTER_ANCHOR_K a (eps_mach max|lam| / a)^(1/5))``, the
+      order-4 balance of the stencil's truncation ``(d / a)^4`` against the
+      round-off ``eps_mach max|lam| / d``.
+    * Every factor is a function of the cluster's SUBSPACE (a change of
+      basis inside the cluster changes ``Q_c`` by a unitary ``W`` and
+      ``Y_c`` to ``W^H Y_c W``), so ``N`` does not depend on the basis the
+      eigensolver picked."""
+    import jax.numpy as jnp
+    n = lam.shape[0]
+    scale = jnp.max(jnp.abs(lam))
+    scale = jnp.where(scale > 0, scale, 1.0)
+    eye = jnp.eye(n, dtype=bool)
+    close = (jnp.abs(lam[:, None] - lam[None, :]) <= gap_rel * scale) & ~eye
+    member = jnp.any(close, axis=1)
+    # clusters are the CONNECTED COMPONENTS of the pairwise relation (a
+    # chain of near-degenerate eigenvalues is one cluster): the transitive
+    # closure, by ceil(log2 n) squarings.  Without it a masked Gram block is
+    # not a Gram matrix and need not be positive definite (measured: a
+    # fillet far from its reference, 76 chained members of 200, min
+    # eigenvalue -6.3e-4 -> NaN gradient).
+    Kf = (close | (eye & member[:, None])).astype(jnp.float64)
+    for _ in range(max(1, int(np.ceil(np.log2(max(n, 2)))))):
+        Kf = jnp.where(Kf @ Kf > 0, 1.0, 0.0)
+    K = Kf > 0
+    rng = np.random.default_rng(20261003 + int(n))
+    X = (rng.standard_normal((n, n))
+         + 1j * rng.standard_normal((n, n))) / np.sqrt(2.0)
+    H = 0.5 * (X + X.conj().T)
+    VH = jnp.conj(V).T
+    # cluster-block Gram (identity on non-members) and its -+1/2 powers
+    GV = V if G is None else G @ V
+    SK = jnp.where(K, VH @ GV, 0.0) + jnp.diag(jnp.where(member, 0.0, 1.0))
+    w, U = jnp.linalg.eigh(SK)
+    Sm = (U * (1.0 / jnp.sqrt(w))[None, :]) @ jnp.conj(U).T
+    Sp = (U * jnp.sqrt(w)[None, :]) @ jnp.conj(U).T
+    Y = Sm @ jnp.where(K, VH @ (H @ V), 0.0) @ Sm
+    ksz = jnp.maximum(jnp.sum(Kf, axis=1), 1.0)
+    Y = Y - jnp.diag(jnp.where(member, (Kf @ jnp.real(jnp.diag(Y))) / ksz,
+                               0.0))
+    ms = jnp.sum((Kf @ jnp.abs(Y) ** 2) * Kf, axis=1) / ksz
+    rms = jnp.sqrt(ms)
+    Y = Y / jnp.where(member & (rms > 0), rms, 1.0)[:, None]
+    step = split_rel * scale
+    if anchors:
+        a = jnp.min(jnp.abs(lam[:, None] - jnp.asarray(
+            [complex(x) for x in anchors])[None, :]), axis=1)
+        a = jnp.min(jnp.where(K, a[None, :], jnp.inf), axis=1)   # cluster-wide
+        cap = _EIG_CLUSTER_ANCHOR_K * a * (
+            np.finfo(np.float64).eps * scale / jnp.maximum(a, 1e-300)) ** 0.2
+        step = jnp.where(member, jnp.minimum(step, cap), step)
+        Y = Y * (step / (split_rel * scale))[:, None]
+    Z = Sm @ Y @ Sp                       # cluster blocks, zero elsewhere
+    N = V @ jnp.linalg.solve(V.T, Z.T).T  # V Z V^-1
+    # a lift that is not finite (an ill-posed cluster block) is dropped: the
+    # stencil's weights sum to one, so that eig then gets the plain VJP
+    N = jnp.where(jnp.all(jnp.isfinite(N)), N, 0.0)
+    return (split_rel * scale) * N, jnp.any(close)
+
+
+def _jax_eig_cluster_vjp():
+    """Lazily build (once) the custom-VJP core of
+    :func:`_jax_eig_cluster_adjoint`."""
+    global _JAX_EIG_CLUSTER_VJP
+    if _JAX_EIG_CLUSTER_VJP is not None:
+        return _JAX_EIG_CLUSTER_VJP
+    from functools import partial
+
+    import jax
+    import jax.numpy as jnp
+
+    def eigs_of(eig_fn, Ls, Gs):
+        return tuple(eig_fn(L, G) for L, G in zip(Ls, Gs))
+
+    @partial(jax.custom_vjp, nondiff_argnums=(0, 1, 2, 3, 4))
+    def core(conv, eig_fn, gap_rel, split_rel, anchors, Ls, Gs, *consts):
+        return conv(eigs_of(eig_fn, Ls, Gs), *consts)
+
+    def core_fwd(conv, eig_fn, gap_rel, split_rel, anchors, Ls, Gs, *consts):
+        eo, evjp = jax.vjp(lambda a, b: eigs_of(eig_fn, a, b), Ls, Gs)
+        out, dvjp = jax.vjp(conv, eo, *consts)
+        lifts, flags = [], []
+        for (lam, V), G, an in zip(eo, Gs, anchors):
+            dN, anyc = _eig_cluster_lift(lam, V, G, gap_rel, split_rel, an)
+            lifts.append(dN)
+            flags.append(anyc)
+        anyc = jnp.any(jnp.stack(flags))
+        return out, (Ls, Gs, consts, evjp, dvjp, tuple(lifts), anyc)
+
+    def core_bwd(conv, eig_fn, gap_rel, split_rel, anchors, res, ct):
+        Ls, Gs, consts, evjp, dvjp, lifts, anyc = res
+        eb, *cb = dvjp(ct)
+
+        def plain(_):
+            return evjp(eb)
+
+        def lifted(_):
+            def g(a, b):
+                return conv(eigs_of(eig_fn, a, b), *consts)
+            acc = None
+            for t, wt in _EIG_CLUSTER_STENCILS[_EIG_CLUSTER_ORDER]:
+                Lx = tuple(L + (t * dN if G is None else G @ (t * dN))
+                           for L, G, dN in zip(Ls, Gs, lifts))
+                _o, vj = jax.vjp(g, Lx, Gs)
+                b = jax.tree_util.tree_map(lambda u: wt * u, vj(ct))
+                acc = b if acc is None else jax.tree_util.tree_map(
+                    lambda u, w: u + w, acc, b)
+            return acc
+        try:
+            flag = bool(anyc)
+        except jax.errors.ConcretizationTypeError:
+            LGb = jax.lax.cond(anyc, lifted, plain, None)
+        else:
+            LGb = lifted(None) if flag else plain(None)
+        return (*LGb, *cb)
+
+    core.defvjp(core_fwd, core_bwd)
+    _JAX_EIG_CLUSTER_VJP = core
+    return core
+
+
+def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
+                             split_rel=None, anchors=None):
+    """``consumer(tuple(eig_fn(L, G) for (L, G) in problems))`` with a
+    reverse-mode rule that is correct at degenerate eigenvalue CLUSTERS
+    (block comment above).
+
+    ``eig_fn(L, G)`` returns the differentiable ``(lam, V)`` of ``G^-1 L``
+    (``G`` may be ``None``: of ``L``), through :func:`_jax_eig_stable`;
+    ``consumer`` maps the tuple of eigenpairs to a pytree of arrays and may
+    close over any traced value (it is closure-converted here, so the closed
+    values receive their cotangents).  ``anchors`` (one tuple of concrete
+    numbers per problem, or ``None``) are the points where the consumer is
+    not smooth in that problem's eigenvalues -- the lift of a cluster near
+    one is shortened (:func:`_eig_cluster_lift`).  ``gap_rel <= 0`` switches the rule off
+    (the plain composition, the gradient without the rule).  Forward values
+    are those of the plain composition, byte for byte."""
+    import jax
+    import jax.numpy as jnp
+    gap = _EIG_CLUSTER_GAP_REL if gap_rel is None else float(gap_rel)
+    split = _EIG_CLUSTER_SPLIT_REL if split_rel is None else float(split_rel)
+    problems = tuple(problems)
+    if not problems or gap <= 0.0:
+        return consumer(tuple(eig_fn(L, G) for L, G in problems))
+    Ls = tuple(L for L, _G in problems)
+    Gs = tuple(G for _L, G in problems)
+    shapes = jax.eval_shape(
+        lambda a, b: tuple(eig_fn(L, G) for L, G in zip(a, b)), Ls, Gs)
+    example = jax.tree_util.tree_map(lambda s: jnp.zeros(s.shape, s.dtype),
+                                     shapes)
+    # ``closure_convert`` caches its result in a STRONG LRU keyed by the
+    # (fresh, per-call) consumer: with leak checking on it takes its uncached
+    # path, so an eager loop of gradients does not pin every call's arrays.
+    with jax.checking_leaks():
+        conv, consts = jax.closure_convert(consumer, example)
+    an = (tuple(() for _p in problems) if anchors is None else
+          tuple(tuple(complex(x) for x in a) for a in anchors))
+    return _jax_eig_cluster_vjp()(conv, eig_fn, gap, split, an, Ls, Gs,
+                                  *consts)
 
 
 
@@ -4757,6 +5025,9 @@ __all__ = [
     "_require_inplane_tensor",
     "_JAX_EIG_STABLE",
     "_jax_eig_stable",
+    "_EIG_CLUSTER_GAP_REL",
+    "_EIG_CLUSTER_SPLIT_REL",
+    "_jax_eig_cluster_adjoint",
     "_HOMOG_CACHE",
     "_HOMOG_LOCK",
     "_clear_rcwa_caches",

@@ -1,0 +1,9 @@
+v4b_rect_conical.py 4
+v4b_rect_conical.py 5
+v4b_rect_conical.py 6
+v2_frozen.py ellipse 4 twin numpy
+v2_frozen.py ellipse 5 twin numpy
+v2_frozen.py ellipse 6 twin numpy
+v2_frozen.py ellipse 8 numpy nofar
+v4_grads.py film 3
+v4_grads.py film 4

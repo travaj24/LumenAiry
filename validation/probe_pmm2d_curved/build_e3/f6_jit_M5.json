@@ -1,0 +1,33 @@
+{
+ "M": 5,
+ "template_s": 1.2665678999983356,
+ "fwd_compile_plus_run_s": 15.922328099994047,
+ "traces_after_forward_calls": 1,
+ "forward_cache_size": 1,
+ "grad_compile_plus_run_s": 28.75576629999705,
+ "traces_after_grad_calls": 2,
+ "grad_cache_size": 1,
+ "traces_first_forward": 1,
+ "traces_first_grad": 1,
+ "jit_forward_s": 0.5983247999974992,
+ "jit_grad_s": 0.8448825999948895,
+ "eager_forward_s": 40.71133689999988,
+ "numpy_solve_s": 3.022614800000156,
+ "values": [
+  0.2613957546912516,
+  0.21366382858039853,
+  0.11804712538354421
+ ],
+ "grads": [
+  -1.6912674695764613,
+  -1.6350315122821215,
+  -1.04257521755991
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_curved_e3\\lumenairy\\__init__.py",
+  "platform": "win32"
+ }
+}

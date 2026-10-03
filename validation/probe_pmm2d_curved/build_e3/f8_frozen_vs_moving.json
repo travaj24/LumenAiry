@@ -1,0 +1,30 @@
+{
+ "circle_traced_shapes_at_r0_vs_numpy": [
+  2.2599110083287854e-15,
+  1.2254086634300165e-14,
+  3.127845336678037e-14
+ ],
+ "circle_traced_map_at_r0_vs_numpy": [
+  2.2599110083287854e-15,
+  1.2254086634300165e-14,
+  3.127845336678037e-14
+ ],
+ "circle_frozen_at_0.36_eval_0.33_vs_numpy_0.33": [
+  4.446045842165097e-07,
+  5.498563161482339e-06,
+  5.663991137690847e-07
+ ],
+ "rect_frozen_at_0.5_eval_0.47_vs_numpy_0.47": [
+  3.5197539327569416e-15,
+  1.3489209749195652e-14,
+  1.3135903472179767e-14
+ ],
+ "rect_w_1.2": "refused: PMM2DStackPure (JAX): these shape parameters change the TOPOLOGY of the merged wall grid (walls merging or separating, a",
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_curved_e3\\lumenairy\\__init__.py",
+  "platform": "win32"
+ }
+}

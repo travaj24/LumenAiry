@@ -1,0 +1,3 @@
+suite A rc=5
+suite B rc=0
+suite A rc=0

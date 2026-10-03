@@ -270,9 +270,14 @@ Berreman, both Jones matrices, to ~1e-13, and an out-of-plane eps with a
 material mu is solved with or without a map.  Phase E2 (2026-10-03) gives
 every layer of a per-layer stack its own map, joined by a non-separable
 curved mortar, so outlines that cross in plan view can be stacked
-(`docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md`).  Still open: the JAX
-twin under a map (curved-cell PLAN Phase E3, approved 2026-10-02 -- not
-this roadmap's own Phase E).  The convergence of the EFFICIENCIES stays
+(`docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md`).  Phase E3 (2026-10-03,
+`docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md`) is the JAX twin:
+`PMM2DStackPure(backend='jax')` / `pmm_jones_2d_staggered(..., backend='jax')`
+differentiate the shared-grid in-plane path -- materials, thicknesses,
+indices and shape parameters (the first curved gradient of the library:
+d T00 / d r of a circle, AD vs a converged FD 2.3e-8 relative at M = 6);
+out-of-plane tensors, slant and per-layer maps under the twin raise and
+say so.  The convergence of the EFFICIENCIES stays
 rim-capped (~1e-5 per rung) for curved pillars as for square ones: the
 in-plane curvature is resolved spectrally, the pillar's top and bottom rim
 is not (a z-direction question).

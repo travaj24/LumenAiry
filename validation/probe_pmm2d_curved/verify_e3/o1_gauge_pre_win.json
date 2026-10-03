@@ -1,0 +1,130 @@
+{
+ "rows": [
+  {
+   "M": 3,
+   "theta": 0.0,
+   "phi": 0.0,
+   "rescaling_dev": 1.4432899320127035e-15,
+   "noise_1e-12_width": 5.568545624612398e-12,
+   "lstsq_shapes": {
+    "PMM2DStackPure far-field Rayleigh projection": [
+     50,
+     72
+    ]
+   }
+  },
+  {
+   "M": 3,
+   "theta": 0.3,
+   "phi": 0.0,
+   "rescaling_dev": 3.48393089433241e-05,
+   "noise_1e-12_width": 7.599818423950633e-07,
+   "lstsq_shapes": {
+    "PMM2DStackPure far-field Rayleigh projection": [
+     50,
+     72
+    ]
+   }
+  },
+  {
+   "M": 3,
+   "theta": 0.3,
+   "phi": 0.45,
+   "rescaling_dev": 2.5424875558566207e-05,
+   "noise_1e-12_width": 5.675673142857551e-07,
+   "lstsq_shapes": {
+    "PMM2DStackPure far-field Rayleigh projection": [
+     50,
+     72
+    ]
+   }
+  },
+  {
+   "M": 4,
+   "theta": 0.0,
+   "phi": 0.0,
+   "rescaling_dev": 1.3322676295501878e-15,
+   "noise_1e-12_width": 4.7195580776815405e-12,
+   "lstsq_shapes": {
+    "PMM2DStackPure far-field Rayleigh projection": [
+     50,
+     162
+    ]
+   }
+  },
+  {
+   "M": 4,
+   "theta": 0.3,
+   "phi": 0.0,
+   "rescaling_dev": 4.241749238964587e-06,
+   "noise_1e-12_width": 1.1623346100886334e-07,
+   "lstsq_shapes": {
+    "PMM2DStackPure far-field Rayleigh projection": [
+     50,
+     162
+    ]
+   }
+  },
+  {
+   "M": 4,
+   "theta": 0.3,
+   "phi": 0.45,
+   "rescaling_dev": 4.0991075544588584e-06,
+   "noise_1e-12_width": 1.6339090208594698e-07,
+   "lstsq_shapes": {
+    "PMM2DStackPure far-field Rayleigh projection": [
+     50,
+     162
+    ]
+   }
+  },
+  {
+   "M": 5,
+   "theta": 0.0,
+   "phi": 0.0,
+   "rescaling_dev": 3.219646771412954e-15,
+   "noise_1e-12_width": 4.685474230825548e-12,
+   "lstsq_shapes": {
+    "PMM2DStackPure far-field Rayleigh projection": [
+     50,
+     288
+    ]
+   }
+  },
+  {
+   "M": 5,
+   "theta": 0.3,
+   "phi": 0.0,
+   "rescaling_dev": 5.903009438201767e-08,
+   "noise_1e-12_width": 2.4739893120240275e-09,
+   "lstsq_shapes": {
+    "PMM2DStackPure far-field Rayleigh projection": [
+     50,
+     288
+    ]
+   }
+  },
+  {
+   "M": 5,
+   "theta": 0.3,
+   "phi": 0.45,
+   "rescaling_dev": 9.93265435456081e-08,
+   "noise_1e-12_width": 1.4600268771758351e-09,
+   "lstsq_shapes": {
+    "PMM2DStackPure far-field Rayleigh projection": [
+     50,
+     288
+    ]
+   }
+  }
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\vE3_pre\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ },
+ "tree": "c:\\tmp\\ve3_pre"
+}

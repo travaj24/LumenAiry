@@ -1,0 +1,4 @@
+done f7_stripe.py 5 rc=0
+done f3_grads.py lc_angle 4 numpy rc=0
+done f3_grads.py eps 4 numpy rc=0
+done f4_events.py 4 rc=0
