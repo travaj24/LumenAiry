@@ -387,16 +387,14 @@ class _BadSinusoid(CM.Sinusoid):
         return v, d
 
 
-@pytest.mark.xfail(strict=True, reason="verifier defect D-1: TransfiniteMap "
-                   "does not check an EdgeCurve's derivative against its "
-                   "value (report section 12, exact edit there)")
 def test_verify_b_inconsistent_curve_derivative_is_refused():
     """The map's POSITIONS come from each curve's value and its JACOBIAN
     from the curve's analytic derivative; nothing checks that the two agree.
     A Sinusoid subclass with a 10 % derivative bug is accepted and moves
     R / T by 3.2e-2 (M = 5) / 4.6e-3 (M = 7) (``v5_curveder_win.json``) --
     silently wrong.  ``EdgeCurve`` is public (``__all__``) and invites user
-    curves.  Strict xfail until the constructor refuses it."""
+    curves.  Was a strict xfail until the constructor refused it (fixed in
+    Phase D, the report's section-12 edit applied verbatim)."""
     vw = np.array([0.0, 0.36, 0.9, _P])
     uw = np.array([0.0, 0.3, 0.9, _P])
     V = _verts(uw, vw)

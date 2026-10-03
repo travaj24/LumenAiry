@@ -816,6 +816,23 @@ class TransfiniteMap(CellMap):
                         f"is {tuple(V[vi, vj])} (mismatch {d:.3e}) -- the "
                         f"two cells sharing this edge would not meet (the "
                         f"map must be continuous across every grid line).")
+            # the Jacobian is built from the curve's ANALYTIC derivative and
+            # the positions from its value: they must agree, or the map's
+            # Jacobian would not be the derivative of its positions (a user
+            # curve with a derivative bug gives a silently wrong answer --
+            # Phase B verifier D-1: a 10 % derivative bug moved R / T by
+            # 3.2e-2 at M = 5 and was accepted)
+            sp = np.linspace(0.1, 0.9, 5)
+            hd = 1e-6
+            fd = (crv(sp + hd)[0] - crv(sp - hd)[0]) / (2.0 * hd)
+            an = crv(sp)[1]
+            dmis = float(np.max(np.abs(fd - an)))
+            if not dmis <= 1e-6 * max(scale, float(np.max(np.abs(an)))):
+                raise ValueError(
+                    f"TransfiniteMap: edge {key!r}: the curve's derivative is "
+                    f"not d/ds of its value (mismatch {dmis:.3e} against a "
+                    f"central difference) -- the map's Jacobian would not "
+                    f"match its positions.")
             self.curved_edges[(kind, i, j)] = crv
         if _validate:
             # (the shape layer passes False to locate a fold itself and name
@@ -839,7 +856,17 @@ class TransfiniteMap(CellMap):
         ``(sx, sy, cu, cv)`` with ``cu, cv in {0, 1}`` the corner's side of
         cell ``(sx, sy)`` (0 = its lower wall).  A corner is singular when the
         cell's two edge tangents there are parallel (antiparallel for a
-        closed smooth curve) to 1e-10 relative."""
+        closed smooth curve) to 1e-10 relative.
+
+        A corner that is only NEARLY singular (a user curve whose tangents
+        meet at an angle just above that tolerance -- ``det J`` small but
+        positive) is NOT listed: its cell gets the tensor rule, whose moments
+        then converge only algebraically, and the solver's node-count
+        criterion WARNS at its cap with the moment error it reached (Phase B
+        verifier note N-1).  The shipped primitives place their 45-degree
+        points exactly, so this arises only for hand-built maps; the remedy
+        is to make the corner exactly singular or to keep it well away from
+        singular."""
         out = []
         Nx, Ny = self.shape
         one = np.array([0.0, 1.0])
