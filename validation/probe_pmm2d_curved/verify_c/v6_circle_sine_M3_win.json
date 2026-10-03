@@ -1,0 +1,38 @@
+{
+ "scenario": "circle_sine",
+ "M": 3,
+ "grid": [
+  4,
+  4
+ ],
+ "closure": 0.009580385949991,
+ "absorption": [
+  [
+   -2.2793174577187016e-15,
+   1.3978866039247924e-15
+  ],
+  [
+   0.10387827690783251,
+   0.10377368130942223
+  ]
+ ],
+ "abs_lossless_layer1": 2.2793174577187016e-15,
+ "abs_balance": 0.006782181239558885,
+ "vacuum_id_same_map": true,
+ "vacuum_id": 7.771561172376096e-15,
+ "wall_s": 6.28548789024353,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

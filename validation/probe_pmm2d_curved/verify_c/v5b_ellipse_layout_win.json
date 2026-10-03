@@ -1,0 +1,110 @@
+{
+ "shipped": {
+  "aspect 1.05": {
+   "5": "EXACT",
+   "10": "EXACT",
+   "20": "EXACT",
+   "30": "EXACT",
+   "40": "FOLD",
+   "44.9": "FOLD",
+   "-30": "EXACT"
+  },
+  "aspect 1.5": {
+   "5": "EXACT",
+   "10": "EXACT",
+   "20": "EXACT",
+   "30": "FOLD",
+   "40": "FOLD",
+   "44.9": "FOLD",
+   "-30": "FOLD"
+  },
+  "aspect 2.0": {
+   "5": "EXACT",
+   "10": "EXACT",
+   "20": "FOLD",
+   "30": "FOLD",
+   "40": "FOLD",
+   "44.9": "FOLD",
+   "-30": "FOLD"
+  },
+  "aspect 3.0": {
+   "5": "EXACT",
+   "10": "EXACT",
+   "20": "FOLD",
+   "30": "FOLD",
+   "40": "FOLD",
+   "44.9": "FOLD",
+   "-30": "FOLD"
+  },
+  "aspect 5.0": {
+   "5": "EXACT",
+   "10": "FOLD",
+   "20": "FOLD",
+   "30": "FOLD",
+   "40": "FOLD",
+   "44.9": "FOLD",
+   "-30": "FOLD"
+  }
+ },
+ "normal45": {
+  "aspect 1.05": {
+   "5": "EXACT",
+   "10": "EXACT",
+   "20": "EXACT",
+   "30": "EXACT",
+   "40": "EXACT",
+   "44.9": "EXACT",
+   "-30": "EXACT"
+  },
+  "aspect 1.5": {
+   "5": "EXACT",
+   "10": "EXACT",
+   "20": "EXACT",
+   "30": "EXACT",
+   "40": "EXACT",
+   "44.9": "EXACT",
+   "-30": "EXACT"
+  },
+  "aspect 2.0": {
+   "5": "EXACT",
+   "10": "EXACT",
+   "20": "EXACT",
+   "30": "EXACT",
+   "40": "EXACT",
+   "44.9": "EXACT",
+   "-30": "EXACT"
+  },
+  "aspect 3.0": {
+   "5": "EXACT",
+   "10": "EXACT",
+   "20": "EXACT",
+   "30": "EXACT",
+   "40": "EXACT",
+   "44.9": "EXACT",
+   "-30": "EXACT"
+  },
+  "aspect 5.0": {
+   "5": "EXACT",
+   "10": "EXACT",
+   "20": "EXACT",
+   "30": "EXACT",
+   "40": "EXACT",
+   "44.9": "EXACT",
+   "-30": "EXACT"
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

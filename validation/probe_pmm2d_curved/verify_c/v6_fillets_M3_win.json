@@ -1,0 +1,38 @@
+{
+ "scenario": "fillets",
+ "M": 3,
+ "grid": [
+  9,
+  9
+ ],
+ "closure": 0.00563005071000755,
+ "absorption": [
+  [
+   1.374886266343032e-14,
+   4.506693203176464e-15
+  ],
+  [
+   0.25799457063943637,
+   0.2582847719387203
+  ]
+ ],
+ "abs_lossless_layer1": 1.374886266343032e-14,
+ "abs_balance": 0.0037682350733581615,
+ "vacuum_id_same_map": true,
+ "vacuum_id": 3.6137759451548845e-14,
+ "wall_s": 103.32324123382568,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

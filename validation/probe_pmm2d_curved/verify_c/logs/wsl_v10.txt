@@ -1,0 +1,2 @@
+{'M': 4, 'grid': [6, 6], 'geometry_verdict': 'EXACT', 'closure': 0.0038674912755600754, 'wall_s': 50.084083557128906}
+wrote v10_macro_M4_wsl.json

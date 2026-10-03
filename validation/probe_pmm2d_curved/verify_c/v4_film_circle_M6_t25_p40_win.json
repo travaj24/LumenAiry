@@ -1,0 +1,40 @@
+{
+ "map": "circle",
+ "M": 6,
+ "theta": 0.4363323129985824,
+ "phi": 0.6981317007977318,
+ "l2norm": {
+  "airy_err": 1.4324167874057991e-06,
+  "n_orders_2_vs_5": 0.0,
+  "wall_s": 23.73105263710022
+ },
+ "l2": {
+  "airy_err": 7.994593831939234e-06,
+  "n_orders_2_vs_5": 0.0,
+  "wall_s": 29.581340074539185
+ },
+ "lstsq": {
+  "airy_err": 1.3991362590726197e-06,
+  "n_orders_2_vs_5": 2.8867051227177143e-07,
+  "wall_s": 32.63884210586548
+ },
+ "modepick": {
+  "airy_err": 1.2341974979790393e-06,
+  "n_orders_2_vs_5": 0.0,
+  "wall_s": 32.201452016830444
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
