@@ -16952,5 +16952,18 @@
   "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_a_narrow_grid_resolves_and_the_guard_sees_the_pre_fix_leg[0.99-0.97-0.91256-0.997466]": 1.5946798999939347,
   "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_the_readout_matches_the_analytic_focus_at_a_new_na[0.93-0.85-0.15-0.024932-0.988807]": 1.2033742000203347,
   "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_the_readout_matches_the_analytic_focus_at_a_new_na[0.97-0.9-0.08-0.216767-0.995531]": 1.4331261000043014,
-  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_the_readout_matches_the_analytic_focus_at_a_new_na[1.0-0.99-0.01-0.999799-0.999807]": 1.27171550001367
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_the_readout_matches_the_analytic_focus_at_a_new_na[1.0-0.99-0.01-0.999799-0.999807]": 1.27171550001367,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a1_fail_before_the_hash_sees_the_identity_map": 0.06,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a1_no_map_never_reaches_the_mapped_code": 0.61,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a2_identity_map_reproduces_the_kron_operators": 0.11,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a3_film_under_stretch_is_exact_and_spectral": 4.57,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a4_fail_before_no_cofactor": 2.33,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a4_te_stripe_under_stretch_matches_the_1d_oracle": 16.84,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a5_geometric_split_minus_R_equals_eps_t_over_eps": 0.16,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a6_fail_before_mixed_hpartner": 2.34,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a6_hpartner_plain_gram_closes": 0.0,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_a7_absorption_closure_under_stretch": 6.77,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_map_protocol_validation": 0.02,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_quadrature_is_adaptive_under_a_strong_stretch": 0.04,
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_scope_refusals_name_their_phase": 0.01
 }
