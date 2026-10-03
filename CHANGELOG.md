@@ -4,6 +4,44 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- pure 2-D PMM (curved cells, Phase B): transfinite maps -- circles, ellipses, fillets and sinusoidal walls as exact grid lines
+
+The pure (no-floor) staggered 2-D PMM can now solve cells whose material
+boundaries are CURVED: a `TransfiniteMap` bends chosen edges of the solver's
+`(u, v)` wall grid into given curves (`Line`, `Arc`, `EllipseArc`,
+`Sinusoid`) and fills every cell by blending its four edge curves (the
+Gordon-Hall construction).  This is Phase B of
+`docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`; build doc and every
+number: `docs/audits/BUILD_PMM2D_CURVED_B_2026_10_02.md`.
+
+* NO SHIPPED ANSWER MOVES.  Without a map the solver runs the shipped code:
+  109 of 109 SHA-256 hashes of operators, modes, R / T / Jones and absorption
+  over every dispatch branch are byte-identical to the Phase-A commit
+  `539ce4a3`.
+* The map is still an EXPERT-LEVEL object: you lay out the wall grid and the
+  edge curves yourself (`lumenairy.elements.pmm._curvemap`, passed as
+  `cmap=` to `PMM2DStackPure` / `pmm_jones_2d_staggered`).  Shape primitives
+  that build the maps for you (`circle`, `ellipse`, `fillet_rect`,
+  `sinusoidal_wall`) are Phase C.
+* A circular dielectric pillar on a 3 x 3 grid lands on an independent 3-D
+  finite-element oracle to 7.8e-06 per diffraction order at `M = 11`, inside
+  that oracle's own 8.3e-06 mesh spread; the shipped staircases of the same
+  circle are 7.1e-02 (4 steps) to 5.7e-03 (16 steps) away and converge toward
+  the curved answer.  A uniform film under the circle map matches the Airy
+  slab to 5.4e-14 (`M = 8`), at oblique and conical incidence spectrally too.
+* The four points where a closed smooth curve meets the tensor grid at a
+  right angle in `(u, v)` (`det J = 0`, e.g. the circle's 45-degree points)
+  are integrated by a Duffy-collapsed rule: the planning rule there
+  converged only like `n^-2` (operators 6 % wrong at the default node count,
+  R / T 3e-07), the corner rule reaches round-off at 16 nodes per direction.
+* Found in the build: the map validation required the whole Jacobian to be
+  periodic across the cell boundary -- only the derivative ALONG each side
+  must be (every curved map violated the stronger form); a map with a tiny
+  shear was held to round-off by the node-count criterion; the curved
+  solve's R / T carry a ~1e-9 round-off floor set by the minimum-norm
+  incident projection when the far-field window is small (measured, not
+  changed in this phase).
+
 ### Added -- pure 2-D PMM (curved cells, Phase A): the coordinate-map machinery, gated on a separable stretch
 
 The pure (no-floor) staggered 2-D PMM can now solve a cell under a COORDINATE
