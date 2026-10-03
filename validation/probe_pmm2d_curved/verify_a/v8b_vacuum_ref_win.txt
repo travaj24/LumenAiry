@@ -1,0 +1,8 @@
+none 5 patterned-vac dRT=3.44e-15 dJph=6.65e-15 | uniform-vac dRT=1.22e-15 dJph=5.66e-16 | closure a=6.6e-06
+none 7 patterned-vac dRT=1.84e-14 dJph=2.35e-14 | uniform-vac dRT=2.16e-15 dJph=2.24e-15 | closure a=1.6e-09
+ident3 5 patterned-vac dRT=1.89e-15 dJph=2.23e-15 | uniform-vac dRT=1.11e-15 dJph=7.10e-16 | closure a=6.6e-06
+ident3 7 patterned-vac dRT=3.12e-14 dJph=4.98e-14 | uniform-vac dRT=1.83e-15 dJph=1.93e-15 | closure a=1.6e-09
+sine0.02_u3 5 patterned-vac dRT=5.32e-06 dJph=1.72e-06 | uniform-vac dRT=5.32e-06 dJph=1.72e-06 | closure a=2.3e-05
+sine0.02_u3 7 patterned-vac dRT=2.37e-10 dJph=1.17e-10 | uniform-vac dRT=2.37e-10 dJph=1.17e-10 | closure a=6.6e-08
+asym_pre 5 patterned-vac dRT=2.32e-02 dJph=9.66e-03 | uniform-vac dRT=2.32e-02 dJph=9.66e-03 | closure a=4.0e-02
+asym_pre 7 patterned-vac dRT=2.99e-03 dJph=1.20e-03 | uniform-vac dRT=2.99e-03 dJph=1.20e-03 | closure a=8.5e-03

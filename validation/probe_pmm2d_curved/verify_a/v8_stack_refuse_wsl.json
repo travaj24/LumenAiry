@@ -1,0 +1,13 @@
+{
+ "message": "PMM2DStackPure: cmap= with layer_grids='per-layer' is not implemented -- per-layer grids under a map need a curved (non-separable) mortar between the layers' partitions, which is Phase E of the curved-cell plan.  Use the default layer_grids='shared' (one map, one grid, every interface a square match).",
+ "names_phase_E": true,
+ "env": {
+  "build": "wsl",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "lumenairy": "/mnt/c/tmp/lum_vcurved_a/lumenairy/__init__.py",
+  "date": "2026-10-02 22:00"
+ }
+}

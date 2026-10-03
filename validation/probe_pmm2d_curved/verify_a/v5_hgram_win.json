@@ -1,0 +1,49 @@
+{
+ "rows": [
+  {
+   "kind": "stripe",
+   "M": 6,
+   "closure": 0.02541231436743685,
+   "mixed_closure": 0.1771350526864528,
+   "mixed_dRT": 0.18099817373641125,
+   "consistent_closure": 0.025412314367428745,
+   "consistent_dRT": 2.883804306463844e-14
+  },
+  {
+   "kind": "stripe",
+   "M": 8,
+   "closure": 0.0015366128550732272,
+   "mixed_closure": 0.18087932388801564,
+   "mixed_dRT": 0.17304420465759715,
+   "consistent_closure": 0.0015366128550152736,
+   "consistent_dRT": 1.8263168755083825e-13
+  },
+  {
+   "kind": "pillar",
+   "M": 6,
+   "closure": 0.032482808114246864,
+   "mixed_closure": 0.29395248860965184,
+   "mixed_dRT": 0.1956370295020815,
+   "consistent_closure": 0.032482808114245754,
+   "consistent_dRT": 1.8735013540549517e-14
+  },
+  {
+   "kind": "pillar",
+   "M": 8,
+   "closure": 0.001549359380678017,
+   "mixed_closure": 0.07972747282702031,
+   "mixed_dRT": 0.18377673521720367,
+   "consistent_closure": 0.0015493593805020467,
+   "consistent_dRT": 1.1773915176149785e-13
+  }
+ ],
+ "env": {
+  "build": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "lumenairy": "C:\\tmp\\lum_vcurved_a\\lumenairy\\__init__.py",
+  "date": "2026-10-02 20:40"
+ }
+}

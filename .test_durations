@@ -16965,5 +16965,11 @@
   "tests/unit/test_pmm2d_staggered_curved_a.py::test_a7_absorption_closure_under_stretch": 6.77,
   "tests/unit/test_pmm2d_staggered_curved_a.py::test_map_protocol_validation": 0.02,
   "tests/unit/test_pmm2d_staggered_curved_a.py::test_quadrature_is_adaptive_under_a_strong_stretch": 0.04,
-  "tests/unit/test_pmm2d_staggered_curved_a.py::test_scope_refusals_name_their_phase": 0.01
+  "tests/unit/test_pmm2d_staggered_curved_a.py::test_scope_refusals_name_their_phase": 0.01,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_fingerprint_sees_the_curve_parameters": 0.05,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_mapped_operators_match_an_independent_oracle": 4.82,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_mapped_projector_keeps_the_phase_rule_on_a_long_cell": 0.87,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_sheared_film_is_exact": 9.45,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_solver_refuses_a_folding_map": 0.72,
+  "tests/unit/test_verify_pmm2d_curved_a.py::test_verify_a_validation_refuses_a_translated_map": 0.01
 }

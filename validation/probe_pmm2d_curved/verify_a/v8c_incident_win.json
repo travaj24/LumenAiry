@@ -1,0 +1,97 @@
+{
+ "rows": [
+  {
+   "map": "ident3",
+   "M": 5,
+   "n_orders": 2,
+   "evanescent_share": 9.481302469485035e-15,
+   "residual": 1.5112605701679423e-15
+  },
+  {
+   "map": "ident3",
+   "M": 5,
+   "n_orders": 3,
+   "evanescent_share": 1.5389025783274694e-14,
+   "residual": 1.1724897306584757e-15
+  },
+  {
+   "map": "ident3",
+   "M": 7,
+   "n_orders": 2,
+   "evanescent_share": 1.1360083282378664e-14,
+   "residual": 1.445996057658432e-15
+  },
+  {
+   "map": "ident3",
+   "M": 7,
+   "n_orders": 3,
+   "evanescent_share": 1.8139737870717968e-14,
+   "residual": 1.1201019355137007e-15
+  },
+  {
+   "map": "sine0.02_u3",
+   "M": 5,
+   "n_orders": 2,
+   "evanescent_share": 2.7903291320904747e-05,
+   "residual": 1.3767650911479717e-15
+  },
+  {
+   "map": "sine0.02_u3",
+   "M": 5,
+   "n_orders": 3,
+   "evanescent_share": 7.478696462979797e-05,
+   "residual": 4.2320368991361506e-15
+  },
+  {
+   "map": "sine0.02_u3",
+   "M": 7,
+   "n_orders": 2,
+   "evanescent_share": 2.813875874055819e-09,
+   "residual": 1.4280672875536041e-15
+  },
+  {
+   "map": "sine0.02_u3",
+   "M": 7,
+   "n_orders": 3,
+   "evanescent_share": 8.057552038115715e-09,
+   "residual": 1.2150415864082171e-15
+  },
+  {
+   "map": "harm_asym_pre",
+   "M": 5,
+   "n_orders": 2,
+   "evanescent_share": 0.11326154230171506,
+   "residual": 1.0119305140322339e-15
+  },
+  {
+   "map": "harm_asym_pre",
+   "M": 5,
+   "n_orders": 3,
+   "evanescent_share": 0.2601406937580174,
+   "residual": 1.4903389764526488e-15
+  },
+  {
+   "map": "harm_asym_pre",
+   "M": 7,
+   "n_orders": 2,
+   "evanescent_share": 0.011068487233031183,
+   "residual": 1.2274690199012476e-15
+  },
+  {
+   "map": "harm_asym_pre",
+   "M": 7,
+   "n_orders": 3,
+   "evanescent_share": 0.022378484503235038,
+   "residual": 2.5235125813709604e-15
+  }
+ ],
+ "env": {
+  "build": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "lumenairy": "C:\\tmp\\lum_vcurved_a\\lumenairy\\__init__.py",
+  "date": "2026-10-02 21:23"
+ }
+}

@@ -1,0 +1,193 @@
+{
+ "rows": [
+  {
+   "map": "sine0.12",
+   "eps": [
+    1.0,
+    0.0
+   ],
+   "M": 4,
+   "split": 0.0,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "sine0.12",
+   "eps": [
+    1.0,
+    0.0
+   ],
+   "M": 6,
+   "split": 0.0,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "sine0.12",
+   "eps": [
+    6.25,
+    0.0
+   ],
+   "M": 4,
+   "split": 4.069721982790899e-16,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "sine0.12",
+   "eps": [
+    6.25,
+    0.0
+   ],
+   "M": 6,
+   "split": 3.052291487093183e-16,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "sine0.12",
+   "eps": [
+    3.0,
+    0.4
+   ],
+   "M": 4,
+   "split": 6.106856156263411e-16,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "sine0.12",
+   "eps": [
+    3.0,
+    0.4
+   ],
+   "M": 6,
+   "split": 3.053428078131714e-16,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "harm_asym",
+   "eps": [
+    1.0,
+    0.0
+   ],
+   "M": 4,
+   "split": 0.0,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "harm_asym",
+   "eps": [
+    1.0,
+    0.0
+   ],
+   "M": 6,
+   "split": 0.0,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "harm_asym",
+   "eps": [
+    6.25,
+    0.0
+   ],
+   "M": 4,
+   "split": 5.802111679808208e-16,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "harm_asym",
+   "eps": [
+    6.25,
+    0.0
+   ],
+   "M": 6,
+   "split": 5.802111679808218e-16,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "harm_asym",
+   "eps": [
+    3.0,
+    0.4
+   ],
+   "M": 4,
+   "split": 3.5019507035602974e-16,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "harm_asym",
+   "eps": [
+    3.0,
+    0.4
+   ],
+   "M": 6,
+   "split": 4.645577429370157e-16,
+   "max_offdiag": 0.0
+  },
+  {
+   "map": "shear",
+   "eps": [
+    1.0,
+    0.0
+   ],
+   "M": 4,
+   "split": 0.0,
+   "max_offdiag": 0.1235271833714455
+  },
+  {
+   "map": "shear",
+   "eps": [
+    1.0,
+    0.0
+   ],
+   "M": 6,
+   "split": 0.0,
+   "max_offdiag": 0.12352718337144482
+  },
+  {
+   "map": "shear",
+   "eps": [
+    6.25,
+    0.0
+   ],
+   "M": 4,
+   "split": 3.878084670239449e-16,
+   "max_offdiag": 0.7720448960715343
+  },
+  {
+   "map": "shear",
+   "eps": [
+    6.25,
+    0.0
+   ],
+   "M": 6,
+   "split": 6.463474450399116e-16,
+   "max_offdiag": 0.7720448960715302
+  },
+  {
+   "map": "shear",
+   "eps": [
+    3.0,
+    0.4
+   ],
+   "M": 4,
+   "split": 2.6048157003933355e-16,
+   "max_offdiag": 0.3738610967862444
+  },
+  {
+   "map": "shear",
+   "eps": [
+    3.0,
+    0.4
+   ],
+   "M": 6,
+   "split": 3.929737749544285e-16,
+   "max_offdiag": 0.37386109678624235
+  }
+ ],
+ "env": {
+  "build": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "lumenairy": "C:\\tmp\\lum_vcurved_a\\lumenairy\\__init__.py",
+  "date": "2026-10-02 20:29"
+ }
+}

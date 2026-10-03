@@ -1,0 +1,15 @@
+{
+ "tag": "m06_drop_P12_P21",
+ "shear_film_M6": 0.0005542992461481377,
+ "shear_film_M7": 0.0005053650181854885,
+ "sep_oracle_M4": 4.2620234274795433e-13,
+ "env": {
+  "build": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "lumenairy": "C:\\tmp\\va_mut\\m06_drop_P12_P21\\lumenairy\\__init__.py",
+  "date": "2026-10-02 20:41"
+ }
+}

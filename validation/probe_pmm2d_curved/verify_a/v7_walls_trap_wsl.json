@@ -1,0 +1,35 @@
+{
+ "rows": [
+  {
+   "M": 6,
+   "physical_walls_built": [
+    0.0,
+    0.2760845213036123,
+    0.5852786404500042,
+    1.0
+   ],
+   "err_vs_intended": 0.08088979621069667,
+   "err_vs_built": 0.0004002339972518365
+  },
+  {
+   "M": 8,
+   "physical_walls_built": [
+    0.0,
+    0.2760845213036123,
+    0.5852786404500042,
+    1.0
+   ],
+   "err_vs_intended": 0.08103785855145823,
+   "err_vs_built": 5.77493113163019e-07
+  }
+ ],
+ "env": {
+  "build": "wsl",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "lumenairy": "/mnt/c/tmp/lum_vcurved_a/lumenairy/__init__.py",
+  "date": "2026-10-02 21:10"
+ }
+}
