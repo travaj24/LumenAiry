@@ -149,7 +149,8 @@ def test_ve3_numpy_solves_never_import_the_twin_module():
     env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
                MKL_NUM_THREADS="1")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True,
-                       text=True, env=env, timeout=600)
+                       text=True, env=env, timeout=600,
+                       stdin=subprocess.DEVNULL)
     assert r.returncode == 0 and r.stdout.strip().endswith("OK"), (
         r.stdout[-500:], r.stderr[-2000:])
 
