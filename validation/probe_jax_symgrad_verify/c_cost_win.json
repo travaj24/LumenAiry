@@ -1,0 +1,138 @@
+{
+ "rcwa_c4v_cluster_grad": {
+  "run_on": 0.03505070000392152,
+  "run_off": 0.008677199999510776,
+  "run_ratio": 4.039402111959813,
+  "first_call_on": 4.635154499999771,
+  "first_call_off": 1.5338208000030136,
+  "first_call_ratio": 3.0219661253717933
+ },
+ "rcwa_c4v_cluster_vmap": {
+  "run_on": 0.09006300000328338,
+  "run_off": 0.027147000000695698,
+  "run_ratio": 3.3176041551911934,
+  "first_call_on": 4.901489700001548,
+  "first_call_off": 1.8306201999948826,
+  "first_call_ratio": 2.677502247607259
+ },
+ "rcwa_c4v_cluster_fwd": {
+  "run_on": 0.004440999997314066,
+  "run_off": 0.003920099996321369,
+  "run_ratio": 1.1328792636620266,
+  "first_call_on": 0.9597796000016388,
+  "first_call_off": 0.9188486999992165,
+  "first_call_ratio": 1.0445458539610026
+ },
+ "rcwa_c4v_cluster_eager": {
+  "run_on": 0.4920570000031148,
+  "run_off": 0.16228509999928065,
+  "run_ratio": 3.0320528502326827,
+  "first_call_on": 17.91873470000428,
+  "first_call_off": 3.771939799997199,
+  "first_call_ratio": 4.750535705797209
+ },
+ "rcwa_conical_nocluster_grad": {
+  "run_on": 0.007387900004687253,
+  "run_off": 0.005850999994436279,
+  "run_ratio": 1.2626730493441145,
+  "first_call_on": 3.8309654999975464,
+  "first_call_off": 1.3554494999989402,
+  "first_call_ratio": 2.826343216770925
+ },
+ "rcwa_conical_nocluster_vmap": {
+  "run_on": 0.0911915000033332,
+  "run_off": 0.0259172000005492,
+  "run_ratio": 3.518570678985415,
+  "first_call_on": 4.755015600007027,
+  "first_call_off": 1.5927496000003885,
+  "first_call_ratio": 2.985413149691494
+ },
+ "rcwa_conical_nocluster_fwd": {
+  "run_on": 0.004083400002855342,
+  "run_off": 0.004087100001925137,
+  "run_ratio": 0.9990947128604506,
+  "first_call_on": 0.9528355000002193,
+  "first_call_off": 0.9825398000029963,
+  "first_call_ratio": 0.9697678404450523
+ },
+ "rcwa_conical_nocluster_eager": {
+  "run_on": 0.21983449999970617,
+  "run_off": 0.1600003999992623,
+  "run_ratio": 1.373962190099023,
+  "first_call_on": 0.278362000004563,
+  "first_call_off": 0.17163499999878695,
+  "first_call_ratio": 1.6218253853032911
+ },
+ "pmm1d_normal_cluster_grad": {
+  "run_on": 0.00909450000472134,
+  "run_off": 0.001897199996165,
+  "run_ratio": 4.793643275935569,
+  "first_call_on": 7.310258800003794,
+  "first_call_off": 1.8844756999969832,
+  "first_call_ratio": 3.8792003526580348
+ },
+ "pmm1d_normal_cluster_vmap": {
+  "run_on": 0.03489459999400424,
+  "run_off": 0.008510300001944415,
+  "run_ratio": 4.100278484428468,
+  "first_call_on": 9.293886699997529,
+  "first_call_off": 2.197280899999896,
+  "first_call_ratio": 4.229721698303557
+ },
+ "pmm1d_normal_cluster_fwd": {
+  "run_on": 0.0014179999998304993,
+  "run_off": 0.0013915000017732382,
+  "run_ratio": 1.0190441954893936,
+  "first_call_on": 1.033784100000048,
+  "first_call_off": 1.144631400005892,
+  "first_call_ratio": 0.9031589557954873
+ },
+ "pmm1d_normal_cluster_eager": {
+  "run_on": 1.087842400003865,
+  "run_off": 0.24845310000091558,
+  "run_ratio": 4.378461770047772,
+  "first_call_on": 16.422589099995093,
+  "first_call_off": 3.3905631000016,
+  "first_call_ratio": 4.843617008628255
+ },
+ "pmm1d_0.2_nocluster_grad": {
+  "run_on": 0.003064500000618864,
+  "run_off": 0.0020726000002468936,
+  "run_ratio": 1.478577632082318,
+  "first_call_on": 7.169646300004388,
+  "first_call_off": 2.123749400001543,
+  "first_call_ratio": 3.3759379990874527
+ },
+ "pmm1d_0.2_nocluster_vmap": {
+  "run_on": 0.02958109999599401,
+  "run_off": 0.00799890000052983,
+  "run_ratio": 3.698145994328548,
+  "first_call_on": 10.042920400002913,
+  "first_call_off": 2.273575699997309,
+  "first_call_ratio": 4.417235986474873
+ },
+ "pmm1d_0.2_nocluster_fwd": {
+  "run_on": 0.0009571000045980327,
+  "run_off": 0.0009618000040063635,
+  "run_ratio": 0.9951133298099886,
+  "first_call_on": 1.0864350000047125,
+  "first_call_off": 1.1096981000009691,
+  "first_call_ratio": 0.9790365505751192
+ },
+ "pmm1d_0.2_nocluster_eager": {
+  "run_on": 0.309164399994188,
+  "run_off": 0.21546300000045449,
+  "run_ratio": 1.4348839475619288,
+  "first_call_on": 0.3020241999984137,
+  "first_call_off": 0.23031079999782378,
+  "first_call_ratio": 1.3113766267203602
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "c:\\tmp\\lum_symgrad_verify\\lumenairy\\__init__.py",
+  "build": "win",
+  "tag": ""
+ }
+}
