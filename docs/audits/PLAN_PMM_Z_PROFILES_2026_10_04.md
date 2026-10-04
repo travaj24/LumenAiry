@@ -365,9 +365,7 @@ class.  The far field is Phase A's cofactor projector under the face map.
 **(A) The physical staircase** (today).  Each slice is the cross-section at
 its mid-height on its own grid; slices meet through a mortar.  Popov,
 Neviere, Gralak and Tayeb ("Staircase approximation validity for
-arbitrary-shaped gratings," JOSA A 19, 33 (2002); the request for this plan
-listed Enoch among the authors -- check the citation before it enters a
-docstring) showed that
+arbitrary-shaped gratings," JOSA A 19, 33 (2002)) showed that
 in TM polarization the staircase converges slowly and non-monotonically
 because every step adds right-angle edges whose field singularity the
 profile does not have.  Measured here on a 1-D dielectric taper: the shipped
