@@ -1,0 +1,113 @@
+{
+ "build": "win",
+ "rows": [
+  {
+   "case": "rcwa_fourfold_cluster",
+   "fwd_first_True": 1.304496199998539,
+   "fwd_True": 0.01493349999509519,
+   "grad_first_True": 5.228478699995321,
+   "grad_True": 0.2472877999971388,
+   "fwd_first_False": 1.1415526999990107,
+   "fwd_False": 0.026516899997659493,
+   "grad_first_False": 1.2453961999999592,
+   "grad_False": 0.03161489999911282,
+   "grad_ratio": 7.821875128628532,
+   "grad_compile_ratio": 4.198245265238077,
+   "fwd_ratio": 0.5631691485963024,
+   "fwd_compile_ratio": 1.1427384824193132
+  },
+  {
+   "case": "rcwa_offset_theta0.2_nocluster",
+   "fwd_first_True": 1.345059699997364,
+   "fwd_True": 0.027707000001100823,
+   "grad_first_True": 4.052084400005697,
+   "grad_True": 0.033257399998547044,
+   "fwd_first_False": 0.8048168999957852,
+   "fwd_False": 0.021948800000245683,
+   "grad_first_False": 1.3738610000000335,
+   "grad_False": 0.029141399994841777,
+   "grad_ratio": 1.1412423563876075,
+   "grad_compile_ratio": 2.9494136597556797,
+   "fwd_ratio": 1.2623469164961496,
+   "fwd_compile_ratio": 1.6712617491064217
+  },
+  {
+   "case": "pmm_jones_1d_at_0_cluster",
+   "fwd_first_True": 1.8930677000025753,
+   "fwd_True": 0.006129900000814814,
+   "grad_first_True": 8.385399699996924,
+   "grad_True": 0.05734230000234675,
+   "fwd_first_False": 1.4995954999976675,
+   "fwd_False": 0.005654300002788659,
+   "grad_first_False": 3.8263348000036785,
+   "grad_False": 0.023200900002848357,
+   "grad_ratio": 2.4715549825785583,
+   "grad_compile_ratio": 2.1914965987787745,
+   "fwd_ratio": 1.0841129755746233,
+   "fwd_compile_ratio": 1.262385556642121
+  },
+  {
+   "case": "pmm_jones_1d_at_0.2_accidental",
+   "fwd_first_True": 2.7633530999955838,
+   "fwd_True": 0.008682200001203455,
+   "grad_first_True": 9.806437999999616,
+   "grad_True": 0.10221630000160076,
+   "fwd_first_False": 1.831955100002233,
+   "fwd_False": 0.005196300000534393,
+   "grad_first_False": 2.378809400004684,
+   "grad_False": 0.014184400002704933,
+   "grad_ratio": 7.206247707489096,
+   "grad_compile_ratio": 4.122414347269817,
+   "fwd_ratio": 1.6708427150685234,
+   "fwd_compile_ratio": 1.5084174824984606
+  },
+  {
+   "case": "pmmstack_2layer_at_0",
+   "fwd_first_True": 3.2717875999951502,
+   "fwd_True": 0.015800599998328835,
+   "grad_first_True": 16.87468539999827,
+   "grad_True": 0.09983199999987846,
+   "fwd_first_False": 1.7711945999981253,
+   "fwd_False": 0.010197899995546322,
+   "grad_first_False": 2.8484612999964156,
+   "grad_False": 0.02720450000197161,
+   "grad_ratio": 3.669687000042025,
+   "grad_compile_ratio": 5.924140657982436,
+   "fwd_ratio": 1.549397425472828,
+   "fwd_compile_ratio": 1.8472208530889904
+  },
+  {
+   "case": "berreman_iso_cluster",
+   "fwd_first_True": 0.9124484000058146,
+   "fwd_True": 6.829999620094895e-05,
+   "grad_first_True": 3.951943400003074,
+   "grad_True": 0.0009903999962261878,
+   "fwd_first_False": 0.4905538999955752,
+   "fwd_False": 0.0001503000021330081,
+   "grad_first_False": 0.9747290000013891,
+   "grad_False": 0.00043819999700644985,
+   "grad_ratio": 2.260155187111081,
+   "grad_compile_ratio": 4.054402197941625,
+   "fwd_ratio": 0.4544244526391079,
+   "fwd_compile_ratio": 1.8600369908669463
+  },
+  {
+   "case": "vmap4_nocluster",
+   "first_True": 5.836591200000839,
+   "run_True": 0.06128719999833265,
+   "first_False": 1.664174000005005,
+   "run_False": 0.08144570000149542,
+   "ratio": 0.7524915372721624,
+   "compile_ratio": 3.5072000884422456
+  },
+  {
+   "case": "vmap4_one_cluster",
+   "first_True": 6.5804829000044265,
+   "run_True": 0.2527233999935561,
+   "first_False": 1.8300036000000546,
+   "run_False": 0.0713703999936115,
+   "ratio": 3.541011399910577,
+   "compile_ratio": 3.5958852212117125
+  }
+ ]
+}

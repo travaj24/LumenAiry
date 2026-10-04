@@ -1,0 +1,47 @@
+{
+ "build": "win",
+ "eff1d": [
+  {
+   "delta": 0.001,
+   "pol": "te",
+   "err": 2.276415700589204e-08,
+   "mirror": 5.39666329177587e-08,
+   "premise": true
+  },
+  {
+   "delta": 0.001,
+   "pol": "tm",
+   "err": 1.0135011590851291e-08,
+   "mirror": 1.3146965123236158e-08,
+   "premise": true
+  },
+  {
+   "delta": 0.0001,
+   "pol": "te",
+   "err": 3.2664819897605146e-06,
+   "mirror": 7.2282215463014655e-06,
+   "premise": false
+  },
+  {
+   "delta": 0.0001,
+   "pol": "tm",
+   "err": 3.88544566634985e-07,
+   "mirror": 5.104419352043981e-07,
+   "premise": true
+  }
+ ],
+ "jones_patched": [
+  {
+   "delta": 0.001,
+   "err_as_shipped": 1.816513504840874e-05,
+   "err_anchor_patched": 4.1241400393094326e-08,
+   "premise": true
+  },
+  {
+   "delta": 0.0001,
+   "err_as_shipped": 19.3366864613343,
+   "err_anchor_patched": 1.1793195558934347e-06,
+   "premise": true
+  }
+ ]
+}

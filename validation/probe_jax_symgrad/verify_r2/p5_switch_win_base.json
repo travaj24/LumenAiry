@@ -1,0 +1,11 @@
+{
+ "build": "win",
+ "root": "C:/tmp/lum_symgrad_verify2_base",
+ "cache_leak": {
+  "jit": 0.060936976757475336,
+  "jit_grad": "UnexpectedTracerError",
+  "eager": "UnexpectedTracerError",
+  "cache_len": 2,
+  "cache_has_tracer": true
+ }
+}

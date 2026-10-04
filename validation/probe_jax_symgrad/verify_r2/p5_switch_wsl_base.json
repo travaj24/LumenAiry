@@ -1,0 +1,11 @@
+{
+ "build": "wsl",
+ "root": "/mnt/c/tmp/lum_symgrad_verify2_base",
+ "cache_leak": {
+  "jit": 0.0609369767574745,
+  "jit_grad": "UnexpectedTracerError",
+  "eager": "UnexpectedTracerError",
+  "cache_len": 2,
+  "cache_has_tracer": true
+ }
+}

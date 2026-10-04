@@ -1,0 +1,13 @@
+{
+ "build": "win",
+ "False->True": {
+  "first": 1.5958912098385614,
+  "new_wrapper_same_callable": 1.5958912098385614,
+  "new_callable": 9.374901906707778e-09
+ },
+ "True->False": {
+  "first": 9.374901906707778e-09,
+  "new_wrapper_same_callable": 9.374901906707778e-09,
+  "new_callable": 1.5958912098385614
+ }
+}
