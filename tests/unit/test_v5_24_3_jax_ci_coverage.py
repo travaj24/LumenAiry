@@ -6,7 +6,8 @@ jax-guarded unit files (module- or function-level
 numpy<->jax parity gates and the P1 regression files.  Every JAX-side
 finding in the audit was therefore invisible to CI.
 
-The fix adds one dedicated, NON-matrix ``jax-unit`` job to
+The fix adds one dedicated ``jax-unit`` job (no Python / OS matrix; sharded
+three ways by pytest-split since 5.50.0) to
 ``.github/workflows/unit-tests.yml`` that installs the ``jax`` extra and
 runs exactly the jax-guarded files (selected by the guard, not by a
 ``-k jax`` name filter, so module-level-jax files and the
@@ -110,6 +111,26 @@ def _has_matrix(block: str) -> bool:
     return bool(re.search(r"^\s*matrix:\s*$", block, re.MULTILINE))
 
 
+def _matrix_axes(block: str) -> list[str]:
+    """The axis names declared under the job's ``matrix:`` (``[]`` when it
+    has none): the keys indented one level below the ``matrix:`` line."""
+    m = re.search(r"^(\s*)matrix:\s*$", block, re.MULTILINE)
+    if m is None:
+        return []
+    indent = len(m.group(1))
+    axes = []
+    for line in block[m.end():].splitlines()[1:]:
+        if not line.strip():
+            continue
+        lead = len(line) - len(line.lstrip())
+        if lead <= indent:
+            break
+        am = re.match(r"^\s*([A-Za-z_][\w-]*):", line)
+        if am is not None and lead == indent + 2:
+            axes.append(am.group(1))
+    return axes
+
+
 def _scan_jax_guarded_files() -> list[str]:
     """Independently enumerate jax-guarded unit files from the tree.
 
@@ -160,12 +181,20 @@ def test_s4_4_dedicated_jax_ci_job_installs_and_runs_jax() -> None:
 
     # Honor the finding's constraint: keep it ONE dedicated job so the
     # 4x3 fast matrix is not re-bloated (the documented v5.0.1 reason jax
-    # was dropped there).  The jax job itself must not carry a matrix.
-    non_matrix = [name for name in qualifying if not _has_matrix(blocks[name])]
-    assert non_matrix, (
+    # was dropped there).  RESTATED 5.50.0: the job may be SHARDED -- a
+    # ``matrix:`` whose only axis is ``shard`` (one Python, one OS; the
+    # unit/slow pytest-split pattern the job's own note prescribed once the
+    # single runner approached its cap, which it did on run 37195274179) --
+    # but it must not carry a Python-version or OS axis, which is what
+    # "re-bloating the fast matrix" means.
+    dedicated = [name for name in qualifying
+                 if set(_matrix_axes(blocks[name])) <= {"shard"}]
+    axes = {n: _matrix_axes(blocks[n]) for n in qualifying}
+    assert dedicated, (
         "S4-4: the jax CI job(s) "
-        f"{qualifying} all carry a ``matrix:`` -- the fix must be a single "
-        "dedicated non-matrix job so the fast matrix is not re-bloated."
+        f"{qualifying} carry a ``matrix:`` with an axis other than ``shard`` "
+        f"({axes}) -- the fix must stay one dedicated job (sharded at most) "
+        "so the fast matrix is not re-bloated."
     )
 
 

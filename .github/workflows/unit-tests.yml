@@ -369,8 +369,22 @@ jobs:
         run: python -m pytest tests/unit/test_public_api.py -v
 
   jax-unit:
-    name: JAX unit tests (Python 3.12)
+    name: JAX unit tests (Python 3.12, shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    # 5.50.0: SHARDED three ways with pytest-split (the pattern the note
+    # below asked for once the single runner approached its cap).  The
+    # matrix axis is the SHARD only -- one Python, one OS -- so the 4x3
+    # fast matrix is not re-bloated; the S4-4 pin
+    # (tests/unit/test_v5_24_3_jax_ci_coverage.py) checks exactly that.
+    # ``--splits`` below and this list MUST stay equal (pytest-split
+    # partitions into exactly ``--splits`` groups).  Measured 2026-10-04 on
+    # run 37195274179: the unsharded lane needed ~55 min against the 45-min
+    # step cap after the symmetric-point gradient and curved-cell E3 files
+    # joined it (14.5 + 5.9 min on the runner for the two largest).
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     # v5.24.4 (AUDIT_V5_24_2 S4-4): the 4x3 fast ``unit`` matrix and every
     # other leg install WITHOUT jax (see the install-line note at line ~63 --
     # jax was deliberately dropped at v5.0.1 to keep the fast matrix light).
@@ -387,9 +401,9 @@ jobs:
     # is a SINGLE unsharded runner carrying the jax-guarded subset WITH jax
     # actually executing: jax's first-call XLA compilation is slow to warm
     # up (e.g. test_v5_10_3_rcwa_2d_autodiff.py alone ~3.5 min), and a lone
-    # job can afford the headroom without bloating anything.  If CI shows
-    # this approaching the cap, shard THIS job (mirror the unit/slow
-    # ``pytest-split`` pattern) rather than adding jax back to the matrix.
+    # job can afford the headroom without bloating anything.  CI showed it
+    # approaching the cap at 5.50.0, so THIS job is now sharded (the
+    # unit/slow ``pytest-split`` pattern) rather than jax added to the matrix.
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
@@ -515,6 +529,9 @@ jobs:
           # OpenMP runtime -- the deadlock C-code cannot be cleanly timed out.
           python -m pytest "${jax_files[@]}" -m "not integration and not slow" \
             --deselect "tests/unit/test_audit_misc.py::TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples::test_real_lens_from_zemax_cookbook" \
+            --splits 3 --group ${{ matrix.shard }} \
+            --splitting-algorithm least_duration \
+            --durations-path .test_durations \
             --timeout=200 --timeout-method=thread \
             --tb=short -p no:cacheprovider --maxfail=8 -v 2>&1 \
             | tee jax_unit_output.txt
@@ -525,7 +542,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: jax-unit-output
+          name: jax-unit-output-${{ matrix.shard }}
           path: jax_unit_output.txt
           if-no-files-found: warn
           retention-days: 7

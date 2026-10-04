@@ -62,6 +62,18 @@ results on two fixtures, and `re_reference`, `aggregate`, `full_field`,
 byte-identical envelopes.  Record:
 `docs/audits/BUILD_REMOVALS_5_50_0_2026_10_03.md`.
 
+### Changed -- CI: the JAX lane is sharded three ways
+
+The dedicated CI job that installs JAX and runs the jax-guarded unit files ran on
+one runner.  On this release's first matrix run it needed about 55 minutes against
+its 45-minute step cap, because the symmetric-point gradient files and the
+curved-cell Phase E3 file joined it (14.5 and 5.9 minutes on the runner for the two
+largest).  The job is now split into three shards balanced by the committed test
+timings, the pattern the unit and slow lanes already use and the pattern the
+job's own note prescribed for this case.  The matrix axis is the shard only -- one
+Python, one operating system -- so the fast matrix is not re-bloated, and the
+coverage pin `tests/unit/test_v5_24_3_jax_ci_coverage.py` now states that rule
+as "no Python or OS axis" rather than "no matrix".  No test moved lanes.
 ### Changed -- the deprecation horizon moves from 5.50 to 5.52, and the removal registry is empty
 
 `lumenairy._deprecation.REMOVAL_SCHEDULE` loses its only entry,
