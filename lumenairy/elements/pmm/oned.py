@@ -204,6 +204,19 @@ def pmm_jones_1d(
     A GAIN (public ``Im(n_superstrate) < 0``) or non-propagating incidence
     medium raises ``ValueError`` on the NumPy path; see the INCIDENCE-MEDIUM
     SCOPE note on :func:`pmm_efficiency_1d`.
+
+    JAX gradients at a SYMMETRIC configuration (exactly degenerate modes -- a
+    four-fold cell, a mirror-symmetric grating at exactly normal incidence, an
+    isotropic layer -- differentiated in a symmetry-breaking direction) are
+    exact: the eigen-solves and everything downstream of them are
+    differentiated by the degenerate-cluster rule
+    (``rcwa._core._jax_eig_cluster_adjoint``). It costs nothing in the forward
+    pass; a gradient through a cluster takes 4 - 13x longer, and a jitted
+    gradient compiles 2.5 - 5x longer.
+    :func:`lumenairy.backend.set_jax_cluster_rule` (or the
+    :class:`~lumenairy.backend.jax_cluster_rule` context manager) switches it
+    off library-wide -- which makes such a gradient WRONG; use it only away
+    from any symmetry.
     """
     angle = _resolve_incidence_checked("pmm_jones_1d", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
@@ -476,6 +489,19 @@ def pmm_efficiency_1d(
     ``jax.grad`` / ``jax.jit`` Tracer) cannot be inspected without severing
     the trace, so it skips the guard -- keep the differentiated incidence
     medium propagating and non-gain yourself.
+
+    JAX gradients at a SYMMETRIC configuration (exactly degenerate modes -- a
+    four-fold cell, a mirror-symmetric grating at exactly normal incidence, an
+    isotropic layer -- differentiated in a symmetry-breaking direction) are
+    exact: the eigen-solves and everything downstream of them are
+    differentiated by the degenerate-cluster rule
+    (``rcwa._core._jax_eig_cluster_adjoint``). It costs nothing in the forward
+    pass; a gradient through a cluster takes 4 - 13x longer, and a jitted
+    gradient compiles 2.5 - 5x longer.
+    :func:`lumenairy.backend.set_jax_cluster_rule` (or the
+    :class:`~lumenairy.backend.jax_cluster_rule` context manager) switches it
+    off library-wide -- which makes such a gradient WRONG; use it only away
+    from any symmetry.
     """
     angle = _resolve_incidence_checked("pmm_efficiency_1d", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)

@@ -213,22 +213,25 @@ def test_rcwa_lift_moves_propagating_layer_roots_across_the_cut_harmlessly():
     import jax.numpy as jnp
 
     import lumenairy.elements.rcwa._core as RC
-    import lumenairy.elements.rcwa.twod as RT
     from lumenairy.elements.rcwa import rcwa_efficiency_2d
+    # (round 2 of the build: the RCWA entries take the rule through
+    # ``_core._jax_cluster_routed``, which records every eig problem through
+    # ``_jax_twin_eig_plain`` -- an eager call records the concrete operator)
     calls = []
-    orig = RT._jax_eig_cluster_adjoint
+    orig = RC._jax_twin_eig_plain
 
-    def spy(eig_fn, problems, consumer, **kw):
-        calls.append((eig_fn, problems, kw))
-        return orig(eig_fn, problems, consumer, **kw)
-    RT._jax_eig_cluster_adjoint = spy
+    def spy(L, G=None):
+        calls.append((L, G))
+        return orig(L, G)
+    RC._jax_twin_eig_plain = spy
     try:
         rcwa_efficiency_2d(_PX, _PX, jnp.asarray(
             (2.25 + 1e-2 * _RAND).astype(complex)), 1.52, 1.0, 0.37, 1.0,
             theta=0.2, phi=0.3, n_orders_x=2, n_orders_y=2)
     finally:
-        RT._jax_eig_cluster_adjoint = orig
-    eig_fn, ((A, G),), kw = calls[-1]
+        RC._jax_twin_eig_plain = orig
+    eig_fn, kw = orig, {"anchors": ((0.0,),)}
+    A, G = calls[-1]
     lam, V = eig_fn(A, G)
     dN, anyc = RC._eig_cluster_lift(lam, V, G, RC._EIG_CLUSTER_GAP_REL,
                                     RC._EIG_CLUSTER_SPLIT_REL,
@@ -374,10 +377,11 @@ def test_pmm1d_pencil_is_right_where_the_fold_is_wrong(pol, monkeypatch):
     orig = RC._jax_eig_cluster_adjoint
 
     def fold(eig_fn, problems, consumer, **kw):
-        probs = tuple((jnp.linalg.solve(B, A), None) for A, B in problems)
-        return orig(lambda A, _G: eig_fn(A, jnp.eye(A.shape[0],
-                                                   dtype=A.dtype)),
-                    probs, consumer, **kw)
+        # (round 2 of the build: problems are (L, G, K) with K the lift
+        # Gram; the fold drops both G and K -- the Euclidean lift)
+        probs = tuple((p[0] if p[1] is None else jnp.linalg.solve(p[1], p[0]),
+                       None) for p in problems)
+        return orig(lambda A, _G: eig_fn(A, None), probs, consumer, **kw)
     monkeypatch.setattr(RC, "_jax_eig_cluster_adjoint", fold)
     assert _rel(_ad(f, 1e-5), fd) > 1e1
 
@@ -425,12 +429,15 @@ def test_pmm_jones_1d_angle_gradient_off_normal_is_exact():
     assert _rel(_ad(f, 1e-5), fd) < 1e-7
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT (claim 5, re-measured): pmm_jones_1d d / d(angle) at exactly "
-    "normal incidence is wrong -- measured 0.97 relative on the verifier "
-    "grating, both builds (builder: 2.7 on its own); the half-space Kx^2 pairs are not "
-    "routed through the cluster rule.  Flips when the twin is routed."))
 def test_pmm_jones_1d_angle_gradient_at_exactly_normal():
+    # Was a STRICT XFAIL; FIXED in the builder's round 2 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 10).  The pinned
+    # defect, as the verifier recorded it:
+    #    DEFECT (claim 5, re-measured): pmm_jones_1d d / d(angle) at exactly
+    #   normal incidence is wrong -- measured 0.97 relative on the verifier
+    #   grating, both builds (builder: 2.7 on its own); the half-space Kx^2
+    #   pairs are not routed through the cluster rule. Flips when the twin is
+    #   routed.
     f = _jones1d_f()
     fd = _fd(lambda t: f(t, np), 0.0, 4e-3)
     assert _rel(_ad(f, 0.0), fd) < 1e-7
@@ -501,26 +508,29 @@ def test_rcwa_jones_2d_laurent_off_symmetry_is_exact():
     assert _rel(_ad(f, 1e-4), fd) < 1e-7
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT (unrouted RCWA entry, not measured by the builder): "
-    "rcwa_jones_2d on JAX input at the C4v cell, x-widening of the post "
-    "(isotropic tensors), is wrong by 6.1e-2 (Windows) / 4.4e-2 (WSL) "
-    "relative, build-dependent -- the "
-    "same degenerate-cluster class; its traced path (the general 4N "
-    "generator cascade) is not routed through the rule.  Flips when routed."))
 def test_rcwa_jones_2d_symmetry_breaking_gradient_at_the_c4v_cell():
+    # Was a STRICT XFAIL; FIXED in the builder's round 2 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 10).  The pinned
+    # defect, as the verifier recorded it:
+    #    DEFECT (unrouted RCWA entry, not measured by the builder):
+    #   rcwa_jones_2d on JAX input at the C4v cell, x-widening of the post
+    #   (isotropic tensors), is wrong by 6.1e-2 (Windows) / 4.4e-2 (WSL)
+    #   relative, build-dependent -- the same degenerate-cluster class; its
+    #   traced path (the general 4N generator cascade) is not routed through the
+    #   rule. Flips when routed.
     f = _jones2d_f(_DX_T)
     fd = _fd(lambda t: f(t, np), 0.0, 2e-2)
     assert _rel(_ad(f, 0.0), fd) < 1e-7
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT (unrouted RCWA entry): d / d(eps_xy) of rcwa_jones_2d at the "
-    "isotropic C4v cell -- every central difference vanishes to 3.6e-13 "
-    "(the true derivative is zero), AD returns 0.088 (Windows) / 0.083 "
-    "(WSL), the "
-    "Berreman-like class.  Flips when routed."))
 def test_rcwa_jones_2d_eps_xy_gradient_at_an_isotropic_c4v_cell():
+    # Was a STRICT XFAIL; FIXED in the builder's round 2 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 10).  The pinned
+    # defect, as the verifier recorded it:
+    #    DEFECT (unrouted RCWA entry): d / d(eps_xy) of rcwa_jones_2d at the
+    #   isotropic C4v cell -- every central difference vanishes to 3.6e-13 (the
+    #   true derivative is zero), AD returns 0.088 (Windows) / 0.083 (WSL), the
+    #   Berreman-like class. Flips when routed.
     XY = np.zeros((_S, _S, 3, 3), complex)
     XY[..., 0, 1] = XY[..., 1, 0] = _POST
     f = _jones2d_f(XY)
@@ -530,16 +540,18 @@ def test_rcwa_jones_2d_eps_xy_gradient_at_an_isotropic_c4v_cell():
     assert np.max(np.abs(_ad(f, 0.0))) < 1e-6
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT, P1, PRE-EXISTING (identical on 5ea82b44): rcwa_jones_2d("
-    "formulation='li') on a TRACED tensor cell (jax.jit / grad) routes to "
-    "the general out-of-plane cascade (twod.py, the traced_tensor branch), "
-    "whose operator build has no 'li' branch -- it silently solves the "
-    "LAURENT formulation.  Measured: jitted forward = NumPy laurent to "
-    "5e-15 and 7.6e-2 away from NumPy / eager li (C4v cell; 3.5e-4 on a C1 "
-    "cell), and the 'li' gradient is 21-62 % wrong at ANY cell.  Flips when "
-    "the traced path honours 'li'."))
 def test_rcwa_jones_2d_li_under_jit_solves_li():
+    # Was a STRICT XFAIL; FIXED in the builder's round 2 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 10).  The pinned
+    # defect, as the verifier recorded it:
+    #    DEFECT, P1, PRE-EXISTING (identical on 5ea82b44): rcwa_jones_2d(
+    #   formulation='li') on a TRACED tensor cell (jax.jit / grad) routes to the
+    #   general out-of-plane cascade (twod.py, the traced_tensor branch), whose
+    #   operator build has no 'li' branch -- it silently solves the LAURENT
+    #   formulation. Measured: jitted forward = NumPy laurent to 5e-15 and
+    #   7.6e-2 away from NumPy / eager li (C4v cell; 3.5e-4 on a C1 cell), and
+    #   the 'li' gradient is 21-62 % wrong at ANY cell. Flips when the traced
+    #   path honours 'li'.
     import jax
     import jax.numpy as jnp
 
@@ -555,12 +567,14 @@ def test_rcwa_jones_2d_li_under_jit_solves_li():
     assert _rel(jitted, eager) < 1e-10
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT, P1, PRE-EXISTING: the rcwa_jones_2d 'li' gradient on a cell "
-    "with NO symmetry (eps 2.25 + 0.6 x random) is wrong by 0.24 relative "
-    "(both builds, both trees) -- it is the Laurent model's gradient (see "
-    "the jit test above).  Flips when the traced path honours 'li'."))
 def test_rcwa_jones_2d_li_gradient_on_a_cell_without_symmetry():
+    # Was a STRICT XFAIL; FIXED in the builder's round 2 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 10).  The pinned
+    # defect, as the verifier recorded it:
+    #    DEFECT, P1, PRE-EXISTING: the rcwa_jones_2d 'li' gradient on a cell
+    #   with NO symmetry (eps 2.25 + 0.6 x random) is wrong by 0.24 relative
+    #   (both builds, both trees) -- it is the Laurent model's gradient (see the
+    #   jit test above). Flips when the traced path honours 'li'.
     cell = ((2.25 + 0.6 * _RAND)[..., None, None] * np.eye(3)).astype(
         complex)
     D = (_DCORNER[..., None, None] * np.eye(3)).astype(complex)

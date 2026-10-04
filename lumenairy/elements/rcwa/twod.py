@@ -19,7 +19,6 @@ from ._core import (
     _cell_lossless,
     _check_energy,
     _concrete,
-    _eig_for,
     _EnergyError,
     _forward_flux_kz,
     _grazing_safe_wavelength_pair,
@@ -27,7 +26,7 @@ from ._core import (
     _interface_smatrix,
     _interface_smatrix_general,
     _is_traced,
-    _jax_eig_cluster_adjoint,
+    _jax_cluster_routed,
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
     _modes_to_M,
@@ -40,13 +39,13 @@ from ._core import (
     _redheffer_star_rt,
     _require_jax_x64,
     _require_propagating_incidence,
-    _scalar_PQ,
     _sqrt_forward,
     _stabilize_bumps,
     _stabilize_closure_failure,
     _symmetric_cascade_rt,
     _symmetric_solve_rt,
     _symmetry_on,
+    _tensor_inplane_mask,
     _tensor_offplane_present,
     _tensor_PQ,
     _validate_cell_sampling,
@@ -1033,6 +1032,19 @@ def rcwa_efficiency_2d(
         Diffraction-order pairs ``(m, n)``.
     R_eff, T_eff : (N,) float ndarray
         Reflected / transmitted diffraction efficiency per order.
+
+    JAX gradients at a SYMMETRIC configuration (exactly degenerate modes -- a
+    four-fold cell, a mirror-symmetric grating at exactly normal incidence, an
+    isotropic layer -- differentiated in a symmetry-breaking direction) are
+    exact: the eigen-solves and everything downstream of them are
+    differentiated by the degenerate-cluster rule
+    (``rcwa._core._jax_eig_cluster_adjoint``). It costs nothing in the forward
+    pass; a gradient through a cluster takes 4 - 13x longer, and a jitted
+    gradient compiles 2.5 - 5x longer.
+    :func:`lumenairy.backend.set_jax_cluster_rule` (or the
+    :class:`~lumenairy.backend.jax_cluster_rule` context manager) switches it
+    off library-wide -- which makes such a gradient WRONG; use it only away
+    from any symmetry.
     """
     if stabilize and not (_is_traced(wavelength) or _is_traced(theta)):
         last = None
@@ -1242,20 +1254,17 @@ def rcwa_efficiency_2d(
     if rt is not None:
         r, t = rt
     else:
-        def _layer_modes(eig_pair=None):
+        def _cascade():
             if formulation == "fff_nv":
-                return _layer_eigenmodes_tensor(
+                Wl, Vl, lam = _layer_eigenmodes_tensor(
                     Kx, Ky, Cxx_nv, Cxy_nv, Cyx_nv, Cyy_nv, EZZ_nv)
-            if li_ops is not None:
+            elif li_ops is not None:
                 Zli = xp.zeros_like(li_ops[0])
-                return _layer_eigenmodes_tensor(
-                    Kx, Ky, li_ops[0], Zli, Zli, li_ops[1], li_ops[2],
-                    eig_pair=eig_pair)
-            return _layer_eigenmodes(Kx, Ky, EPS, EPS_normal,
-                                     ez_laurent_inv=ez_inv, eig_pair=eig_pair)
-
-        def _cascade(eig_pair=None):
-            Wl, Vl, lam = _layer_modes(eig_pair)
+                Wl, Vl, lam = _layer_eigenmodes_tensor(
+                    Kx, Ky, li_ops[0], Zli, Zli, li_ops[1], li_ops[2])
+            else:
+                Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_normal,
+                                                ez_laurent_inv=ez_inv)
             S = _interface_smatrix(Wref, Vref, Wl, Vl)
             S = _propagation_star(S, lam, k0 * depth)
             # Only S11 / S21 are read, so the layer|substrate star is closed
@@ -1263,30 +1272,11 @@ def rcwa_efficiency_2d(
             return _redheffer_star_rt(
                 S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn), cinc)
 
-        if is_jax:
-            # The reverse pass through the layer eig is correct at a
-            # DEGENERATE eigenvalue cluster only when the rule sees the eig
-            # AND everything downstream of it (a symmetric cell -- e.g.
-            # four-fold, where every layer eigenvalue is doubly degenerate
-            # -- differentiated in a symmetry-breaking direction; see
-            # _core._jax_eig_cluster_adjoint).  The eig's argument is the
-            # layer operator P @ Q, built outside the eig with the same
-            # expressions; the forward values are those of the plain
-            # composition.  The anchor is the branch point lam^2 = 0 of
-            # _sqrt_decay.
-            if li_ops is not None:
-                Zli = xp.zeros_like(li_ops[0])
-                P_l, Q_l = _tensor_PQ(Kx, Ky, li_ops[0], Zli, Zli, li_ops[1],
-                                      li_ops[2], xp)
-            else:
-                P_l, Q_l = _scalar_PQ(Kx, Ky, EPS, EPS_normal, ez_inv, xp)
-            Omega2 = P_l @ Q_l
-            eig = _eig_for(xp)
-            r, t = _jax_eig_cluster_adjoint(
-                lambda A, _G: eig(A), ((Omega2, None),),
-                lambda eigs: _cascade(eigs[0]), anchors=((0.0,),))
-        else:
-            r, t = _cascade()
+        # JAX: the layer eig and everything downstream of it go through the
+        # degenerate-cluster rule (_core._jax_cluster_routed), which is exact
+        # for a symmetric cell (e.g. four-fold: every layer eigenvalue doubly
+        # degenerate) differentiated in a symmetry-breaking direction.
+        r, t = _jax_cluster_routed(_cascade) if is_jax else _cascade()
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
     # PUBLIC-convention forward kz for the z-flux + mask + Ez (see
@@ -1798,6 +1788,19 @@ def rcwa_jones_2d(
     argsort).  A non-reciprocal (gyrotropic) cell legitimately has
     polarization-dependent extinction; only PROVABLY-LOSSLESS (all-real)
     cells are closure-checked.
+
+    JAX gradients at a SYMMETRIC configuration (exactly degenerate modes -- a
+    four-fold cell, a mirror-symmetric grating at exactly normal incidence, an
+    isotropic layer -- differentiated in a symmetry-breaking direction) are
+    exact: the eigen-solves and everything downstream of them are
+    differentiated by the degenerate-cluster rule
+    (``rcwa._core._jax_eig_cluster_adjoint``). It costs nothing in the forward
+    pass; a gradient through a cluster takes 4 - 13x longer, and a jitted
+    gradient compiles 2.5 - 5x longer.
+    :func:`lumenairy.backend.set_jax_cluster_rule` (or the
+    :class:`~lumenairy.backend.jax_cluster_rule` context manager) switches it
+    off library-wide -- which makes such a gradient WRONG; use it only away
+    from any symmetry.
     """
     if formulation not in ("laurent", "li", "fff_nv"):
         raise ValueError(
@@ -1979,97 +1982,129 @@ def rcwa_jones_2d(
         sym_rt = _symmetric_cascade_rt(
             Vref, Vtrn, Kx, Ky, [("PQ", P_s, Q_s, probe)], [depth], k0,
             cincs, orders, xp)
-    if offplane:
-        # Full-3x3 path (audit GAP2, v5.14.1; the same Li-2003 order the 1-D
-        # OOP path and pmm_jones_2d use): the POINTWISE ezz-Schur fold
-        # a_eff = e_ab - e_az e_zb / e_zz is applied on the CELL before the
-        # direct-rule convolution (folding AFTER convolution is the audited
-        # "gen2" trap), the four off-plane blocks feed the first-order
-        # generator, and the asymmetric forward/backward mode sets cascade
-        # through the GENERALIZED S-matrix.  Validated against a conical
-        # Berreman 4x4 oracle on uniform tilted-uniaxial / lossy cells.
-        if formulation == "fff_nv":
-            # CORRECT-RULE out-of-plane: the Li-2003 successive full-3x3
-            # factorization ehat = L2 L1(eps) (inverse rule on the wall-normal
-            # diagonals, off-plane components carried through the Schur pivots),
-            # then the E_z fold l3- as the OPERATOR Schur complement on
-            # ehat^{33} (Li 2003 Eq. 27) -- the in-plane blocks are pre-folded
-            # for the Q block while the raw ehat cross-blocks + ehat^{33} feed
-            # the generator's own inv(EZZ) for the A/B off-plane coupling.
-            # The 3x3 operator is SYMMETRIZED over the two factorization
-            # orders, exactly as the in-plane 2x2 one is (audit H3): the
-            # component permutation is (x, y, z) -> (y, x, z), and the mean is
-            # taken on the nine raw ehat blocks so the l3- fold below runs
-            # AFTER it (the mean of two Schur complements is not the Schur
-            # complement of the mean).
-            # The validated-scope notice belongs here too (VERIFY-A14 V6): this
-            # is the SAME Li-2003 staircase scope as the in-plane path, and the
-            # notice was reachable only from the in-plane branch, so an
-            # out-of-plane tensor cell with a CURVED pattern got 'fff_nv' with
-            # no scope signal at all.
-            _li_tensor_scope_notice("rcwa_jones_2d", eps_t,
-                                    allow_nonseparable_nv)
-            eh = _li_convolutions_2d_tensor_full(eps_t, orders, n_orders_x,
-                                                 n_orders_y, xp)
-            ezzi = xp.linalg.inv(eh[(2, 2)])
-            Cxx = eh[(0, 0)] - eh[(0, 2)] @ ezzi @ eh[(2, 0)]
-            Cxy = eh[(0, 1)] - eh[(0, 2)] @ ezzi @ eh[(2, 1)]
-            Cyx = eh[(1, 0)] - eh[(1, 2)] @ ezzi @ eh[(2, 0)]
-            Cyy = eh[(1, 1)] - eh[(1, 2)] @ ezzi @ eh[(2, 1)]
-            EZZ, EZX, EZY = eh[(2, 2)], eh[(2, 0)], eh[(2, 1)]
-            EXZ, EYZ = eh[(0, 2)], eh[(1, 2)]
-        else:
-            # Direct-rule (laurent) / 'li': the POINTWISE ezz-Schur fold
-            # a_eff = e_ab - e_az e_zb / e_zz on the CELL before convolution
-            # (folding AFTER convolution is the audited "gen2" trap).
-            ezz_c = eps_t[:, :, 2, 2]
-            inv_ezz = 1.0 / ezz_c
-            exz_c = eps_t[:, :, 0, 2]
-            eyz_c = eps_t[:, :, 1, 2]
-            ezx_c = eps_t[:, :, 2, 0]
-            ezy_c = eps_t[:, :, 2, 1]
-            Cxx = _conv(eps_t[:, :, 0, 0] - exz_c * ezx_c * inv_ezz)
-            Cxy = _conv(eps_t[:, :, 0, 1] - exz_c * ezy_c * inv_ezz)
-            Cyx = _conv(eps_t[:, :, 1, 0] - eyz_c * ezx_c * inv_ezz)
-            Cyy = _conv(eps_t[:, :, 1, 1] - eyz_c * ezy_c * inv_ezz)
-            EZZ = _conv(ezz_c)
-            EZX, EZY = _conv(ezx_c), _conv(ezy_c)
-            EXZ, EYZ = _conv(exz_c), _conv(eyz_c)
-        Wl, Vl, lam, Wlb, Vlb, lam_b = _layer_eigenmodes_tensor(
-            Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
-            EZX=EZX, EZY=EZY, EXZ=EXZ, EYZ=EYZ)
-        Mref = _modes_to_M(Wref, Vref, Wref, -Vref)
-        Mtrn = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
-        Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)
-        S = _interface_smatrix_general(Mref, Ml)
-        S = _propagation_star_general(S, lam, lam_b, k0 * depth)
-        S_sub = _interface_smatrix_general(Ml, Mtrn)
-    elif sym_rt is not None:
-        S = S_sub = None                      # even sector already solved
-    else:
-        # In-plane path, every formulation: the operator set was built above
-        # (once) -- 'fff_nv' is the SYMMETRIZED Li-2003 successive full-tensor
-        # factorization (audit H3; the inverse rule on the wall-normal diagonal
-        # along each axis plus the correct off-diagonal composite of a rotated
-        # director, with only scalar wall-normal inversions, cond ~ O(10)), and
-        # 'li' / 'laurent' come from _inplane_ops.  EZZ stays direct in every
-        # case (E_z is tangential to every vertical wall, Li 1997 Eq. 27).
-        Cxx, Cxy, Cyx, Cyy, EZZ = inplane_ops
-        Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
-        S = _interface_smatrix(Wref, Vref, Wl, Vl)
-        S = _propagation_star(S, lam, k0 * depth)
-        S_sub = _interface_smatrix(Wl, Vl, Wtrn, Vtrn)
-
     p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
     delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
-    if S is not None:
-        # Only S11 / S21 of the layer|substrate star are read, so it is closed
-        # on the two sources rather than assembled (_redheffer_star_rt).
-        # Columns are the incident polarizations, x then y.
-        zero_d = 0.0 * delta
-        rr, tt = _redheffer_star_rt(
-            S, S_sub, xp.stack([xp.concatenate([delta, zero_d]),
-                                xp.concatenate([zero_d, delta])], axis=1))
+
+    # The layer's eig(s) and everything downstream of them to the order
+    # amplitudes: on JAX through the degenerate-cluster rule
+    # (_core._jax_cluster_routed), exact for a symmetric cell (e.g.
+    # four-fold) differentiated in a symmetry-breaking direction.
+    def _layer_rt():
+        rr = tt = None
+        if offplane:
+            # Full-3x3 path (audit GAP2, v5.14.1; the same Li-2003 order the 1-D
+            # OOP path and pmm_jones_2d use): the POINTWISE ezz-Schur fold
+            # a_eff = e_ab - e_az e_zb / e_zz is applied on the CELL before the
+            # direct-rule convolution (folding AFTER convolution is the audited
+            # "gen2" trap), the four off-plane blocks feed the first-order
+            # generator, and the asymmetric forward/backward mode sets cascade
+            # through the GENERALIZED S-matrix.  Validated against a conical
+            # Berreman 4x4 oracle on uniform tilted-uniaxial / lossy cells.
+            if formulation == "fff_nv":
+                # CORRECT-RULE out-of-plane: the Li-2003 successive full-3x3
+                # factorization ehat = L2 L1(eps) (inverse rule on the wall-normal
+                # diagonals, off-plane components carried through the Schur pivots),
+                # then the E_z fold l3- as the OPERATOR Schur complement on
+                # ehat^{33} (Li 2003 Eq. 27) -- the in-plane blocks are pre-folded
+                # for the Q block while the raw ehat cross-blocks + ehat^{33} feed
+                # the generator's own inv(EZZ) for the A/B off-plane coupling.
+                # The 3x3 operator is SYMMETRIZED over the two factorization
+                # orders, exactly as the in-plane 2x2 one is (audit H3): the
+                # component permutation is (x, y, z) -> (y, x, z), and the mean is
+                # taken on the nine raw ehat blocks so the l3- fold below runs
+                # AFTER it (the mean of two Schur complements is not the Schur
+                # complement of the mean).
+                # The validated-scope notice belongs here too (VERIFY-A14 V6): this
+                # is the SAME Li-2003 staircase scope as the in-plane path, and the
+                # notice was reachable only from the in-plane branch, so an
+                # out-of-plane tensor cell with a CURVED pattern got 'fff_nv' with
+                # no scope signal at all.
+                _li_tensor_scope_notice("rcwa_jones_2d", eps_t,
+                                        allow_nonseparable_nv)
+                eh = _li_convolutions_2d_tensor_full(eps_t, orders, n_orders_x,
+                                                     n_orders_y, xp)
+                ezzi = xp.linalg.inv(eh[(2, 2)])
+                Cxx = eh[(0, 0)] - eh[(0, 2)] @ ezzi @ eh[(2, 0)]
+                Cxy = eh[(0, 1)] - eh[(0, 2)] @ ezzi @ eh[(2, 1)]
+                Cyx = eh[(1, 0)] - eh[(1, 2)] @ ezzi @ eh[(2, 0)]
+                Cyy = eh[(1, 1)] - eh[(1, 2)] @ ezzi @ eh[(2, 1)]
+                EZZ, EZX, EZY = eh[(2, 2)], eh[(2, 0)], eh[(2, 1)]
+                EXZ, EYZ = eh[(0, 2)], eh[(1, 2)]
+            else:
+                # Direct-rule (laurent) / 'li': the POINTWISE ezz-Schur fold
+                # a_eff = e_ab - e_az e_zb / e_zz on the CELL before convolution
+                # (folding AFTER convolution is the audited "gen2" trap).
+                ezz_c = eps_t[:, :, 2, 2]
+                inv_ezz = 1.0 / ezz_c
+                exz_c = eps_t[:, :, 0, 2]
+                eyz_c = eps_t[:, :, 1, 2]
+                ezx_c = eps_t[:, :, 2, 0]
+                ezy_c = eps_t[:, :, 2, 1]
+                Cxx = _conv(eps_t[:, :, 0, 0] - exz_c * ezx_c * inv_ezz)
+                Cxy = _conv(eps_t[:, :, 0, 1] - exz_c * ezy_c * inv_ezz)
+                Cyx = _conv(eps_t[:, :, 1, 0] - eyz_c * ezx_c * inv_ezz)
+                Cyy = _conv(eps_t[:, :, 1, 1] - eyz_c * ezy_c * inv_ezz)
+                EZZ = _conv(ezz_c)
+                EZX, EZY = _conv(ezx_c), _conv(ezy_c)
+                EXZ, EYZ = _conv(exz_c), _conv(eyz_c)
+                if formulation == "li" and traced_tensor:
+                    # P1-1 (verifier 2026-10-04): a TRACED tensor reaches this
+                    # general path whatever its value, but NumPy -- and an
+                    # eager JAX call -- solve an IN-PLANE tensor's 'li' on the
+                    # in-plane route (_inplane_ops: the Li-1997 inverse rule
+                    # on the diagonal blocks), and only an out-of-plane one
+                    # here with the direct rule.  The traced call selects
+                    # between the two operator sets on the tensor's VALUE
+                    # (_core._tensor_inplane_mask, the same test the concrete
+                    # routing uses), so it solves what the concrete call
+                    # solves; it used to solve Laurent for every in-plane
+                    # cell (forward 7.6e-2 off, gradient 21 - 62 % wrong).
+                    # For an in-plane tensor the off-plane blocks vanish and
+                    # the folded components are the raw ones, so only the
+                    # two diagonal blocks differ.
+                    inpl = _tensor_inplane_mask(eps_t, xp)
+                    li_xx, _lxy, _lyx, li_yy, _lzz = _inplane_ops(
+                        eps_t[:, :, 0, 0], eps_t[:, :, 0, 1],
+                        eps_t[:, :, 1, 0], eps_t[:, :, 1, 1],
+                        eps_t[:, :, 2, 2])
+                    Cxx = xp.where(inpl, li_xx, Cxx)
+                    Cyy = xp.where(inpl, li_yy, Cyy)
+            Wl, Vl, lam, Wlb, Vlb, lam_b = _layer_eigenmodes_tensor(
+                Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
+                EZX=EZX, EZY=EZY, EXZ=EXZ, EYZ=EYZ)
+            Mref = _modes_to_M(Wref, Vref, Wref, -Vref)
+            Mtrn = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
+            Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)
+            S = _interface_smatrix_general(Mref, Ml)
+            S = _propagation_star_general(S, lam, lam_b, k0 * depth)
+            S_sub = _interface_smatrix_general(Ml, Mtrn)
+        elif sym_rt is not None:
+            S = S_sub = None                      # even sector already solved
+        else:
+            # In-plane path, every formulation: the operator set was built above
+            # (once) -- 'fff_nv' is the SYMMETRIZED Li-2003 successive full-tensor
+            # factorization (audit H3; the inverse rule on the wall-normal diagonal
+            # along each axis plus the correct off-diagonal composite of a rotated
+            # director, with only scalar wall-normal inversions, cond ~ O(10)), and
+            # 'li' / 'laurent' come from _inplane_ops.  EZZ stays direct in every
+            # case (E_z is tangential to every vertical wall, Li 1997 Eq. 27).
+            Cxx, Cxy, Cyx, Cyy, EZZ = inplane_ops
+            Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
+            S = _interface_smatrix(Wref, Vref, Wl, Vl)
+            S = _propagation_star(S, lam, k0 * depth)
+            S_sub = _interface_smatrix(Wl, Vl, Wtrn, Vtrn)
+
+        if S is not None:
+            # Only S11 / S21 of the layer|substrate star are read, so it is closed
+            # on the two sources rather than assembled (_redheffer_star_rt).
+            # Columns are the incident polarizations, x then y.
+            zero_d = 0.0 * delta
+            rr, tt = _redheffer_star_rt(
+                S, S_sub, xp.stack([xp.concatenate([delta, zero_d]),
+                                    xp.concatenate([zero_d, delta])], axis=1))
+        return rr, tt
+
+    rr, tt = _jax_cluster_routed(_layer_rt) if is_jax else _layer_rt()
     kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2)))
     kz_ref_f = _forward_flux_kz(eps_sup, kxv, kyv)
     kz_trn_f = _forward_flux_kz(eps_sub, kxv, kyv)

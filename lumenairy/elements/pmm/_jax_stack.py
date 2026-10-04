@@ -250,7 +250,8 @@ def _pmm_stack_solve_jax(stack):
     retain_internal / dispersive) happens in the dispatcher."""
     import jax.numpy as jnp
 
-    from ..rcwa import _jax_eig_stable, _require_jax_x64
+    from ..rcwa import _require_jax_x64
+    from ..rcwa._core import _jax_cluster_routed, _jax_twin_eig
     _require_jax_x64("PMMStack.solve")
     cj = jnp.complex128
 
@@ -312,138 +313,150 @@ def _pmm_stack_solve_jax(stack):
         kx0 = 0.0
 
     # ---- half-space + layer modes (gauge-stable custom-VJP eig) -----------
-    eig = _jax_eig_stable()
+    # Every eig of the solve (the half-spaces' shared geometric Kx2, each
+    # layer's Mbig) and everything downstream of them go through the
+    # degenerate-cluster rule (rcwa._core._jax_cluster_routed): at exactly
+    # normal incidence the half-spaces' +-m orders are degenerate pairs (a
+    # uniform layer's Mbig is degenerate throughout) and d / d(angle) splits
+    # them.  ``eig`` is rcwa._core._jax_twin_eig; its third argument (S0, the
+    # mass matrix) is the rule's lift Gram, and does not change the value.
+    eig = _jax_twin_eig
 
-    def _t5(M):
-        M = jnp.asarray(M, cj)
-        if M.ndim == 0:
-            return dict(exx=M, exy=0.0 * M, eyx=0.0 * M, eyy=M, ezz=M)
-        return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1],
-                    ezz=M[2, 2])
+    def _solve():
 
-    # SHARED-EIG half-spaces (audit P3-27; the NumPy stack's v5.14.2 backlog-A2
-    # optimization ported to the twin).  Both UNIFORM half-spaces reduce to
-    # ``Mbig(eps) = eps I - blockdiag(Kx2, Kx2)`` with the eps-free geometric
-    # ``Kx2 = S0^-1 (K - i kx0 (C - C^T) + kx0^2 S0) / k0^2``, so ONE n x n
-    # custom-VJP eig (traced through k0 / kx0) replaces the two full traced
-    # assemblies + two dense 2n x 2n eigs; the eps / n_sup / n_sub gradients
-    # flow ANALYTICALLY through the spectrum shift q^2 = eps - mu.
-    S0g, Kg, Cwg = _jstack_geo_ops(static)
-    S0j = jnp.asarray(S0g, cj)
-    op = jnp.asarray(Kg, cj)
-    if not (isinstance(kx0, float) and kx0 == 0.0):
-        Cwj = jnp.asarray(Cwg, cj)
-        op = op - 1j * kx0 * (Cwj - Cwj.T) + (kx0 * kx0) * S0j
-    Kx2 = (1.0 / (k0 * k0)) * (jnp.linalg.inv(S0j) @ op)
-    mu_geo, w_geo = eig(Kx2)
-    Wsup, Vsup, _ls, _qs = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
-                                                 eps_sup)
-    Wsub, Vsub, _lb, _qb = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
-                                                 eps_sub)
+        def _t5(M):
+            M = jnp.asarray(M, cj)
+            if M.ndim == 0:
+                return dict(exx=M, exy=0.0 * M, eyx=0.0 * M, eyy=M, ezz=M)
+            return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1],
+                        ezz=M[2, 2])
 
-    lmodes = []
-    for i, (thk, _segs, _slant) in enumerate(stack._layers):
-        mats = _jstack_assemble(static, jnp,
-                                [_t5(e) for e in layer_eps_u[i]])
-        Wl, Vl, lam, _q = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
-        lmodes.append((Wl, Vl, lam, jnp.asarray(thk)))
+        # SHARED-EIG half-spaces (audit P3-27; the NumPy stack's v5.14.2 backlog-A2
+        # optimization ported to the twin).  Both UNIFORM half-spaces reduce to
+        # ``Mbig(eps) = eps I - blockdiag(Kx2, Kx2)`` with the eps-free geometric
+        # ``Kx2 = S0^-1 (K - i kx0 (C - C^T) + kx0^2 S0) / k0^2``, so ONE n x n
+        # custom-VJP eig (traced through k0 / kx0) replaces the two full traced
+        # assemblies + two dense 2n x 2n eigs; the eps / n_sup / n_sub gradients
+        # flow ANALYTICALLY through the spectrum shift q^2 = eps - mu.
+        S0g, Kg, Cwg = _jstack_geo_ops(static)
+        S0j = jnp.asarray(S0g, cj)
+        op = jnp.asarray(Kg, cj)
+        if not (isinstance(kx0, float) and kx0 == 0.0):
+            Cwj = jnp.asarray(Cwg, cj)
+            op = op - 1j * kx0 * (Cwj - Cwj.T) + (kx0 * kx0) * S0j
+        Kx2 = (1.0 / (k0 * k0)) * (jnp.linalg.inv(S0j) @ op)
+        mu_geo, w_geo = eig(Kx2, None, S0j)
+        Wsup, Vsup, _ls, _qs = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
+                                                     eps_sup)
+        Wsub, Vsub, _lb, _qb = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
+                                                     eps_sub)
 
-    # ---- Redheffer cascade (verbatim the single-layer twin's blocks) ------
-    def _ismat(Wa, Va, Wb, Vb):
-        a = jnp.linalg.solve(Wb, Wa)
-        b = jnp.linalg.solve(Vb, Va)
-        apb, amb = a + b, a - b
-        iapb = jnp.linalg.inv(apb)
-        return (-iapb @ amb, 2.0 * iapb,
-                0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+        lmodes = []
+        for i, (thk, _segs, _slant) in enumerate(stack._layers):
+            mats = _jstack_assemble(static, jnp,
+                                    [_t5(e) for e in layer_eps_u[i]])
+            Wl, Vl, lam, _q = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
+            lmodes.append((Wl, Vl, lam, jnp.asarray(thk)))
 
-    def _psmat(lam, k0_L):
-        m = lam.shape[0]
-        X = jnp.diag(jnp.exp(-lam * k0_L))
-        Z = jnp.zeros((m, m), cj)
-        return (Z, X, X, Z)
+        # ---- Redheffer cascade (verbatim the single-layer twin's blocks) ------
+        def _ismat(Wa, Va, Wb, Vb):
+            a = jnp.linalg.solve(Wb, Wa)
+            b = jnp.linalg.solve(Vb, Va)
+            apb, amb = a + b, a - b
+            iapb = jnp.linalg.inv(apb)
+            return (-iapb @ amb, 2.0 * iapb,
+                    0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
 
-    def _star(SA, SB):
-        A11, A12, A21, A22 = SA
-        B11, B12, B21, B22 = SB
-        m = A11.shape[0]
-        eye = jnp.eye(m, dtype=cj)
-        D = jnp.linalg.inv(eye - B11 @ A22)
-        F = jnp.linalg.inv(eye - A22 @ B11)
-        return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
-                B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
+        def _psmat(lam, k0_L):
+            m = lam.shape[0]
+            X = jnp.diag(jnp.exp(-lam * k0_L))
+            Z = jnp.zeros((m, m), cj)
+            return (Z, X, X, Z)
 
-    nlay = len(lmodes)
-    S = _ismat(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
-    for i, (Wl, Vl, lam, thk) in enumerate(lmodes):
-        S = _star(S, _psmat(lam, k0 * thk))
-        if i == nlay - 1:
-            S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
+        def _star(SA, SB):
+            A11, A12, A21, A22 = SA
+            B11, B12, B21, B22 = SB
+            m = A11.shape[0]
+            eye = jnp.eye(m, dtype=cj)
+            D = jnp.linalg.inv(eye - B11 @ A22)
+            F = jnp.linalg.inv(eye - A22 @ B11)
+            return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
+                    B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
+
+        nlay = len(lmodes)
+        S = _ismat(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
+        for i, (Wl, Vl, lam, thk) in enumerate(lmodes):
+            S = _star(S, _psmat(lam, k0 * thk))
+            if i == nlay - 1:
+                S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
+            else:
+                S = _star(S, _ismat(Wl, Vl, lmodes[i + 1][0], lmodes[i + 1][1]))
+        S11, _S12, S21, _S22 = S
+
+        # ---- far field (verbatim the single-layer twin's tail; mirrors
+        # _assemble_jones_farfield with the differentiable min-norm pinv) -------
+        n_glob = static["n_glob"]
+        Gv = 2.0 * np.pi / stack.period
+
+        def _project(Wmodes):
+            return jnp.vstack([Tp @ Wmodes[:n_glob, :], Tp @ Wmodes[n_glob:, :]])
+
+        Hsup = _project(Wsup)
+        Hsub = _project(Wsub)
+
+        orders_j = jnp.asarray(orders)
+        kx = (kx0 + orders_j * Gv) / k0
+
+        def _kzf(eps, kxv):
+            val = jnp.sqrt(jnp.asarray(eps - kxv ** 2, dtype=cj))
+            return jnp.where(val.imag < 0.0, -val, val)
+
+        kz_sup = _kzf(eps_sup, kx)
+        kz_sub = _kzf(eps_sub, kx)
+        kx0n = kx0 / k0
+        kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(kx0n, cj)))
+        safe_r = jnp.where(jnp.abs(kz_sup) < 1e-12, 1.0, kz_sup)
+        safe_t = jnp.where(jnp.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+
+        # Differentiable minimum-norm least squares (jnp.linalg.lstsq's VJP NaNs
+        # on the underdetermined stacked Hsup): x = A^H (A A^H)^-1 b.
+        mrows, ncols = Hsup.shape
+        if mrows <= ncols:
+            AAH_inv = jnp.linalg.inv(Hsup @ Hsup.conj().T)
+            pinv = Hsup.conj().T @ AAH_inv
         else:
-            S = _star(S, _ismat(Wl, Vl, lmodes[i + 1][0], lmodes[i + 1][1]))
-    S11, _S12, S21, _S22 = S
+            AHA_inv = jnp.linalg.inv(Hsup.conj().T @ Hsup)
+            pinv = AHA_inv @ Hsup.conj().T
 
-    # ---- far field (verbatim the single-layer twin's tail; mirrors
-    # _assemble_jones_farfield with the differentiable min-norm pinv) -------
-    n_glob = static["n_glob"]
-    Gv = 2.0 * np.pi / stack.period
+        m0 = int(np.where(orders == 0)[0][0])
+        rows_R, rows_T, jcols = [], [], []
+        for col in range(2):                    # 0 = incident Ex, 1 = incident Ey
+            rhs = jnp.zeros(2 * N, cj).at[(col * N) + m0].set(1.0)
+            cinc = pinv @ rhs
+            r_ord = Hsup @ (S11 @ cinc)
+            t_ord = Hsub @ (S21 @ cinc)
+            rx, ry = r_ord[:N], r_ord[N:]
+            tx, ty = t_ord[:N], t_ord[N:]
+            rz = -(kx * rx) / safe_r
+            tz = -(kx * tx) / safe_t
+            if col == 0:
+                flux_inc = kz_inc * (1.0 + (kx0n / kz_inc) ** 2)
+            else:
+                flux_inc = kz_inc
+            Re = jnp.real(kz_sup) * (jnp.abs(rx) ** 2 + jnp.abs(ry) ** 2
+                                     + jnp.abs(rz) ** 2) / flux_inc
+            Te = jnp.real(kz_sub) * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2
+                                     + jnp.abs(tz) ** 2) / flux_inc
+            # ``Re(kz) > 0`` cut-off mask, matching the NumPy twin (audit M7).
+            rows_R.append(jnp.where(jnp.real(kz_sup) > 0.0, jnp.real(Re), 0.0))
+            rows_T.append(jnp.where(jnp.real(kz_sub) > 0.0, jnp.real(Te), 0.0))
+            jcols.append(jnp.stack([rx[m0], ry[m0]]))
+        R_eff = jnp.stack(rows_R)
+        T_eff = jnp.stack(rows_T)
+        jones = jnp.stack(jcols, axis=1)        # (2,2): columns = incident Ex / Ey
+        return R_eff, T_eff, jones
 
-    def _project(Wmodes):
-        return jnp.vstack([Tp @ Wmodes[:n_glob, :], Tp @ Wmodes[n_glob:, :]])
-
-    Hsup = _project(Wsup)
-    Hsub = _project(Wsub)
-
-    orders_j = jnp.asarray(orders)
-    kx = (kx0 + orders_j * Gv) / k0
-
-    def _kzf(eps, kxv):
-        val = jnp.sqrt(jnp.asarray(eps - kxv ** 2, dtype=cj))
-        return jnp.where(val.imag < 0.0, -val, val)
-
-    kz_sup = _kzf(eps_sup, kx)
-    kz_sub = _kzf(eps_sub, kx)
-    kx0n = kx0 / k0
-    kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(kx0n, cj)))
-    safe_r = jnp.where(jnp.abs(kz_sup) < 1e-12, 1.0, kz_sup)
-    safe_t = jnp.where(jnp.abs(kz_sub) < 1e-12, 1.0, kz_sub)
-
-    # Differentiable minimum-norm least squares (jnp.linalg.lstsq's VJP NaNs
-    # on the underdetermined stacked Hsup): x = A^H (A A^H)^-1 b.
-    mrows, ncols = Hsup.shape
-    if mrows <= ncols:
-        AAH_inv = jnp.linalg.inv(Hsup @ Hsup.conj().T)
-        pinv = Hsup.conj().T @ AAH_inv
-    else:
-        AHA_inv = jnp.linalg.inv(Hsup.conj().T @ Hsup)
-        pinv = AHA_inv @ Hsup.conj().T
-
-    m0 = int(np.where(orders == 0)[0][0])
-    rows_R, rows_T, jcols = [], [], []
-    for col in range(2):                    # 0 = incident Ex, 1 = incident Ey
-        rhs = jnp.zeros(2 * N, cj).at[(col * N) + m0].set(1.0)
-        cinc = pinv @ rhs
-        r_ord = Hsup @ (S11 @ cinc)
-        t_ord = Hsub @ (S21 @ cinc)
-        rx, ry = r_ord[:N], r_ord[N:]
-        tx, ty = t_ord[:N], t_ord[N:]
-        rz = -(kx * rx) / safe_r
-        tz = -(kx * tx) / safe_t
-        if col == 0:
-            flux_inc = kz_inc * (1.0 + (kx0n / kz_inc) ** 2)
-        else:
-            flux_inc = kz_inc
-        Re = jnp.real(kz_sup) * (jnp.abs(rx) ** 2 + jnp.abs(ry) ** 2
-                                 + jnp.abs(rz) ** 2) / flux_inc
-        Te = jnp.real(kz_sub) * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2
-                                 + jnp.abs(tz) ** 2) / flux_inc
-        # ``Re(kz) > 0`` cut-off mask, matching the NumPy twin (audit M7).
-        rows_R.append(jnp.where(jnp.real(kz_sup) > 0.0, jnp.real(Re), 0.0))
-        rows_T.append(jnp.where(jnp.real(kz_sub) > 0.0, jnp.real(Te), 0.0))
-        jcols.append(jnp.stack([rx[m0], ry[m0]]))
-    R_eff = jnp.stack(rows_R)
-    T_eff = jnp.stack(rows_T)
-    jones = jnp.stack(jcols, axis=1)        # (2,2): columns = incident Ex / Ey
+    R_eff, T_eff, jones = _jax_cluster_routed(_solve)
     return jnp.asarray(orders), R_eff, T_eff, jones
 
 def _pmm_stack_solve_jax_perlayer(stack):
@@ -458,7 +471,8 @@ def _pmm_stack_solve_jax_perlayer(stack):
     import jax.numpy as jnp
 
     from ...backend import is_jax_array
-    from ..rcwa import _jax_eig_stable, _require_jax_x64
+    from ..rcwa import _require_jax_x64
+    from ..rcwa._core import _jax_cluster_routed, _jax_twin_eig
     from ._core import (
         PMM_MORTAR_SEPARABLE,
         _build_sem_tensor_segments,
@@ -563,160 +577,172 @@ def _pmm_stack_solve_jax_perlayer(stack):
     else:
         kx0 = 0.0
 
-    eig = _jax_eig_stable()
+    # Every eig of the solve (the half-spaces' shared geometric Kx2, each
+    # layer's Mbig) and everything downstream of them go through the
+    # degenerate-cluster rule (rcwa._core._jax_cluster_routed): at exactly
+    # normal incidence the half-spaces' +-m orders are degenerate pairs (a
+    # uniform layer's Mbig is degenerate throughout) and d / d(angle) splits
+    # them.  ``eig`` is rcwa._core._jax_twin_eig; its third argument (S0, the
+    # mass matrix) is the rule's lift Gram, and does not change the value.
+    eig = _jax_twin_eig
 
-    def _t5(M):
-        M = jnp.asarray(M, cj)
-        if M.ndim == 0:
-            return dict(exx=M, exy=0.0 * M, eyx=0.0 * M, eyy=M, ezz=M)
-        return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1],
-                    ezz=M[2, 2])
+    def _solve():
 
-    def _uniform_modes(static_x, eps_x):
-        S0g, Kg, Cwg = _jstack_geo_ops(static_x)
-        S0j = jnp.asarray(S0g, cj)
-        op = jnp.asarray(Kg, cj)
-        if not (isinstance(kx0, float) and kx0 == 0.0):
-            Cwj = jnp.asarray(Cwg, cj)
-            op = op - 1j * kx0 * (Cwj - Cwj.T) + (kx0 * kx0) * S0j
-        Kx2 = (1.0 / (k0 * k0)) * (jnp.linalg.inv(S0j) @ op)
-        mu_geo, w_geo = eig(Kx2)
-        return _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp, eps_x)
+        def _t5(M):
+            M = jnp.asarray(M, cj)
+            if M.ndim == 0:
+                return dict(exx=M, exy=0.0 * M, eyx=0.0 * M, eyy=M, ezz=M)
+            return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1],
+                        ezz=M[2, 2])
 
-    Wsup, Vsup, _ls, _qs = _uniform_modes(statics[0], eps_sup)
-    Wsub, Vsub, _lb, _qb = _uniform_modes(statics[-1], eps_sub)
+        def _uniform_modes(static_x, eps_x):
+            S0g, Kg, Cwg = _jstack_geo_ops(static_x)
+            S0j = jnp.asarray(S0g, cj)
+            op = jnp.asarray(Kg, cj)
+            if not (isinstance(kx0, float) and kx0 == 0.0):
+                Cwj = jnp.asarray(Cwg, cj)
+                op = op - 1j * kx0 * (Cwj - Cwj.T) + (kx0 * kx0) * S0j
+            Kx2 = (1.0 / (k0 * k0)) * (jnp.linalg.inv(S0j) @ op)
+            mu_geo, w_geo = eig(Kx2, None, S0j)
+            return _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp, eps_x)
 
-    lmodes = []
-    for i, (thk, _segs, _slant) in enumerate(stack._layers):
-        mats = _jstack_assemble(statics[i], jnp,
-                                [_t5(e) for e in grid_of[i][1]])
-        Wl, Vl, lam, _q = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
-        lmodes.append((Wl, Vl, lam, jnp.asarray(thk)))
+        Wsup, Vsup, _ls, _qs = _uniform_modes(statics[0], eps_sup)
+        Wsub, Vsub, _lb, _qb = _uniform_modes(statics[-1], eps_sub)
 
-    # ---- cascade: plain interface on conforming pairs, mortar otherwise ---
-    def _ismat(Wa, Va, Wb, Vb):
-        a = jnp.linalg.solve(Wb, Wa)
-        b = jnp.linalg.solve(Vb, Va)
-        apb, amb = a + b, a - b
-        iapb = jnp.linalg.inv(apb)
-        return (-iapb @ amb, 2.0 * iapb,
-                0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+        lmodes = []
+        for i, (thk, _segs, _slant) in enumerate(stack._layers):
+            mats = _jstack_assemble(statics[i], jnp,
+                                    [_t5(e) for e in grid_of[i][1]])
+            Wl, Vl, lam, _q = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
+            lmodes.append((Wl, Vl, lam, jnp.asarray(thk)))
 
-    def _imort(Wa, Va, Wb, Vb, i):
-        Cba, Cab = crosses[i]
-        Ma = jnp.asarray(Ms[wkeys[i]], cj)
-        Mb = jnp.asarray(Ms[wkeys[i + 1]], cj)
-        if _sep:
-            A = jnp.linalg.solve(_kron2_apply(Mb, Wb, jnp),
-                                 _kron2_apply(jnp.asarray(Cba, cj), Wa, jnp))
-            B = jnp.linalg.solve(_kron2_apply(Ma, Va, jnp),
-                                 _kron2_apply(jnp.asarray(Cab, cj), Vb, jnp))
-            BA = B @ A
-            eye_a = jnp.eye(BA.shape[0], dtype=cj)
-            # one factorisation, both right-hand sides (the NumPy twin's shape)
-            X = jnp.linalg.solve(eye_a + BA,
-                                 jnp.concatenate((eye_a - BA, B), axis=1))
-            nc = eye_a.shape[1]
-            S11 = X[:, :nc]
-            S12 = 2.0 * X[:, nc:]
-        else:                       # fail-before: the pre-M3 traced arithmetic
-            A = jnp.linalg.solve(Mb @ Wb, jnp.asarray(Cba, cj) @ Wa)
-            B = jnp.linalg.solve(Ma @ Va, jnp.asarray(Cab, cj) @ Vb)
-            BA = B @ A
-            eye_a = jnp.eye(BA.shape[0], dtype=cj)
-            iba = jnp.linalg.inv(eye_a + BA)
-            S11 = iba @ (eye_a - BA)
-            S12 = 2.0 * (iba @ B)
-        S21 = A @ (eye_a + S11)
-        S22 = A @ S12 - jnp.eye(A.shape[0], dtype=cj)
-        return (S11, S12, S21, S22)
+        # ---- cascade: plain interface on conforming pairs, mortar otherwise ---
+        def _ismat(Wa, Va, Wb, Vb):
+            a = jnp.linalg.solve(Wb, Wa)
+            b = jnp.linalg.solve(Vb, Va)
+            apb, amb = a + b, a - b
+            iapb = jnp.linalg.inv(apb)
+            return (-iapb @ amb, 2.0 * iapb,
+                    0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
 
-    def _psmat(lam, k0_L):
-        m = lam.shape[0]
-        X = jnp.diag(jnp.exp(-lam * k0_L))
-        Z = jnp.zeros((m, m), cj)
-        return (Z, X, X, Z)
+        def _imort(Wa, Va, Wb, Vb, i):
+            Cba, Cab = crosses[i]
+            Ma = jnp.asarray(Ms[wkeys[i]], cj)
+            Mb = jnp.asarray(Ms[wkeys[i + 1]], cj)
+            if _sep:
+                A = jnp.linalg.solve(_kron2_apply(Mb, Wb, jnp),
+                                     _kron2_apply(jnp.asarray(Cba, cj), Wa, jnp))
+                B = jnp.linalg.solve(_kron2_apply(Ma, Va, jnp),
+                                     _kron2_apply(jnp.asarray(Cab, cj), Vb, jnp))
+                BA = B @ A
+                eye_a = jnp.eye(BA.shape[0], dtype=cj)
+                # one factorisation, both right-hand sides (the NumPy twin's shape)
+                X = jnp.linalg.solve(eye_a + BA,
+                                     jnp.concatenate((eye_a - BA, B), axis=1))
+                nc = eye_a.shape[1]
+                S11 = X[:, :nc]
+                S12 = 2.0 * X[:, nc:]
+            else:                       # fail-before: the pre-M3 traced arithmetic
+                A = jnp.linalg.solve(Mb @ Wb, jnp.asarray(Cba, cj) @ Wa)
+                B = jnp.linalg.solve(Ma @ Va, jnp.asarray(Cab, cj) @ Vb)
+                BA = B @ A
+                eye_a = jnp.eye(BA.shape[0], dtype=cj)
+                iba = jnp.linalg.inv(eye_a + BA)
+                S11 = iba @ (eye_a - BA)
+                S12 = 2.0 * (iba @ B)
+            S21 = A @ (eye_a + S11)
+            S22 = A @ S12 - jnp.eye(A.shape[0], dtype=cj)
+            return (S11, S12, S21, S22)
 
-    def _star_rect(SA, SB):
-        # The inverses stay inverses, mirroring the NumPy twin -- see
-        # ``_redheffer_star_rect``'s docstring for the identity pin that
-        # refused the solve.  The common subexpressions are named once (the
-        # bit-identical half of M3 / N-3 item 4).
-        A11, A12, A21, A22 = SA
-        B11, B12, B21, B22 = SB
-        m = A22.shape[0]
-        eye = jnp.eye(m, dtype=cj)
-        AD = A12 @ jnp.linalg.inv(eye - B11 @ A22)
-        BF = B21 @ jnp.linalg.inv(eye - A22 @ B11)
-        return (A11 + AD @ B11 @ A21, AD @ B12,
-                BF @ A21, B22 + BF @ A22 @ B12)
+        def _psmat(lam, k0_L):
+            m = lam.shape[0]
+            X = jnp.diag(jnp.exp(-lam * k0_L))
+            Z = jnp.zeros((m, m), cj)
+            return (Z, X, X, Z)
 
-    def _ifc(Wa, Va, Wb, Vb, i):
-        # i = the LOWER layer index of an interior interface; None = half-space
-        if i is None or wkeys[i] == wkeys[i + 1]:
-            return _ismat(Wa, Va, Wb, Vb)
-        return _imort(Wa, Va, Wb, Vb, i)
+        def _star_rect(SA, SB):
+            # The inverses stay inverses, mirroring the NumPy twin -- see
+            # ``_redheffer_star_rect``'s docstring for the identity pin that
+            # refused the solve.  The common subexpressions are named once (the
+            # bit-identical half of M3 / N-3 item 4).
+            A11, A12, A21, A22 = SA
+            B11, B12, B21, B22 = SB
+            m = A22.shape[0]
+            eye = jnp.eye(m, dtype=cj)
+            AD = A12 @ jnp.linalg.inv(eye - B11 @ A22)
+            BF = B21 @ jnp.linalg.inv(eye - A22 @ B11)
+            return (A11 + AD @ B11 @ A21, AD @ B12,
+                    BF @ A21, B22 + BF @ A22 @ B12)
 
-    S = _ismat(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
-    for i, (Wl, Vl, lam, thk) in enumerate(lmodes):
-        S = _star_rect(S, _psmat(lam, k0 * thk))
-        if i == nlay - 1:
-            S = _star_rect(S, _ismat(Wl, Vl, Wsub, Vsub))
+        def _ifc(Wa, Va, Wb, Vb, i):
+            # i = the LOWER layer index of an interior interface; None = half-space
+            if i is None or wkeys[i] == wkeys[i + 1]:
+                return _ismat(Wa, Va, Wb, Vb)
+            return _imort(Wa, Va, Wb, Vb, i)
+
+        S = _ismat(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
+        for i, (Wl, Vl, lam, thk) in enumerate(lmodes):
+            S = _star_rect(S, _psmat(lam, k0 * thk))
+            if i == nlay - 1:
+                S = _star_rect(S, _ismat(Wl, Vl, Wsub, Vsub))
+            else:
+                S = _star_rect(S, _ifc(Wl, Vl, lmodes[i + 1][0],
+                                       lmodes[i + 1][1], i))
+        S11, _S12, S21, _S22 = S
+
+        # ---- far field (per-grid projectors; otherwise the shared twin tail) --
+        n0g = statics[0]["n_glob"]
+        nNg = statics[-1]["n_glob"]
+        Gv = 2.0 * np.pi / stack.period
+        Hsup = jnp.vstack([Tp_sup @ Wsup[:n0g, :], Tp_sup @ Wsup[n0g:, :]])
+        Hsub = jnp.vstack([Tp_sub @ Wsub[:nNg, :], Tp_sub @ Wsub[nNg:, :]])
+        orders_j = jnp.asarray(orders)
+        kx = (kx0 + orders_j * Gv) / k0
+
+        def _kzf(eps, kxv):
+            val = jnp.sqrt(jnp.asarray(eps - kxv ** 2, dtype=cj))
+            return jnp.where(val.imag < 0.0, -val, val)
+
+        kz_sup = _kzf(eps_sup, kx)
+        kz_sub = _kzf(eps_sub, kx)
+        kx0n = kx0 / k0
+        kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(kx0n, cj)))
+        safe_r = jnp.where(jnp.abs(kz_sup) < 1e-12, 1.0, kz_sup)
+        safe_t = jnp.where(jnp.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+        mrows, ncols = Hsup.shape
+        if mrows <= ncols:
+            AAH_inv = jnp.linalg.inv(Hsup @ Hsup.conj().T)
+            pinv = Hsup.conj().T @ AAH_inv
         else:
-            S = _star_rect(S, _ifc(Wl, Vl, lmodes[i + 1][0],
-                                   lmodes[i + 1][1], i))
-    S11, _S12, S21, _S22 = S
+            AHA_inv = jnp.linalg.inv(Hsup.conj().T @ Hsup)
+            pinv = AHA_inv @ Hsup.conj().T
+        m0 = int(np.where(np.asarray(orders) == 0)[0][0])
+        rows_R, rows_T, jcols = [], [], []
+        for col in range(2):
+            rhs = jnp.zeros(2 * N, cj).at[(col * N) + m0].set(1.0)
+            cinc = pinv @ rhs
+            r_ord = Hsup @ (S11 @ cinc)
+            t_ord = Hsub @ (S21 @ cinc)
+            rx, ry = r_ord[:N], r_ord[N:]
+            tx, ty = t_ord[:N], t_ord[N:]
+            rz = -(kx * rx) / safe_r
+            tz = -(kx * tx) / safe_t
+            if col == 0:
+                flux_inc = kz_inc * (1.0 + (kx0n / kz_inc) ** 2)
+            else:
+                flux_inc = kz_inc
+            Re = jnp.real(kz_sup) * (jnp.abs(rx) ** 2 + jnp.abs(ry) ** 2
+                                     + jnp.abs(rz) ** 2) / flux_inc
+            Te = jnp.real(kz_sub) * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2
+                                     + jnp.abs(tz) ** 2) / flux_inc
+            rows_R.append(jnp.where(jnp.real(kz_sup) > 0.0, jnp.real(Re), 0.0))
+            rows_T.append(jnp.where(jnp.real(kz_sub) > 0.0, jnp.real(Te), 0.0))
+            jcols.append(jnp.stack([rx[m0], ry[m0]]))
+        R_eff = jnp.stack(rows_R)
+        T_eff = jnp.stack(rows_T)
+        jones = jnp.stack(jcols, axis=1)
+        return R_eff, T_eff, jones
 
-    # ---- far field (per-grid projectors; otherwise the shared twin tail) --
-    n0g = statics[0]["n_glob"]
-    nNg = statics[-1]["n_glob"]
-    Gv = 2.0 * np.pi / stack.period
-    Hsup = jnp.vstack([Tp_sup @ Wsup[:n0g, :], Tp_sup @ Wsup[n0g:, :]])
-    Hsub = jnp.vstack([Tp_sub @ Wsub[:nNg, :], Tp_sub @ Wsub[nNg:, :]])
-    orders_j = jnp.asarray(orders)
-    kx = (kx0 + orders_j * Gv) / k0
-
-    def _kzf(eps, kxv):
-        val = jnp.sqrt(jnp.asarray(eps - kxv ** 2, dtype=cj))
-        return jnp.where(val.imag < 0.0, -val, val)
-
-    kz_sup = _kzf(eps_sup, kx)
-    kz_sub = _kzf(eps_sub, kx)
-    kx0n = kx0 / k0
-    kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(kx0n, cj)))
-    safe_r = jnp.where(jnp.abs(kz_sup) < 1e-12, 1.0, kz_sup)
-    safe_t = jnp.where(jnp.abs(kz_sub) < 1e-12, 1.0, kz_sub)
-    mrows, ncols = Hsup.shape
-    if mrows <= ncols:
-        AAH_inv = jnp.linalg.inv(Hsup @ Hsup.conj().T)
-        pinv = Hsup.conj().T @ AAH_inv
-    else:
-        AHA_inv = jnp.linalg.inv(Hsup.conj().T @ Hsup)
-        pinv = AHA_inv @ Hsup.conj().T
-    m0 = int(np.where(np.asarray(orders) == 0)[0][0])
-    rows_R, rows_T, jcols = [], [], []
-    for col in range(2):
-        rhs = jnp.zeros(2 * N, cj).at[(col * N) + m0].set(1.0)
-        cinc = pinv @ rhs
-        r_ord = Hsup @ (S11 @ cinc)
-        t_ord = Hsub @ (S21 @ cinc)
-        rx, ry = r_ord[:N], r_ord[N:]
-        tx, ty = t_ord[:N], t_ord[N:]
-        rz = -(kx * rx) / safe_r
-        tz = -(kx * tx) / safe_t
-        if col == 0:
-            flux_inc = kz_inc * (1.0 + (kx0n / kz_inc) ** 2)
-        else:
-            flux_inc = kz_inc
-        Re = jnp.real(kz_sup) * (jnp.abs(rx) ** 2 + jnp.abs(ry) ** 2
-                                 + jnp.abs(rz) ** 2) / flux_inc
-        Te = jnp.real(kz_sub) * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2
-                                 + jnp.abs(tz) ** 2) / flux_inc
-        rows_R.append(jnp.where(jnp.real(kz_sup) > 0.0, jnp.real(Re), 0.0))
-        rows_T.append(jnp.where(jnp.real(kz_sub) > 0.0, jnp.real(Te), 0.0))
-        jcols.append(jnp.stack([rx[m0], ry[m0]]))
-    R_eff = jnp.stack(rows_R)
-    T_eff = jnp.stack(rows_T)
-    jones = jnp.stack(jcols, axis=1)
+    R_eff, T_eff, jones = _jax_cluster_routed(_solve)
     return jnp.asarray(orders), R_eff, T_eff, jones
 

@@ -1,0 +1,38 @@
+{
+ "rcwa_sym": {
+  "grad_compile_s": 5.496710999999777,
+  "grad_s": 0.11840749999919353,
+  "fwd_compile_s": 1.1584471999995003,
+  "fwd_s": 0.014955100000406674
+ },
+ "rcwa_rect": {
+  "grad_compile_s": 4.824676600000203,
+  "grad_s": 0.02576630000021396,
+  "fwd_compile_s": 1.380511999999726,
+  "fwd_s": 0.01639219999924535
+ },
+ "pmm1d_0": {
+  "grad_compile_s": 9.060316299999613,
+  "grad_s": 0.012090600000192353,
+  "fwd_compile_s": 1.24221260000013,
+  "fwd_s": 0.0013848999997208011
+ },
+ "pmm1d_02": {
+  "grad_compile_s": 6.593286100000114,
+  "grad_s": 0.00419289999990724,
+  "fwd_compile_s": 1.0916791999998168,
+  "fwd_s": 0.0011168999999426887
+ },
+ "rcwa_rect_vmap4": {
+  "grad_compile_s": 7.641602499999863,
+  "grad_s": 0.11034359999939625
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_symgrad/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

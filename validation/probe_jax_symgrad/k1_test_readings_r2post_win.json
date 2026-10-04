@@ -1,0 +1,118 @@
+{
+ "gauge_te": {
+  "status": "pass",
+  "rel_values": [
+   3.282428280859659e-11,
+   6.435179442479832e-11,
+   0.28745429705180225,
+   0.09386705844671596
+  ]
+ },
+ "gauge_tm": {
+  "status": "pass",
+  "rel_values": [
+   1.6982512638822268e-10,
+   2.7371498065438624e-10,
+   0.707518268270107,
+   0.23103722101971658
+  ]
+ },
+ "near_random_te": {
+  "status": "pass",
+  "rel_values": [
+   1.2287324553599878e-10
+  ]
+ },
+ "near_random_tm": {
+  "status": "pass",
+  "rel_values": [
+   3.6140358469390446e-10
+  ]
+ },
+ "rcwa_jones_2d": {
+  "status": "pass",
+  "rel_values": [
+   2.0241751941552504e-10
+  ]
+ },
+ "rcwa_stack": {
+  "status": "pass",
+  "rel_values": [
+   2.301634438744939e-10
+  ]
+ },
+ "berreman": {
+  "status": "pass",
+  "rel_values": [
+   1.4746378211636278e-09
+  ]
+ },
+ "pmm_jones_1d": {
+  "status": "pass",
+  "rel_values": [
+   1.2733553179994932e-10
+  ]
+ },
+ "pmm_stack_shared": {
+  "status": "pass",
+  "rel_values": [
+   8.264631716094864e-11
+  ]
+ },
+ "pmm_stack_perlayer": {
+  "status": "pass",
+  "rel_values": [
+   7.9581205081355e-11
+  ]
+ },
+ "pmm2d_traced": {
+  "status": "pass",
+  "rel_values": [
+   2.2947508291560277e-10
+  ]
+ },
+ "switch_te": {
+  "status": "pass",
+  "rel_values": [
+   2.8403183184714475e-10,
+   0.23030940172806658,
+   1.1853887678325496e-16
+  ]
+ },
+ "jones_li": {
+  "status": "pass",
+  "rel_values": [
+   2.574609843414951e-10
+  ]
+ },
+ "vmap_mix": {
+  "status": "pass",
+  "rel_values": []
+ },
+ "switch_tm": {
+  "status": "pass",
+  "rel_values": [
+   1.3644933347425125e-09,
+   0.3944304967811607,
+   1.0001548689024543e-16
+  ]
+ },
+ "li_fwd": {
+  "c4v": {
+   "jit_vs_numpy_li": 5.551115123125783e-16,
+   "numpy_li_vs_laurent": 0.0021816031112872405
+  },
+  "random": {
+   "jit_vs_numpy_li": 2.2065682614424986e-15,
+   "numpy_li_vs_laurent": 0.0007332286841775643
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_symgrad\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

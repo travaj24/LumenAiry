@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 736dad129273081a5a482e21ee9d1a9944ab3389b75c8eb3de3376e848db9d21
-token_sha256: 7de3a6287e1ea5d1c9ed796d8129da65132201905eeeff341c2f616ce1455f67
+ast_sha256: 0cd415d8c28df8f0ee7855e55c885e64917cb2e0df732625fb2bae1d3fdb8020
+token_sha256: 4b32906cb95d21dbaac263e183f593a672ae017c719a810f6c3114e74a0199b2
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -11,6 +11,7 @@ re_recorded: 2026-09-13 -- the on-cut band comparison and the forward selector m
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-10-03 -- the curved-cell map, Phase E2: _interface_smatrix_mortar_2d / _interface_smatrix_general_mortar_2d apply a DENSE (non-separable) cross operator when cr.dense -- two layers on different coordinate maps; the separable arithmetic is unchanged (BUILD_PMM2D_CURVED_E2_2026_10_03)
 re_recorded: 2026-10-03 -- JAX 1-D twin: _jpmm_sem_modes split into _jpmm_sem_problem / _jpmm_sem_modes_from_eig; _jpmm_solve routes its three modal pencils and the rest of the solve through rcwa._core._jax_eig_cluster_adjoint (correct d/d(angle) at exactly normal incidence); forward values byte-identical
+re_recorded: 2026-10-04 -- JAX 1-D, Jones twins routed through rcwa._core._jax_cluster_routed (round 1 explicit split removed); eig called on the pencil / with the S0 lift Gram; forward values byte-identical
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`

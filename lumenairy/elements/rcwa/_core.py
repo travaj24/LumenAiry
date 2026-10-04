@@ -196,11 +196,13 @@ def _stabilize_bumps(n_orders, reach=12, floor=2):
 def _eig_for(xp):
     """Backend-appropriate general (non-Hermitian) eigendecomposition for the
     layer / Omega^2 solve.  NumPy and CuPy use their native ``linalg.eig``;
-    JAX uses the gauge-stable custom-VJP eig (:func:`_jax_eig_stable`) so the
+    JAX uses :func:`_jax_twin_eig` (the gauge-stable custom-VJP eig of
+    :func:`_jax_eig_stable`, which a solve wrapped in
+    :func:`_jax_cluster_routed` hands to the degenerate-cluster rule) so the
     whole RCWA solve stays differentiable.  Returns a callable with the
     ``eig(A) -> (eigvals, eigvecs)`` signature."""
     if JAX_AVAILABLE and backend_name(xp) == "jax":
-        return _jax_eig_stable()
+        return _jax_twin_eig
     return xp.linalg.eig
 
 
@@ -2565,9 +2567,8 @@ def _tensor_PQ(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ, xp, Ez_inv=None):
     """The in-plane tensor layer's first-order blocks ``(P, Q)`` -- the
     construction :func:`_layer_eigenmodes_tensor` eigendecomposes (it calls
     this), exposed so the even-parity machinery can fold them (backlog A1,
-    2026-06-10) and the JAX entries can build the operator ``P @ Q`` outside
-    the eig (:func:`_jax_eig_cluster_adjoint`).  ``Ez_inv`` is ``inv(EZZ)``
-    when the caller already holds it."""
+    2026-06-10).  ``Ez_inv`` is ``inv(EZZ)`` when the caller already holds
+    it."""
     if Ez_inv is None:
         Ez_inv = xp.linalg.inv(EZZ)
     P = _layer_P_matrix(Kx, Ky, Ez_inv)
@@ -2686,7 +2687,7 @@ def _symmetric_cascade_rt(Vref, Vtrn, Kx, Ky, layer_specs, depths, k0,
 
 
 def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None, *,
-                      grazing_floor=None, eig_pair=None):
+                      grazing_floor=None):
     """Eigenmodes of a single layer (structured or uniform).
 
     Dimension-agnostic: the harmonic count ``N`` is inferred from ``Kx`` so
@@ -2726,12 +2727,6 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None, *,
     indices in its ``eps_reals`` list), and that degeneracy reaches the
     interface match through ``b = solve(Vl, Vref)``.  See
     :func:`_traced_grazing_floor`.
-
-    ``eig_pair`` (default ``None`` = take the eig here) is the ``(lam2, W)``
-    eigenpairs of ``P @ Q`` (:func:`_scalar_PQ`), already taken by the caller --
-    the JAX entries that wrap the eig and the rest of their solve in
-    :func:`_jax_eig_cluster_adjoint` pass them in; every other line is the
-    same.
     """
     xp = array_namespace(Kx, Ky, EPS, EPS_normal)
 
@@ -2766,13 +2761,10 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None, *,
         # "dual-Laurent" rule); NO caller passes it since v5.14.1 audit F1
         # measured that as the wrong factorization (+0.35 metal absorptance),
         # and it is kept only as the factorization-study hook (audit M10).
-        if eig_pair is None:
-            EPS_inv = (ez_laurent_inv if ez_laurent_inv is not None
-                       else xp.linalg.inv(EPS))
-            P = _layer_P_matrix(Kx, Ky, EPS_inv)
-            lam2, W = _eig_for(xp)(P @ Q)        # Omega^2 = P @ Q
-        else:
-            lam2, W = eig_pair
+        EPS_inv = (ez_laurent_inv if ez_laurent_inv is not None
+                   else xp.linalg.inv(EPS))
+        P = _layer_P_matrix(Kx, Ky, EPS_inv)
+        lam2, W = _eig_for(xp)(P @ Q)            # Omega^2 = P @ Q
         lam = _sqrt_decay(lam2)                  # = i kz (prop.) / |gamma| (evan.)
         return W, Q @ W @ xp.diag(_inv_lam(_floor_lam(lam))), lam
 
@@ -4151,8 +4143,7 @@ def _generator_modes(G, Kx, xp, sym_gauge=None):
 
 def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
                              EZX=None, EZY=None, EXZ=None, EYZ=None,
-                             slant=None, sym_gauge=None,
-                             eig_pair=None):
+                             slant=None, sym_gauge=None):
     """Eigenmodes of a full-in-plane-tensor layer (dimension-agnostic).
 
     The anisotropic ``Q`` block (rigorously derived and locked to the
@@ -4182,10 +4173,6 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
     ``4N`` ``zgeev``) when the assembled generator actually carries the
     structure.  Omitting it, or handing one whose structure does not verify,
     runs the dense generator path unchanged.
-
-    ``eig_pair`` (in-plane path only) is the ``(lam2, W)`` eigenpairs of
-    ``P @ Q`` (:func:`_tensor_PQ`) already taken by the caller, as in
-    :func:`_layer_eigenmodes`.
     """
     xp = array_namespace(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
     Kx = xp.asarray(Kx).astype(_C)
@@ -4239,10 +4226,6 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
             "docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md B6).  "
             "Otherwise use an in-plane tensor, or model the slant as a "
             "z-staircase of vertical out-of-plane layers.")
-    if eig_pair is not None and (
-            _slanted or any(t is not None for t in (EZX, EZY, EXZ, EYZ))):
-        raise ValueError("_layer_eigenmodes_tensor: eig_pair is for the "
-                         "in-plane P @ Q path only.")
     if _slanted or any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
         # ---- full-3x3 (out-of-plane) generator path (Li 2003) ---------------
         # Also the SLANT path: a shear breaks the same [W; -V] <-> -lam
@@ -4283,7 +4266,7 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
         if _slanted:
             G = G + _slant_convection(Kx, Ky, slant, xp)
         return _generator_modes(G, Kx, xp, sym_gauge=sym_gauge)
-    lam2, W = _eig_for(xp)(P @ Q) if eig_pair is None else eig_pair
+    lam2, W = _eig_for(xp)(P @ Q)
     lam = _sqrt_decay(lam2)
     V = Q @ W @ xp.diag(_inv_lam(lam))
     if backend_name(xp) != "jax":
@@ -4320,14 +4303,25 @@ def _tensor_offplane_present(*tensors):
         a = np.asarray(to_numpy(t)).astype(_C)
         if a.shape[-2:] != (3, 3):
             continue
-        offz = np.maximum.reduce([np.abs(a[..., 0, 2]), np.abs(a[..., 1, 2]),
-                                  np.abs(a[..., 2, 0]), np.abs(a[..., 2, 1])])
-        diag = np.maximum.reduce([np.abs(a[..., 0, 0]), np.abs(a[..., 1, 1]),
-                                  np.abs(a[..., 2, 2])])
-        scale = max(float(np.max(diag)), 1.0)
-        if float(np.max(offz)) > 1e-9 * scale:
+        if not bool(_tensor_inplane_mask(a, np)):
             return True
     return False
+
+
+def _tensor_inplane_mask(a, xp):
+    """``True`` when the ``(..., 3, 3)`` tensor field ``a`` has NO
+    out-of-plane coupling (every ``eps_xz, eps_yz, eps_zx, eps_zy`` within
+    ``1e-9`` of the largest diagonal entry, floored at 1) -- the ONE
+    definition of "in-plane" behind :func:`_tensor_offplane_present` (NumPy,
+    a Python bool) and the traced 'li' select of ``rcwa_jones_2d`` (JAX, a
+    traced boolean, so a TRACED tensor takes the same factorization a
+    concrete one of the same value would)."""
+    offz = xp.maximum(xp.maximum(xp.abs(a[..., 0, 2]), xp.abs(a[..., 1, 2])),
+                      xp.maximum(xp.abs(a[..., 2, 0]), xp.abs(a[..., 2, 1])))
+    diag = xp.maximum(xp.maximum(xp.abs(a[..., 0, 0]), xp.abs(a[..., 1, 1])),
+                      xp.abs(a[..., 2, 2]))
+    scale = xp.maximum(xp.max(diag), 1.0)
+    return ~(xp.max(offz) > 1e-9 * scale)
 
 
 def _tensor_offplane_or_traced(*tensors):
@@ -4527,20 +4521,20 @@ def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
 # an exact degeneracy for reach (measured: 1e-13 takes theta=1e-8 from 43% to
 # ~5%, while removing the floor entirely makes the exactly degenerate point
 # 7.7x WORSE -- 1.71e-02 against 2.22e-03).
-# WHAT REPLACED THE LIMIT (2026-10-03): a twin whose eig CONSUMER is available
-# as a function wraps eig + consumer in :func:`_jax_eig_cluster_adjoint`
-# below, and is then exact at and near the degenerate point.  Users: the pure
-# staggered 2-D PMM twin (E3 round 2), ``rcwa_efficiency_2d`` on JAX input
-# and the 1-D PMM twin ``pmm_efficiency_1d`` (both
-# docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md: the table
-# above is the 1-D twin BEFORE that fix; after it, d R / d theta at exactly
-# 0.0 is exact to 1.2e-11 (TE) / 3.1e-10 (TM) relative and every theta of
-# the ladder to <= 2.6e-9).  The other users of this eig (BOR, BOR-SEM, EME,
-# Berreman, the PMM stack and Jones twins) are listed with their measured
-# symmetric-point readings in that record; four are still wrong AT their
-# symmetric points (Berreman with a traced tensor, ``pmm_jones_1d`` and the
-# 1-D ``PMMStack`` d / d(angle) at 0, the hybrid 2-D stack with a traced
-# region layout) and need the same restructure.
+# WHAT REPLACED THE LIMIT (2026-10-03/04): every JAX twin whose solve can
+# meet a degenerate cluster wraps its eig(s) and the rest of its solve in
+# :func:`_jax_eig_cluster_adjoint` below (through :func:`_jax_cluster_routed`
+# for all but the pure staggered 2-D PMM twin), and is then exact at and
+# near the degenerate point (docs/audits/
+# BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md: the table above is the
+# 1-D twin BEFORE that fix; after it, d R / d theta at exactly 0.0 is exact
+# to 1.2e-11 (TE) / 3.1e-10 (TM) relative and every theta of the ladder to
+# <= 2.6e-9).  The users of this eig that are NOT routed were measured
+# correct at their symmetric points or are not of this class (BOR / BOR-SEM:
+# no exact degeneracy at a fixed azimuthal order; EME modes: the consumer
+# returns sorted eigenvalues; the native Berreman cascade and the hybrid
+# 2-D PMM cell twin: no first-order splitting) -- that record, sections 5
+# and 10.
 
 # Fraction of ``max|lam|`` below which an eigenvalue splitting is treated as
 # unresolved by the eigenvector VJP (see the block comment above).
@@ -4672,25 +4666,31 @@ def _jax_eig_stable():
 # the lift, below gap_rel so a lifted member never approaches an eigenvalue
 # outside its cluster, and large enough that eps_mach / split_rel is small.
 #
-# USERS (and how to hand the rule a problem).  ``problems`` are the eig
-# ARGUMENTS built outside the eig and ``consumer`` is everything downstream
-# of the eigenpairs, so the reverse pass can re-run both at lifted points:
-#   * the pure staggered 2-D PMM twin (``_jax_twod_staggered``): its
-#     generalized pencils (L, G);
-#   * ``rcwa_efficiency_2d`` on JAX input (``rcwa/twod.py``): the layer
-#     operator ``P @ Q`` (``_scalar_PQ`` / ``_tensor_PQ``, the same blocks
-#     ``_layer_eigenmodes`` builds), G = None, anchor lam^2 = 0;
-#   * the 1-D PMM twin (``pmm/_core._jpmm_solve``): its three pencils
-#     (A, B) -- layer, superstrate, substrate -- anchor q^2 = 0.
-# A twin whose eig is of a FOLD ``B^-1 A`` with ``B`` Hermitian positive
-# definite (a mass matrix) must hand the PENCIL (A, B), not the fold with
-# G = None: the fold's eigenvectors are B-orthogonal, so the Euclidean-Gram
-# lift of a cluster that merges DISTINCT eigenvalues (near, not at, the
-# symmetric point) is complex, and a forward-branch selector downstream reads
-# it as a branch change -- measured on the 1-D twin at 1e-5 rad off normal
+# USERS.  ``problems`` are the eig ARGUMENTS and ``consumer`` is everything
+# downstream of the eigenpairs, so the reverse pass can re-run both at lifted
+# points.  The pure staggered 2-D PMM twin (``_jax_twod_staggered``) builds
+# its generalized pencils (L, G) and consumer explicitly; every other routed
+# twin wraps its solve in :func:`_jax_cluster_routed` (below), which records
+# the problems from the twin's own ``_jax_twin_eig`` calls and replays the
+# eigenpairs into the same solve: ``rcwa_efficiency_2d``, ``rcwa_jones_2d``
+# and ``RCWAStack`` on JAX input (the layer operators ``P @ Q`` / the
+# out-of-plane generators), ``pmm_efficiency_1d`` (its three pencils
+# (A, B)), ``pmm_jones_1d`` and the 1-D ``PMMStack`` (the half-spaces' shared
+# geometric ``Kx2`` and every layer's ``Mbig``, with the mass matrix as the
+# lift Gram K), the Berreman off-plane cascade (every layer's ``Delta``) and
+# the hybrid 2-D ``PMM2DStack`` (every patterned layer's ``P @ Q``).
+# The lift's inner product matters near (not at) a symmetric point: for an
+# operator that is self-adjoint in a mass matrix B (a fold ``B^-1 A``, or an
+# ``S0^-1 op``), the Euclidean-Gram lift of a cluster that merges DISTINCT
+# eigenvalues is complex, and a forward-branch selector downstream reads it
+# as a branch change -- measured on the 1-D twin at 1e-5 rad off normal
 # (pairs split by 4.8e-8 of the spectrum): 4.7e3 (TE) / 7.0e4 (TM) relative
-# error with the fold, 1.0e-10 / 2.4e-10 with the pencil
-# (validation/probe_jax_symgrad/c1_gram.py).
+# error with the Euclidean Gram, 1.0e-10 / 2.4e-10 with B
+# (validation/probe_jax_symgrad/c1_gram.py).  Hence the optional third entry
+# K of a problem (the lift Gram, default G), which does not change a value.
+# The rule is switched off library-wide by
+# ``lumenairy.backend.set_jax_cluster_rule(False)`` /
+# ``jax_cluster_rule(False)`` (see :mod:`lumenairy.backend.array`).
 _EIG_CLUSTER_GAP_REL = 1e-6
 _EIG_CLUSTER_SPLIT_REL = 1e-7
 
@@ -4707,6 +4707,22 @@ _EIG_CLUSTER_ORDER = 4
 _EIG_CLUSTER_ANCHOR_K = 0.25
 
 _JAX_EIG_CLUSTER_VJP = None
+
+
+def _eig_cluster_pairs(lam, gap_rel):
+    """The pairwise cluster relation of :func:`_eig_cluster_lift`: ``(i, j)``
+    with ``|lam_i - lam_j| <= gap_rel * max|lam|``, ``i != j`` (JAX)."""
+    import jax.numpy as jnp
+    scale = jnp.max(jnp.abs(lam))
+    scale = jnp.where(scale > 0, scale, 1.0)
+    eye = jnp.eye(lam.shape[0], dtype=bool)
+    return (jnp.abs(lam[:, None] - lam[None, :]) <= gap_rel * scale) & ~eye
+
+
+def _eig_cluster_flag(lam, gap_rel):
+    """Whether ``lam`` holds any cluster (the lift's ``any_cluster``)."""
+    import jax.numpy as jnp
+    return jnp.any(_eig_cluster_pairs(lam, gap_rel))
 
 
 def _eig_cluster_lift(lam, V, G, gap_rel, split_rel, anchors=()):
@@ -4751,7 +4767,7 @@ def _eig_cluster_lift(lam, V, G, gap_rel, split_rel, anchors=()):
     scale = jnp.max(jnp.abs(lam))
     scale = jnp.where(scale > 0, scale, 1.0)
     eye = jnp.eye(n, dtype=bool)
-    close = (jnp.abs(lam[:, None] - lam[None, :]) <= gap_rel * scale) & ~eye
+    close = _eig_cluster_pairs(lam, gap_rel)
     member = jnp.any(close, axis=1)
     # clusters are the CONNECTED COMPONENTS of the pairwise relation (a
     # chain of near-degenerate eigenvalues is one cluster): the transitive
@@ -4798,6 +4814,32 @@ def _eig_cluster_lift(lam, V, G, gap_rel, split_rel, anchors=()):
     return (split_rel * scale) * N, jnp.any(close)
 
 
+_BATCH_ANY = None
+
+
+def _batch_any():
+    """Lazily build (once) ``batch_any(flag)``: the identity on an
+    unbatched boolean, and under ``jax.vmap`` the OR over the batch as an
+    UNBATCHED value (``jax.custom_batching.custom_vmap``), so a ``lax.cond``
+    on it stays a branch instead of becoming a both-branches select."""
+    global _BATCH_ANY
+    if _BATCH_ANY is not None:
+        return _BATCH_ANY
+    import jax.numpy as jnp
+    from jax.custom_batching import custom_vmap
+
+    @custom_vmap
+    def batch_any(flag):
+        return flag
+
+    @batch_any.def_vmap
+    def _batch_any_rule(axis_size, in_batched, flag):
+        return (jnp.any(flag) if in_batched[0] else flag), False
+
+    _BATCH_ANY = batch_any
+    return batch_any
+
+
 def _jax_eig_cluster_vjp():
     """Lazily build (once) the custom-VJP core of
     :func:`_jax_eig_cluster_adjoint`."""
@@ -4813,23 +4855,28 @@ def _jax_eig_cluster_vjp():
         return tuple(eig_fn(L, G) for L, G in zip(Ls, Gs))
 
     @partial(jax.custom_vjp, nondiff_argnums=(0, 1, 2, 3, 4))
-    def core(conv, eig_fn, gap_rel, split_rel, anchors, Ls, Gs, *consts):
+    def core(conv, eig_fn, gap_rel, split_rel, anchors, Ls, Gs, Ks, *consts):
         return conv(eigs_of(eig_fn, Ls, Gs), *consts)
 
-    def core_fwd(conv, eig_fn, gap_rel, split_rel, anchors, Ls, Gs, *consts):
+    def core_fwd(conv, eig_fn, gap_rel, split_rel, anchors, Ls, Gs, Ks,
+                 *consts):
         eo, evjp = jax.vjp(lambda a, b: eigs_of(eig_fn, a, b), Ls, Gs)
         out, dvjp = jax.vjp(conv, eo, *consts)
-        lifts, flags = [], []
-        for (lam, V), G, an in zip(eo, Gs, anchors):
-            dN, anyc = _eig_cluster_lift(lam, V, G, gap_rel, split_rel, an)
-            lifts.append(dN)
-            flags.append(anyc)
-        anyc = jnp.any(jnp.stack(flags))
-        return out, (Ls, Gs, consts, evjp, dvjp, tuple(lifts), anyc)
+        # only the CLUSTER TEST runs here (O(n^2) per problem); the lift
+        # itself (an eigh, a solve and a few products per problem, ~the
+        # cost of the eig) is built in the reverse pass's lifted branch, so a
+        # gradient without a cluster does not pay for it (the 1-D twin's
+        # no-cluster gradient: 1.1 - 1.3x the plain one before this split,
+        # 1.0 - 1.1x after it; build record, section 10.6)
+        anyc = jnp.any(jnp.stack([_eig_cluster_flag(lam, gap_rel)
+                                  for lam, _V in eo]))
+        return out, (Ls, Gs, Ks, consts, evjp, dvjp, eo, anyc)
 
     def core_bwd(conv, eig_fn, gap_rel, split_rel, anchors, res, ct):
-        Ls, Gs, consts, evjp, dvjp, lifts, anyc = res
+        Ls, Gs, Ks, consts, evjp, dvjp, eo, anyc = res
         eb, *cb = dvjp(ct)
+        # the lift Grams only shape the lift's direction: no cotangent
+        Kb = jax.tree_util.tree_map(jnp.zeros_like, Ks)
 
         def plain(_):
             return evjp(eb)
@@ -4837,6 +4884,10 @@ def _jax_eig_cluster_vjp():
         def lifted(_):
             def g(a, b):
                 return conv(eigs_of(eig_fn, a, b), *consts)
+            lifts = tuple(
+                _eig_cluster_lift(lam, V, G if K is None else K, gap_rel,
+                                  split_rel, an)[0]
+                for (lam, V), G, K, an in zip(eo, Gs, Ks, anchors))
             acc = None
             for t, wt in _EIG_CLUSTER_STENCILS[_EIG_CLUSTER_ORDER]:
                 Lx = tuple(L + (t * dN if G is None else G @ (t * dN))
@@ -4849,10 +4900,19 @@ def _jax_eig_cluster_vjp():
         try:
             flag = bool(anyc)
         except jax.errors.ConcretizationTypeError:
-            LGb = jax.lax.cond(anyc, lifted, plain, None)
+            # ``_batch_any`` keeps the predicate UNBATCHED under ``jax.vmap``
+            # (the OR over the batch).  A batched predicate turns
+            # ``lax.cond`` into a select that RUNS BOTH branches, so a
+            # vmapped gradient with no cluster anywhere in the batch paid the
+            # lifted cost (measured 7 - 16x); now it takes the plain branch.
+            # A batch with a cluster in any element runs the lifted branch
+            # for all of them, which is exact for the others too (their lift
+            # is zero: four evaluations at the same point, weights summing
+            # to one).
+            LGb = jax.lax.cond(_batch_any()(anyc), lifted, plain, None)
         else:
             LGb = lifted(None) if flag else plain(None)
-        return (*LGb, *cb)
+        return (*LGb, Kb, *cb)
 
     core.defvjp(core_fwd, core_bwd)
     _JAX_EIG_CLUSTER_VJP = core
@@ -4866,7 +4926,11 @@ def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
     (block comment above).
 
     ``eig_fn(L, G)`` returns the differentiable ``(lam, V)`` of ``G^-1 L``
-    (``G`` may be ``None``: of ``L``), through :func:`_jax_eig_stable`;
+    (``G`` may be ``None``: of ``L``), through :func:`_jax_eig_stable`.  A
+    problem may carry a third entry ``K``, the inner product the LIFT is built
+    in (a Hermitian positive-definite mass matrix in which the operator is
+    self-adjoint for a lossless medium); it defaults to ``G`` (the identity
+    when ``G`` is ``None``) and gets no cotangent;
     ``consumer`` maps the tuple of eigenpairs to a pytree of arrays and may
     close over any traced value (it is closure-converted here, so the closed
     values receive their cotangents).  ``anchors`` (one tuple of concrete
@@ -4887,12 +4951,14 @@ def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
     # conversion (which would trace the consumer into a jaxpr on every eager
     # call and hand its intermediates to the caller's instrumentation as
     # tracers) and no lift.  Same values either way.
-    if (not problems or gap <= 0.0 or not any(
-            isinstance(x, jax.core.Tracer)
-            for x in jax.tree_util.tree_leaves(problems))):
-        return consumer(tuple(eig_fn(L, G) for L, G in problems))
-    Ls = tuple(L for L, _G in problems)
-    Gs = tuple(G for _L, G in problems)
+    from ...backend import jax_cluster_rule_enabled
+    if (not problems or gap <= 0.0 or not jax_cluster_rule_enabled()
+            or not any(isinstance(x, jax.core.Tracer)
+                       for x in jax.tree_util.tree_leaves(problems))):
+        return consumer(tuple(eig_fn(p[0], p[1]) for p in problems))
+    Ls = tuple(p[0] for p in problems)
+    Gs = tuple(p[1] for p in problems)
+    Ks = tuple(p[2] if len(p) > 2 else None for p in problems)
     shapes = jax.eval_shape(
         lambda a, b: tuple(eig_fn(L, G) for L, G in zip(a, b)), Ls, Gs)
     example = jax.tree_util.tree_map(lambda s: jnp.zeros(s.shape, s.dtype),
@@ -4904,8 +4970,140 @@ def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
         conv, consts = jax.closure_convert(consumer, example)
     an = (tuple(() for _p in problems) if anchors is None else
           tuple(tuple(complex(x) for x in a) for a in anchors))
-    return _jax_eig_cluster_vjp()(conv, eig_fn, gap, split, an, Ls, Gs,
+    return _jax_eig_cluster_vjp()(conv, eig_fn, gap, split, an, Ls, Gs, Ks,
                                   *consts)
+
+
+# ---------------------------------------------------------------------------
+# THE eig of every JAX twin, and the one way a twin's solve takes the rule
+# ---------------------------------------------------------------------------
+# ``_jax_twin_eig(L, G, K)`` is the eig every routed JAX twin calls (through
+# ``_eig_for(jnp)`` for the RCWA family): ``(lam, V)`` of ``G^-1 L`` (of ``L``
+# when ``G`` is ``None``) by :func:`_jax_eig_stable`, exactly the expression
+# the twins evaluated before (``eig(L)`` / ``eig(jnp.linalg.solve(G, L))``),
+# so a forward value does not move by a bit.
+#
+# ``_jax_cluster_routed(solve)`` runs a twin's solve (a closure returning a
+# pytree of arrays, taking every eigen-decomposition through
+# ``_jax_twin_eig``) through :func:`_jax_eig_cluster_adjoint` without the twin
+# having to restructure itself into "eig problems" and "consumer":
+#   1. it runs ``solve()`` once with ``_jax_twin_eig`` RECORDING its arguments
+#      (and answering with the real eig) -- the problems, in call order;
+#   2. when the rule applies (the switch is on and an eig argument is
+#      traced), the problems are recorded again INSIDE a trace (closure
+#      conversion) and the consumer is ``solve`` re-run, inside the same
+#      kind of trace, with ``_jax_twin_eig`` REPLAYING the eigenpairs it is
+#      handed, in the same order (a solve's control flow may test whether a
+#      value is concrete, so record and replay must see the same regime; a
+#      count mismatch raises).
+# The first pass's own result is returned when the rule does not apply (an
+# eager forward: no second pass at all); under ``jax.jit`` the first pass's
+# downstream is dead code that XLA removes, and only its eig arguments
+# survive as the problems.  Every eig of the solve is in ONE cluster rule,
+# so a stack's layers, half-spaces and shared geometric eigs are all seen.
+import contextvars as _contextvars  # noqa: E402
+
+_JAX_TWIN_EIG_ROUTE: "_contextvars.ContextVar" = _contextvars.ContextVar(
+    "lumenairy_jax_twin_eig_route", default=None)
+
+
+def _jax_twin_eig_plain(L, G=None):
+    """``(lam, V)`` of ``G^-1 L`` (of ``L`` when ``G`` is ``None``) through
+    :func:`_jax_eig_stable` -- the eig problem's ``eig_fn``."""
+    eig = _jax_eig_stable()
+    if G is None:
+        return eig(L)
+    import jax.numpy as jnp
+    return eig(jnp.linalg.solve(G, L))
+
+
+def _jax_twin_eig(L, G=None, K=None):
+    """THE eig of every routed JAX twin: ``(lam, V)`` of ``G^-1 L``.  ``K``
+    (optional) is the lift's inner product for the cluster rule (see
+    :func:`_jax_eig_cluster_adjoint`); it does not change the value.  Inside
+    :func:`_jax_cluster_routed` the call is recorded (first pass) or replayed
+    (the rule's consumer); outside, it is the plain eig."""
+    route = _JAX_TWIN_EIG_ROUTE.get()
+    if route is not None:
+        return route(L, G, K)
+    return _jax_twin_eig_plain(L, G)
+
+
+def _jax_cluster_routed(solve, *, anchor=0.0, gap_rel=None):
+    """``solve()`` with the reverse pass of the degenerate-cluster rule over
+    EVERY ``_jax_twin_eig`` it calls (block comment above).  ``anchor`` is
+    the branch point of the solve's modal square root in the eigenvalue
+    plane (``lam^2 = 0`` / ``q^2 = 0``: 0, the default)."""
+    import jax
+    problems = []
+
+    def record(L, G, K):
+        problems.append((L, G, K))
+        return _jax_twin_eig_plain(L, G)
+
+    token = _JAX_TWIN_EIG_ROUTE.set(record)
+    try:
+        out = solve()
+    finally:
+        _JAX_TWIN_EIG_ROUTE.reset(token)
+    gap = _EIG_CLUSTER_GAP_REL if gap_rel is None else float(gap_rel)
+    from ...backend import jax_cluster_rule_enabled
+    if (not problems or gap <= 0.0 or not jax_cluster_rule_enabled()
+            or not any(isinstance(x, jax.core.Tracer)
+                       for x in jax.tree_util.tree_leaves(problems))):
+        return out
+
+    # The consumer below re-runs ``solve`` INSIDE a trace (the closure
+    # conversion of _jax_eig_cluster_adjoint), where every value -- even one
+    # the first pass saw as concrete -- is a tracer; a solve whose control
+    # flow tests concreteness (the Berreman twin takes an analytic, eig-free
+    # branch for a concretely isotropic layer) then takes MORE eigs than the
+    # first pass recorded.  The problems are therefore re-recorded under the
+    # same trace regime as the replay (measured: the eager ``jax.grad`` of
+    # tests/unit/test_v5_14_5_emt_and_berreman_jax.py otherwise ran off the
+    # end of the recorded list).  Under ``jax.jit`` both regimes are traced
+    # and the two recordings are the same operations.
+    def rerecord():
+        recs = []
+
+        def rec(L, G, K):
+            recs.append((L, G, K))
+            return _jax_twin_eig_plain(L, G)
+
+        tok = _JAX_TWIN_EIG_ROUTE.set(rec)
+        try:
+            solve()
+        finally:
+            _JAX_TWIN_EIG_ROUTE.reset(tok)
+        return recs
+
+    with jax.checking_leaks():
+        conv_r, consts_r = jax.closure_convert(rerecord)
+    problems = conv_r(*consts_r)
+
+    def consumer(eigs):
+        it = iter(eigs)
+        used = [0]
+
+        def replay(L, G, K):
+            used[0] += 1
+            return next(it)
+
+        tok = _JAX_TWIN_EIG_ROUTE.set(replay)
+        try:
+            res = solve()
+        finally:
+            _JAX_TWIN_EIG_ROUTE.reset(tok)
+        if used[0] != len(eigs):
+            raise RuntimeError(
+                f"_jax_cluster_routed: the solve took {used[0]} eigs on "
+                f"replay but {len(eigs)} when recorded -- its control flow "
+                f"depends on a traced value")
+        return res
+
+    return _jax_eig_cluster_adjoint(
+        _jax_twin_eig_plain, problems, consumer, gap_rel=gap_rel,
+        anchors=((anchor,),) * len(problems))
 
 
 
@@ -5081,6 +5279,7 @@ __all__ = [
     "_select_forward_flux",
     "_layer_eigenmodes_tensor",
     "_tensor_offplane_present",
+    "_tensor_inplane_mask",
     "_reject_jax_offplane",
     "_require_inplane_tensor",
     "_JAX_EIG_STABLE",
@@ -5088,6 +5287,8 @@ __all__ = [
     "_EIG_CLUSTER_GAP_REL",
     "_EIG_CLUSTER_SPLIT_REL",
     "_jax_eig_cluster_adjoint",
+    "_jax_cluster_routed",
+    "_jax_twin_eig",
     "_HOMOG_CACHE",
     "_HOMOG_LOCK",
     "_clear_rcwa_caches",

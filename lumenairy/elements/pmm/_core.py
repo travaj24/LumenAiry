@@ -3751,7 +3751,8 @@ def _jpmm_assemble(static, jnp, eps_ridge, eps_groove, dyn=None):
 
 def _jpmm_sem_modes(M, jnp, eig, k0, polarization, kx0=0.0):
     """Folded standard-eig modal solve eig(B^-1 A) with the differentiable
-    custom-VJP eig and the noise-robust forward-mode branch.  Returns
+    custom-VJP eig (``eig`` is ``rcwa._core._jax_twin_eig``, called on the
+    pencil ``(A, B)``) and the noise-robust forward-mode branch.  Returns
     ``(Acoef, lam, q, invop)`` (mirror of :func:`_sem_modes`).
 
     ``kx0`` (a TRACED jnp scalar = ``Re(n_sup) sin(angle) k0``) adds the Bloch
@@ -3762,27 +3763,6 @@ def _jpmm_sem_modes(M, jnp, eig, k0, polarization, kx0=0.0):
     python ``0.0`` (normal incidence) skips the convection so the path stays
     byte-equal to the prior normal-incidence twin; a traced kx0 (even one whose
     concrete value is 0) flows the ``d/d(angle)`` derivative through."""
-    A, B, invop = _jpmm_sem_problem(M, jnp, k0, polarization, kx0)
-    q2, Acoef = eig(jnp.linalg.solve(B, A))
-    return _jpmm_sem_modes_from_eig(q2, Acoef, jnp, invop)
-
-
-def _jpmm_sem_problem(M, jnp, k0, polarization, kx0=0.0):
-    """The modal pencil ``(A, B)`` of :func:`_jpmm_sem_modes` (whose eig it
-    takes of the fold ``B^-1 A``) and its TM ``invop``, built OUTSIDE the eig
-    so a solve can hand the eig and everything downstream of it to
-    :func:`lumenairy.elements.rcwa._core._jax_eig_cluster_adjoint`
-    (:func:`_jpmm_solve`).  Same expressions, same order of operations.
-
-    The PENCIL, not the fold, is what the rule gets: ``B`` (a mass matrix,
-    Hermitian positive definite) is the Gram of the cluster lift, so for a
-    lossless medium (``A`` Hermitian) the lift of a cluster that merges
-    several DISTINCT eigenvalues keeps them real -- with the Euclidean Gram
-    the fold's ``B``-orthogonal eigenvectors gave complex shifts that the
-    forward-branch selector read as a branch change (measured: d / d(angle)
-    at 1e-5 rad, where the half-space pairs are split by 4.8e-8 of the
-    spectrum, wrong by 4.7e3 relative with the fold, 1e-10 with the
-    pencil)."""
     k02 = k0 * k0
     # Skip the convection ONLY for the python literal 0.0 (normal incidence,
     # byte-equal to the prior twin); a TRACED jnp scalar -- even one valued 0 --
@@ -3802,12 +3782,9 @@ def _jpmm_sem_problem(M, jnp, k0, polarization, kx0=0.0):
             Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * M["Pinv"]
         A, B = M["S0"] - Lop / k02, M["Pinv"]
         invop = jnp.linalg.solve(M["S0"], M["Pinv"])
-    return A, B, invop
-
-
-def _jpmm_sem_modes_from_eig(q2, Acoef, jnp, invop):
-    """``(Acoef, lam, q, invop)`` of :func:`_jpmm_sem_modes` from the
-    eigenpairs ``(q2, Acoef)`` of :func:`_jpmm_sem_problem`."""
+    # the PENCIL (A, B): the value is eig(solve(B, A)), as before; B (a mass
+    # matrix) is the cluster rule's lift Gram (rcwa._core._jax_twin_eig)
+    q2, Acoef = eig(A, B)
     q = jnp.sqrt(q2)
     # Noise-robust forward branch (the _sem_modes robust=True rule): flip only
     # when CLEARLY backward -- a degenerate half-space q^2 carries ~1e-15 imag
@@ -3927,29 +3904,50 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
     Msup = _jpmm_assemble(static, jnp, eps_sup, eps_sup, dyn=dyn)
     Msub = _jpmm_assemble(static, jnp, eps_sub, eps_sub, dyn=dyn)
 
-    # The three eigs (layer, superstrate, substrate) and EVERYTHING downstream
-    # of them go through the degenerate-cluster adjoint
-    # (rcwa._core._jax_eig_cluster_adjoint): at exactly normal incidence the
+    # Every eig of the solve (layer, superstrate, substrate) and everything
+    # downstream of them go through the degenerate-cluster rule
+    # (rcwa._core._jax_cluster_routed): at exactly normal incidence the
     # half-spaces' +-m orders are degenerate pairs and d / d(angle) splits
-    # them, which no reverse rule at the eig boundary can follow (the W9 note
-    # there).  Forward values are those of the plain composition; the anchor
-    # is the branch point q^2 = 0 of the modal sqrt.
-    probs = [_jpmm_sem_problem(Mx, jnp, k0, polarization, kx0)
-             for Mx in (M, Msup, Msub)]
-    invop, invsup, invsub = (iv for _A, _B, iv in probs)
-
-    def _amplitudes(eigs):
-        (Acoef, lam_l, q_l, _i), (Wsup, _ls, q_sup, _s), (
-            Wsub, _lb, q_sub, _b) = [_jpmm_sem_modes_from_eig(q2, V, jnp, iv)
-                                     for (q2, V), (_A, _B, iv)
-                                     in zip(eigs, probs)]
+    # them, which no reverse rule at the eig boundary can follow.
+    def _amplitudes():
+        Acoef, lam_l, q_l, invop = _jpmm_sem_modes(M, jnp, eig, k0, polarization,
+                                                   kx0)
         Wl = Acoef
         Vl = (Acoef if polarization == "te" else invop @ Acoef) @ jnp.diag(q_l)
+        Wsup, _ls, q_sup, invsup = _jpmm_sem_modes(Msup, jnp, eig, k0, polarization,
+                                                   kx0)
+        Wsub, _lb, q_sub, invsub = _jpmm_sem_modes(Msub, jnp, eig, k0, polarization,
+                                                   kx0)
         if polarization == "te":
             Vsup, Vsub = Wsup @ jnp.diag(q_sup), Wsub @ jnp.diag(q_sub)
         else:
             Vsup = (invsup @ Wsup) @ jnp.diag(q_sup)
             Vsub = (invsub @ Wsub) @ jnp.diag(q_sub)
+
+        def _ismat(Wa, Va, Wb, Vb):
+            a = jnp.linalg.solve(Wb, Wa)
+            b = jnp.linalg.solve(Vb, Va)
+            apb, amb = a + b, a - b
+            iapb = jnp.linalg.inv(apb)
+            return (-iapb @ amb, 2.0 * iapb,
+                    0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+
+        def _psmat(lam, k0_L):
+            n = lam.shape[0]
+            X = jnp.diag(jnp.exp(-lam * k0_L))
+            Z = jnp.zeros((n, n), cj)
+            return (Z, X, X, Z)
+
+        def _star(SA, SB):
+            A11, A12, A21, A22 = SA
+            B11, B12, B21, B22 = SB
+            n = A11.shape[0]
+            I = jnp.eye(n, dtype=cj)
+            D = jnp.linalg.inv(I - B11 @ A22)
+            F = jnp.linalg.inv(I - A22 @ B11)
+            return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
+                    B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
+
         S = _ismat(Wsup, Vsup, Wl, Vl)
         S = _star(S, _psmat(lam_l, k0 * depth))
         S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
@@ -3960,40 +3958,13 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
         delta0 = jnp.asarray((orders == 0).astype(_C))
         # ``jnp.linalg.lstsq``'s SVD gradient is unusable on the STRUCTURALLY
         # degenerate Hsup (repeated singular value 1/sqrt(n_glob)) -- see
-        # :func:`_jpmm_min_norm_projection`, and the same replacement in the
-        # Jones twin below and in ``_jax_stack``.
+        # :func:`_jpmm_min_norm_projection`, and the same replacement in the Jones
+        # twin below and in ``_jax_stack``.
         cinc = _jpmm_min_norm_projection(Hsup, delta0, jnp)
         return Hsup @ (S11 @ cinc), Hsub @ (S21 @ cinc)
 
-    def _ismat(Wa, Va, Wb, Vb):
-        a = jnp.linalg.solve(Wb, Wa)
-        b = jnp.linalg.solve(Vb, Va)
-        apb, amb = a + b, a - b
-        iapb = jnp.linalg.inv(apb)
-        return (-iapb @ amb, 2.0 * iapb,
-                0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
-
-    def _psmat(lam, k0_L):
-        n = lam.shape[0]
-        X = jnp.diag(jnp.exp(-lam * k0_L))
-        Z = jnp.zeros((n, n), cj)
-        return (Z, X, X, Z)
-
-    def _star(SA, SB):
-        A11, A12, A21, A22 = SA
-        B11, B12, B21, B22 = SB
-        n = A11.shape[0]
-        I = jnp.eye(n, dtype=cj)
-        D = jnp.linalg.inv(I - B11 @ A22)
-        F = jnp.linalg.inv(I - A22 @ B11)
-        return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
-                B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
-
-    from ..rcwa._core import _jax_eig_cluster_adjoint
-    r_ord, t_ord = _jax_eig_cluster_adjoint(
-        lambda A, B: eig(jnp.linalg.solve(B, A)),
-        tuple((A, B) for A, B, _iv in probs), _amplitudes,
-        anchors=((0.0,),) * 3)
+    from ..rcwa._core import _jax_cluster_routed
+    r_ord, t_ord = _jax_cluster_routed(_amplitudes)
 
     def _kzf(eps, kxv):
         val = jnp.sqrt(jnp.asarray(eps - kxv ** 2, dtype=cj))
@@ -4074,7 +4045,7 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
     value skips the guard (see :func:`_jpmm_concrete_incidence_guard`)."""
     import jax.numpy as jnp
 
-    from ..rcwa import _jax_eig_stable, _require_jax_x64
+    from ..rcwa import _require_jax_x64
     _require_jax_x64("pmm_efficiency_1d")
 
     if int(elements_per_region) != 1:
@@ -4179,7 +4150,8 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
         dyn = None
         Tp = jnp.asarray(_jpmm_fourier_projection(orders, period_c, static), cj)
 
-    eig = _jax_eig_stable()
+    from ..rcwa._core import _jax_twin_eig
+    eig = _jax_twin_eig
     o, R, T = _jpmm_solve(static, orders, Tp, jnp, eig, period_c,
                           eps_ridge, eps_groove, eps_sup, eps_sub,
                           depth, wavelength, polarization, dyn=dyn, kx0=kx0)
@@ -4326,7 +4298,12 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
 
     Mbig = jnp.block([[G @ Cxx, G @ Cxy],
                       [Cyx,     Cyy - Kx2]])
-    q2, W2 = eig(Mbig)
+    # ``eig`` is ``rcwa._core._jax_twin_eig``: the value is eig(Mbig); the
+    # third argument is the cluster rule's lift Gram, blockdiag(S0, S0), in
+    # which a UNIFORM layer's Mbig = eps I - blockdiag(Kx2, Kx2) is
+    # self-adjoint (lossless, real kx0)
+    Zn = jnp.zeros((n, n), dtype=cj)
+    q2, W2 = eig(Mbig, None, jnp.block([[S0, Zn], [Zn, S0]]))
     q = jnp.sqrt(q2)
     Q = jnp.block([[Cyx, Cyy - Kx2], [-Cxx, -Cxy]])
 
@@ -4375,7 +4352,9 @@ def _juniform_geo_eig(mats, jnp, eig, k0, kx0=0.0):
         Cw = mats["conv"]["one"]
         op = op - 1j * kx0 * (Cw - Cw.T) + (kx0 * kx0) * mats["mass"]["one"]
     Kx2 = (1.0 / k02) * (iS0 @ op)
-    mu, w = eig(Kx2)
+    # the value is eig(Kx2); S0 is the cluster rule's lift Gram (Kx2 = S0^-1
+    # op with op Hermitian for real kx0: S0-self-adjoint)
+    mu, w = eig(Kx2, None, mats["S0"])
     return mu, w, Kx2
 
 
@@ -4444,53 +4423,88 @@ def _jpmm_jones_solve(static, orders, Tp, jnp, eig, period, t_ridge, t_groove,
     mats_sup = _jpmm_assemble_tensor(static, jnp, t_iso_sup, t_iso_sup, dyn=dyn)
     mats_sub = _jpmm_assemble_tensor(static, jnp, t_iso_sub, t_iso_sub, dyn=dyn)
 
-    Wl, Vl, lam_l, _ql = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
-    # v5.18.1 (audit P3-27 second half): the two ISOTROPIC half-spaces share
-    # ONE geometry-only eig (backlog A2) instead of two independent full 2n
-    # eigs -- Kx2 is eps-free and identical for sup/sub on the shared mesh.
-    # Mirrors the numpy _pmm_jones_solve_core, which already does this; the JAX
-    # twin now matches that oracle's shared-eig gauge exactly.
-    _geo = _juniform_geo_eig(mats_sup, jnp, eig, k0, kx0)
-    Wsup, Vsup, _ls, _qs = _jpmm_sem_modes_uniform(
-        mats_sup, jnp, eig, k0, kx0, eps_sup, geo=_geo)
-    Wsub, Vsub, _lb, _qb = _jpmm_sem_modes_uniform(
-        mats_sub, jnp, eig, k0, kx0, eps_sub, geo=_geo)
+    m0 = int(np.where(orders == 0)[0][0])
 
-    def _ismat(Wa, Va, Wb, Vb):
-        a = jnp.linalg.solve(Wb, Wa)
-        b = jnp.linalg.solve(Vb, Va)
-        apb, amb = a + b, a - b
-        iapb = jnp.linalg.inv(apb)
-        return (-iapb @ amb, 2.0 * iapb,
-                0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+    # Every eig of the solve (the layer's Mbig and the half-spaces' shared
+    # geometric Kx2) and everything downstream of them, to the reflected /
+    # transmitted order amplitudes, go through the degenerate-cluster rule
+    # (rcwa._core._jax_cluster_routed): at exactly normal incidence the
+    # half-spaces' +-m orders are degenerate pairs (and a uniform layer's
+    # Mbig is degenerate throughout) and d / d(angle) splits them.
+    def _amplitudes():
+        Wl, Vl, lam_l, _ql = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
+        # v5.18.1 (audit P3-27 second half): the two ISOTROPIC half-spaces share
+        # ONE geometry-only eig (backlog A2) instead of two independent full 2n
+        # eigs -- Kx2 is eps-free and identical for sup/sub on the shared mesh.
+        # Mirrors the numpy _pmm_jones_solve_core, which already does this; the JAX
+        # twin now matches that oracle's shared-eig gauge exactly.
+        _geo = _juniform_geo_eig(mats_sup, jnp, eig, k0, kx0)
+        Wsup, Vsup, _ls, _qs = _jpmm_sem_modes_uniform(
+            mats_sup, jnp, eig, k0, kx0, eps_sup, geo=_geo)
+        Wsub, Vsub, _lb, _qb = _jpmm_sem_modes_uniform(
+            mats_sub, jnp, eig, k0, kx0, eps_sub, geo=_geo)
 
-    def _psmat(lam, k0_L):
-        m = lam.shape[0]
-        X = jnp.diag(jnp.exp(-lam * k0_L))
-        Z = jnp.zeros((m, m), cj)
-        return (Z, X, X, Z)
+        def _ismat(Wa, Va, Wb, Vb):
+            a = jnp.linalg.solve(Wb, Wa)
+            b = jnp.linalg.solve(Vb, Va)
+            apb, amb = a + b, a - b
+            iapb = jnp.linalg.inv(apb)
+            return (-iapb @ amb, 2.0 * iapb,
+                    0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
 
-    def _star(SA, SB):
-        A11, A12, A21, A22 = SA
-        B11, B12, B21, B22 = SB
-        m = A11.shape[0]
-        I = jnp.eye(m, dtype=cj)
-        D = jnp.linalg.inv(I - B11 @ A22)
-        F = jnp.linalg.inv(I - A22 @ B11)
-        return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
-                B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
+        def _psmat(lam, k0_L):
+            m = lam.shape[0]
+            X = jnp.diag(jnp.exp(-lam * k0_L))
+            Z = jnp.zeros((m, m), cj)
+            return (Z, X, X, Z)
 
-    S = _ismat(Wsup, Vsup, Wl, Vl)
-    S = _star(S, _psmat(lam_l, k0 * depth))
-    S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
-    S11, _S12, S21, _S22 = S
+        def _star(SA, SB):
+            A11, A12, A21, A22 = SA
+            B11, B12, B21, B22 = SB
+            m = A11.shape[0]
+            I = jnp.eye(m, dtype=cj)
+            D = jnp.linalg.inv(I - B11 @ A22)
+            F = jnp.linalg.inv(I - A22 @ B11)
+            return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
+                    B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
 
-    def _project(Wmodes):
-        return jnp.vstack([Tp @ Wmodes[:n_glob, :], Tp @ Wmodes[n_glob:, :]])
+        S = _ismat(Wsup, Vsup, Wl, Vl)
+        S = _star(S, _psmat(lam_l, k0 * depth))
+        S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
+        S11, _S12, S21, _S22 = S
 
-    Hsup = _project(Wsup)
-    Hsub = _project(Wsub)
+        def _project(Wmodes):
+            return jnp.vstack([Tp @ Wmodes[:n_glob, :], Tp @ Wmodes[n_glob:, :]])
 
+        Hsup = _project(Wsup)
+        Hsub = _project(Wsub)
+
+        # DIFFERENTIABLE minimum-norm least squares for the incident-amplitude
+        # projection.  ``jnp.linalg.lstsq``'s VJP NaNs on a rank-deficient / under-
+        # determined system (the stacked Hsup is (2N, 2*n_glob) with 2N <= 2*n_glob,
+        # i.e. underdetermined), so use the closed-form min-norm pseudo-inverse
+        # x = A^H (A A^H)^-1 b (forward-identical to numpy's SVD min-norm lstsq to
+        # ~1e-14, validated; A A^H is well-conditioned -- cond ~ Hsup's^2).  The
+        # over-determined case (2N > 2*n_glob, not hit on this surface) would use
+        # (A^H A)^-1 A^H; branch on the CONCRETE shape (static per trace).
+        mrows, ncols = Hsup.shape
+        if mrows <= ncols:
+            AAH_inv = jnp.linalg.inv(Hsup @ Hsup.conj().T)
+            pinv = Hsup.conj().T @ AAH_inv          # (ncols, mrows) min-norm pinv
+        else:
+            AHA_inv = jnp.linalg.inv(Hsup.conj().T @ Hsup)
+            pinv = AHA_inv @ Hsup.conj().T          # least-squares pinv
+
+        r_cols, t_cols = [], []
+        for col in range(2):                # 0 = incident Ex, 1 = incident Ey
+            rhs = jnp.zeros(2 * N, cj).at[(col * N) + m0].set(1.0)
+            cinc = pinv @ rhs
+            r_cols.append(Hsup @ (S11 @ cinc))
+            t_cols.append(Hsub @ (S21 @ cinc))
+        return tuple(r_cols), tuple(t_cols)
+
+    from ..rcwa._core import _jax_cluster_routed
+    r_cols, t_cols = _jax_cluster_routed(_amplitudes)
     orders_j = jnp.asarray(orders)
     kx = (kx0 + orders_j * G) / k0
 
@@ -4504,30 +4518,9 @@ def _jpmm_jones_solve(static, orders, Tp, jnp, eig, period, t_ridge, t_groove,
     kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(kx0n, cj)))
     safe_r = jnp.where(jnp.abs(kz_sup) < 1e-12, 1.0, kz_sup)
     safe_t = jnp.where(jnp.abs(kz_sub) < 1e-12, 1.0, kz_sub)
-
-    # DIFFERENTIABLE minimum-norm least squares for the incident-amplitude
-    # projection.  ``jnp.linalg.lstsq``'s VJP NaNs on a rank-deficient / under-
-    # determined system (the stacked Hsup is (2N, 2*n_glob) with 2N <= 2*n_glob,
-    # i.e. underdetermined), so use the closed-form min-norm pseudo-inverse
-    # x = A^H (A A^H)^-1 b (forward-identical to numpy's SVD min-norm lstsq to
-    # ~1e-14, validated; A A^H is well-conditioned -- cond ~ Hsup's^2).  The
-    # over-determined case (2N > 2*n_glob, not hit on this surface) would use
-    # (A^H A)^-1 A^H; branch on the CONCRETE shape (static per trace).
-    mrows, ncols = Hsup.shape
-    if mrows <= ncols:
-        AAH_inv = jnp.linalg.inv(Hsup @ Hsup.conj().T)
-        pinv = Hsup.conj().T @ AAH_inv          # (ncols, mrows) min-norm pinv
-    else:
-        AHA_inv = jnp.linalg.inv(Hsup.conj().T @ Hsup)
-        pinv = AHA_inv @ Hsup.conj().T          # least-squares pinv
-
-    m0 = int(np.where(orders == 0)[0][0])
     rows_R, rows_T, jcols = [], [], []
     for col in range(2):                    # 0 = incident Ex, 1 = incident Ey
-        rhs = jnp.zeros(2 * N, cj).at[(col * N) + m0].set(1.0)
-        cinc = pinv @ rhs
-        r_ord = Hsup @ (S11 @ cinc)
-        t_ord = Hsub @ (S21 @ cinc)
+        r_ord, t_ord = r_cols[col], t_cols[col]
         rx, ry = r_ord[:N], r_ord[N:]
         tx, ty = t_ord[:N], t_ord[N:]
         # longitudinal Ez (div D = 0 in the isotropic half-space): rz = -kx rx/kz
@@ -4571,7 +4564,8 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
     value skips the guard (see :func:`_jpmm_concrete_incidence_guard`)."""
     import jax.numpy as jnp
 
-    from ..rcwa import _jax_eig_stable, _require_jax_x64
+    from ..rcwa import _require_jax_x64
+    from ..rcwa._core import _jax_twin_eig
     _require_jax_x64("pmm_jones_1d")
 
     if int(elements_per_region) != 1:
@@ -4672,7 +4666,7 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
     # projection is the static numpy one.
     Tp = jnp.asarray(_jpmm_fourier_projection(orders, period_c, static), cj)
 
-    eig = _jax_eig_stable()
+    eig = _jax_twin_eig
     o, R, T, J = _jpmm_jones_solve(static, orders, Tp, jnp, eig, period_c,
                                    t_ridge, t_groove, eps_sup, eps_sub, depth,
                                    wavelength, kx0=kx0)
@@ -7659,8 +7653,6 @@ __all__ = [
     "_jpmm_fourier_projection_jax",
     "_jpmm_assemble",
     "_jpmm_sem_modes",
-    "_jpmm_sem_modes_from_eig",
-    "_jpmm_sem_problem",
     "_jpmm_solve",
     "_pmm_efficiency_1d_jax",
     "_jpmm_assemble_tensor",

@@ -109,9 +109,11 @@ def _pmm_stack2d_solve_jax(stack):
     jones(2,2))`` with jnp R/T/jones."""
     import jax.numpy as jnp
 
-    from ..rcwa import _jax_eig_stable, _require_jax_x64
+    from ..rcwa import _require_jax_x64
     from ..rcwa._core import (
         _interface_smatrix,
+        _jax_cluster_routed,
+        _jax_twin_eig,
         _propagation_star,
         _redheffer_star,
         # THE one modal branch selector, traced with ``jnp`` at its call sites
@@ -226,66 +228,76 @@ def _pmm_stack2d_solve_jax(stack):
         Vl = Q @ Wl @ jnp.diag(_inv_lam(lam))
         return Wl, Vl, lam
 
-    eig = _jax_eig_stable()
-    Wsup, Vsup, _ls = _homog(eps_sup)
-    Wsub, Vsub, _lb = _homog(eps_sub)
+    # Every patterned layer's eig (P @ Q) and the cascade downstream of it go
+    # through the degenerate-cluster rule (rcwa._core._jax_cluster_routed):
+    # a four-fold cell has every eigenvalue in a degenerate pair, and a
+    # symmetry-breaking parameter (a traced region's eps) splits them.
+    # ``eig`` is rcwa._core._jax_twin_eig (the same value as before).
+    eig = _jax_twin_eig
 
-    modes = []
-    for L in stack._layers:
-        thk = jnp.asarray(L["t"])
-        if L["kind"] == "uniform":
-            eps_l = jnp.conj(jnp.asarray(L["eps"]).astype(cj))
-            Wl, Vl, lam = _homog(eps_l)
-        elif L.get("traced"):
-            st = _layer_static_traced(stack, L)
-            cell = jnp.asarray(L["cell"]).astype(cj)
-            eps_regions = jnp.conj(jnp.stack(
-                [cell[i, j] for (i, j) in L["first_idx"]]))
-            Wreg = jnp.asarray(st["Wreg"])
-            eps_nodal = eps_regions @ Wreg
-            inv_nodal = (1.0 / eps_regions) @ Wreg
-            # Factorized sandwiches (twod._sandwich_factorized): two per-axis
-            # einsum contractions instead of the dense (Nf, N) Kronecker
-            # projector pair -- see _jax_twod._proj_sandwich_jnp.
-            EpsF = _proj_sandwich_jnp(jnp, st, eps_nodal)
-            EinvF = _proj_sandwich_jnp(jnp, st, inv_nodal)
-            EpnF = _proj_sandwich_jnp(jnp, st, 1.0 / inv_nodal)
-            GxF = jnp.asarray(st["Gx0F"], cj) / k0 + kx0 * jnp.asarray(
-                st["IpxF"], cj)
-            GyF = jnp.asarray(st["Gy0F"], cj) / k0 + ky0 * jnp.asarray(
-                st["IpyF"], cj)
-            Wl, Vl, lam = _modes_projected(GxF, GyF, EpsF, EinvF, EpnF)
-        else:                                       # concrete scalar layer
-            tile_i = np.conj(L["tile"])
-            eps0 = tile_i.flat[0]
-            if bool(np.all(np.abs(tile_i - eps0) < 1e-12)):
-                Wl, Vl, lam = _homog(jnp.asarray(eps0))
-            else:
-                lops = _layer_static_scalar(stack, L)
-                GxF = (jnp.asarray(lops["Gx0F"], cj) / k0
-                       + kx0 * jnp.asarray(lops["IpxF"], cj))
-                GyF = (jnp.asarray(lops["Gy0F"], cj) / k0
-                       + ky0 * jnp.asarray(lops["IpyF"], cj))
-                Wl, Vl, lam = _modes_projected(
-                    GxF, GyF, jnp.asarray(lops["EpsF"], cj),
-                    jnp.asarray(lops["EinvF"], cj),
-                    jnp.asarray(lops["EpnF"], cj),
-                    EpnxF=jnp.asarray(lops["EpnxF"], cj),
-                    EpnyF=jnp.asarray(lops["EpnyF"], cj))
-        modes.append((Wl, Vl, lam, thk))
+    def _cascade():
+        Wsup, Vsup, _ls = _homog(eps_sup)
+        Wsub, Vsub, _lb = _homog(eps_sub)
 
-    # ---- symmetric Redheffer cascade (backend-generic helpers) ------------
-    nlay = len(modes)
-    ifc = [_interface_smatrix(Wsup, Vsup, modes[0][0], modes[0][1])]
-    for ii in range(1, nlay):
-        ifc.append(_interface_smatrix(modes[ii - 1][0], modes[ii - 1][1],
-                                      modes[ii][0], modes[ii][1]))
-    ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1], Wsub, Vsub))
-    S = ifc[0]
-    for ii, (Wl, Vl, lam, thk) in enumerate(modes):
-        S = _propagation_star(S, lam, k0 * thk)
-        S = _redheffer_star(S, ifc[ii + 1])
-    S11, _S12, S21, _S22 = S
+        modes = []
+        for L in stack._layers:
+            thk = jnp.asarray(L["t"])
+            if L["kind"] == "uniform":
+                eps_l = jnp.conj(jnp.asarray(L["eps"]).astype(cj))
+                Wl, Vl, lam = _homog(eps_l)
+            elif L.get("traced"):
+                st = _layer_static_traced(stack, L)
+                cell = jnp.asarray(L["cell"]).astype(cj)
+                eps_regions = jnp.conj(jnp.stack(
+                    [cell[i, j] for (i, j) in L["first_idx"]]))
+                Wreg = jnp.asarray(st["Wreg"])
+                eps_nodal = eps_regions @ Wreg
+                inv_nodal = (1.0 / eps_regions) @ Wreg
+                # Factorized sandwiches (twod._sandwich_factorized): two per-axis
+                # einsum contractions instead of the dense (Nf, N) Kronecker
+                # projector pair -- see _jax_twod._proj_sandwich_jnp.
+                EpsF = _proj_sandwich_jnp(jnp, st, eps_nodal)
+                EinvF = _proj_sandwich_jnp(jnp, st, inv_nodal)
+                EpnF = _proj_sandwich_jnp(jnp, st, 1.0 / inv_nodal)
+                GxF = jnp.asarray(st["Gx0F"], cj) / k0 + kx0 * jnp.asarray(
+                    st["IpxF"], cj)
+                GyF = jnp.asarray(st["Gy0F"], cj) / k0 + ky0 * jnp.asarray(
+                    st["IpyF"], cj)
+                Wl, Vl, lam = _modes_projected(GxF, GyF, EpsF, EinvF, EpnF)
+            else:                                       # concrete scalar layer
+                tile_i = np.conj(L["tile"])
+                eps0 = tile_i.flat[0]
+                if bool(np.all(np.abs(tile_i - eps0) < 1e-12)):
+                    Wl, Vl, lam = _homog(jnp.asarray(eps0))
+                else:
+                    lops = _layer_static_scalar(stack, L)
+                    GxF = (jnp.asarray(lops["Gx0F"], cj) / k0
+                           + kx0 * jnp.asarray(lops["IpxF"], cj))
+                    GyF = (jnp.asarray(lops["Gy0F"], cj) / k0
+                           + ky0 * jnp.asarray(lops["IpyF"], cj))
+                    Wl, Vl, lam = _modes_projected(
+                        GxF, GyF, jnp.asarray(lops["EpsF"], cj),
+                        jnp.asarray(lops["EinvF"], cj),
+                        jnp.asarray(lops["EpnF"], cj),
+                        EpnxF=jnp.asarray(lops["EpnxF"], cj),
+                        EpnyF=jnp.asarray(lops["EpnyF"], cj))
+            modes.append((Wl, Vl, lam, thk))
+
+        # ---- symmetric Redheffer cascade (backend-generic helpers) ------------
+        nlay = len(modes)
+        ifc = [_interface_smatrix(Wsup, Vsup, modes[0][0], modes[0][1])]
+        for ii in range(1, nlay):
+            ifc.append(_interface_smatrix(modes[ii - 1][0], modes[ii - 1][1],
+                                          modes[ii][0], modes[ii][1]))
+        ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1], Wsub, Vsub))
+        S = ifc[0]
+        for ii, (Wl, Vl, lam, thk) in enumerate(modes):
+            S = _propagation_star(S, lam, k0 * thk)
+            S = _redheffer_star(S, ifc[ii + 1])
+        S11, _S12, S21, _S22 = S
+        return S11, S21
+
+    S11, S21 = _jax_cluster_routed(_cascade)
 
     # ---- Jones far field (both incident polarizations; verbatim the numpy
     # stack's tail with tracer-safe guards) ---------------------------------

@@ -1,0 +1,118 @@
+{
+ "gauge_te": {
+  "status": "pass",
+  "rel_values": [
+   1.0079125312652177e-10,
+   1.0341709770621004e-10,
+   0.058403157319171894,
+   0.028932754014770405
+  ]
+ },
+ "gauge_tm": {
+  "status": "pass",
+  "rel_values": [
+   5.22372145201954e-10,
+   2.396802517904846e-10,
+   0.14341968991028786,
+   0.07104973818929364
+  ]
+ },
+ "near_random_te": {
+  "status": "pass",
+  "rel_values": [
+   9.200448233863127e-11
+  ]
+ },
+ "near_random_tm": {
+  "status": "pass",
+  "rel_values": [
+   4.56128521922355e-10
+  ]
+ },
+ "rcwa_jones_2d": {
+  "status": "pass",
+  "rel_values": [
+   4.367692169805475e-10
+  ]
+ },
+ "rcwa_stack": {
+  "status": "pass",
+  "rel_values": [
+   4.743377375775386e-10
+  ]
+ },
+ "berreman": {
+  "status": "pass",
+  "rel_values": [
+   1.7312143122823464e-09
+  ]
+ },
+ "pmm_jones_1d": {
+  "status": "pass",
+  "rel_values": [
+   6.014944606825832e-11
+  ]
+ },
+ "pmm_stack_shared": {
+  "status": "pass",
+  "rel_values": [
+   9.064031621599945e-11
+  ]
+ },
+ "pmm_stack_perlayer": {
+  "status": "pass",
+  "rel_values": [
+   8.518097547937827e-11
+  ]
+ },
+ "pmm2d_traced": {
+  "status": "pass",
+  "rel_values": [
+   2.032567045645613e-10
+  ]
+ },
+ "switch_te": {
+  "status": "pass",
+  "rel_values": [
+   6.440293225884506e-11,
+   0.27652964913439976,
+   1.1853887678325225e-16
+  ]
+ },
+ "jones_li": {
+  "status": "pass",
+  "rel_values": [
+   3.182512848963853e-10
+  ]
+ },
+ "vmap_mix": {
+  "status": "pass",
+  "rel_values": []
+ },
+ "switch_tm": {
+  "status": "pass",
+  "rel_values": [
+   5.09147300549646e-10,
+   0.4735878971745916,
+   4.0006194756098036e-16
+  ]
+ },
+ "li_fwd": {
+  "c4v": {
+   "jit_vs_numpy_li": 1.1934897514720433e-15,
+   "numpy_li_vs_laurent": 0.002181603111286873
+  },
+  "random": {
+   "jit_vs_numpy_li": 6.938893903907228e-16,
+   "numpy_li_vs_laurent": 0.0007332286841779945
+  }
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_symgrad/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

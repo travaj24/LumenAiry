@@ -29,6 +29,7 @@ from ._core import (
     _homogeneous_eigenmodes,
     _interface_smatrix,
     _interface_smatrix_general,
+    _jax_cluster_routed,
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
     _max_aligned_delta,
@@ -2835,7 +2836,21 @@ class RCWAStack:
         ``retain_internal=True``, JAX backend) falls back to the full solve
         BIT-IDENTICALLY.  NB a pixel cell's feature centre lies on the
         half-pixel grid -- mixing it with an analytic shape at exactly
-        ``period/2`` is a genuine centre mismatch and falls back."""
+        ``period/2`` is a genuine centre mismatch and falls back.
+
+        JAX gradients at a SYMMETRIC configuration (exactly degenerate modes --
+        a four-fold cell, a mirror-symmetric grating at exactly normal
+        incidence, an isotropic layer -- differentiated in a symmetry-breaking
+        direction) are exact: the eigen-solves and everything downstream of
+        them are differentiated by the degenerate-cluster rule
+        (``rcwa._core._jax_eig_cluster_adjoint``). It costs nothing in the
+        forward pass; a gradient through a cluster takes 4 - 13x longer, and a
+        jitted gradient compiles 2.5 - 5x longer.
+        :func:`lumenairy.backend.set_jax_cluster_rule` (or the
+        :class:`~lumenairy.backend.jax_cluster_rule` context manager) switches
+        it off library-wide -- which makes such a gradient WRONG; use it only
+        away from any symmetry.
+        """
         if not stabilize:
             return self._solve_once(retain_internal=retain_internal,
                                     symmetry=symmetry)
@@ -3007,7 +3022,16 @@ class RCWAStack:
         # backend name is in the key too so a NumPy and a CuPy solve of the
         # same geometry never alias to each other's (wrong-device) modes.
         # A TRACED source has no hashable key -> compute uncached (D1).
-        if src_traced:
+        # Inside a jax.jit trace Kx / Ky are TRACERS even for a concrete
+        # source: caching their modes would store tracers in the module-level
+        # cache and leak them into the next call (UnexpectedTracerError) --
+        # compute those uncached as well (docs/history/
+        # lumenairy.elements.rcwa.stack.md).
+        in_trace = False
+        if bname == "jax":
+            import jax
+            in_trace = isinstance(Kx, jax.core.Tracer)
+        if src_traced or in_trace:
             Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
             Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
         else:
@@ -3060,79 +3084,96 @@ class RCWAStack:
                         d2_g = xp.concatenate([d_g, d_g])
                         sym_rt = [(d2_g * r, d2_g * t) for r, t in sym_rt]
 
-        _mode_cache = {}
-        modes = []
-        for L in ([] if sym_rt is not None else self._layers):
-            key = self._layer_eig_key(L)
-            cached = _mode_cache.get(key) if key is not None else None
-            if cached is None:
-                cached = self._layer_modes(L, Kx, Ky, orders)
-                if key is not None:
-                    # Freeze before sharing (audit W7-B, the M9 class): the
-                    # SAME tuple object is appended for every layer with an
-                    # identical eig key, so with retain_internal=True a
-                    # 3-period DBR has info['W'][0] IS info['W'][2] IS
-                    # info['W'][4] (measured).  A write through one layer's
-                    # view silently rewrote the others.
-                    cached = tuple(_readonly(a) for a in cached)
-                    _mode_cache[key] = cached
-            modes.append(cached)
-        any_oop = any(isinstance(m, tuple) and len(m) == 8 and m[0] == "gen"
-                      for m in modes)
-        if sym_rt is not None:
-            S = None                          # even sector already solved
-        elif not any_oop:
-            W0, V0, lam0, _e0 = modes[0]
-            S = _interface_smatrix(Wref, Vref, W0, V0)
-            S = _propagation_star(S, lam0, k0 * self._layers[0].thickness)
-            for i in range(1, len(modes)):
-                Wp, Vp, _lp, _ = modes[i - 1]
-                Wc, Vc, lamc, _ = modes[i]
-                S = _redheffer_star(S, _interface_smatrix(Wp, Vp, Wc, Vc))
-                S = _propagation_star(S, lamc, k0 * self._layers[i].thickness)
-            Wl, Vl, _ll, _el = modes[-1]
-            S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-        else:
-            # GENERALIZED cascade (v5.14.1): any out-of-plane tensor layer
-            # breaks the [W; -V] <-> -lam symmetry, so the whole stack is
-            # promoted -- symmetric layers/half-spaces enter as
-            # [W, W; V, -V] blocks with (lam, -lam), the generator layers
-            # with their explicit forward/backward sets (the PMM2DStack
-            # any_oop pattern; the single-layer machinery is rcwa_jones_2d's
-            # GAP2 path).  retain_internal=True (loose-ends round 2026-07-14,
-            # the Berreman-C2 port): the bracketing partial cascades are
-            # built with the SAME generalized interface/propagation
-            # convention and the per-layer ASYMMETRIC mode sets are retained
-            # explicitly -- RCWAResult's recovery/field/absorption consumers
-            # branch on info['general'].
-
-            def _gblocks(m):
-                if isinstance(m, tuple) and len(m) == 8 and m[0] == "gen":
-                    _k, Wf, Vf, lf, Wb, Vb, lb, _e = m
-                    return _modes_to_M(Wf, Vf, Wb, Vb), lf, lb
-                W, V, lam, _e = m
-                return _modes_to_M(W, V, W, -V), lam, -lam
-            M_prev = _modes_to_M(Wref, Vref, Wref, -Vref)
-            S = None
+        # The layers' eigs and the cascade downstream of them.  On JAX the
+        # cascade goes through the degenerate-cluster rule
+        # (_core._jax_cluster_routed): exact for a symmetric cell (e.g.
+        # four-fold) differentiated in a symmetry-breaking direction.
+        def _cascade():
             gen_ifc, gen_prop = [], []
-            for i, m in enumerate(modes):
-                Ml, lf, lb = _gblocks(m)
-                Si = _interface_smatrix_general(M_prev, Ml)
-                S = Si if S is None else _redheffer_star(S, Si)
-                S = _propagation_star_general(
-                    S, lf, lb, k0 * self._layers[i].thickness)
-                M_prev = Ml
+            _mode_cache = {}
+            modes = []
+            for L in ([] if sym_rt is not None else self._layers):
+                key = self._layer_eig_key(L)
+                cached = _mode_cache.get(key) if key is not None else None
+                if cached is None:
+                    cached = self._layer_modes(L, Kx, Ky, orders)
+                    if key is not None:
+                        # Freeze before sharing (audit W7-B, the M9 class): the
+                        # SAME tuple object is appended for every layer with an
+                        # identical eig key, so with retain_internal=True a
+                        # 3-period DBR has info['W'][0] IS info['W'][2] IS
+                        # info['W'][4] (measured).  A write through one layer's
+                        # view silently rewrote the others.
+                        cached = tuple(_readonly(a) for a in cached)
+                        _mode_cache[key] = cached
+                modes.append(cached)
+            any_oop = any(isinstance(m, tuple) and len(m) == 8 and m[0] == "gen"
+                          for m in modes)
+            if sym_rt is not None:
+                S = None                          # even sector already solved
+            elif not any_oop:
+                W0, V0, lam0, _e0 = modes[0]
+                S = _interface_smatrix(Wref, Vref, W0, V0)
+                S = _propagation_star(S, lam0, k0 * self._layers[0].thickness)
+                for i in range(1, len(modes)):
+                    Wp, Vp, _lp, _ = modes[i - 1]
+                    Wc, Vc, lamc, _ = modes[i]
+                    S = _redheffer_star(S, _interface_smatrix(Wp, Vp, Wc, Vc))
+                    S = _propagation_star(S, lamc, k0 * self._layers[i].thickness)
+                Wl, Vl, _ll, _el = modes[-1]
+                S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+            else:
+                # GENERALIZED cascade (v5.14.1): any out-of-plane tensor layer
+                # breaks the [W; -V] <-> -lam symmetry, so the whole stack is
+                # promoted -- symmetric layers/half-spaces enter as
+                # [W, W; V, -V] blocks with (lam, -lam), the generator layers
+                # with their explicit forward/backward sets (the PMM2DStack
+                # any_oop pattern; the single-layer machinery is rcwa_jones_2d's
+                # GAP2 path).  retain_internal=True (loose-ends round 2026-07-14,
+                # the Berreman-C2 port): the bracketing partial cascades are
+                # built with the SAME generalized interface/propagation
+                # convention and the per-layer ASYMMETRIC mode sets are retained
+                # explicitly -- RCWAResult's recovery/field/absorption consumers
+                # branch on info['general'].
+
+                def _gblocks(m):
+                    if isinstance(m, tuple) and len(m) == 8 and m[0] == "gen":
+                        _k, Wf, Vf, lf, Wb, Vb, lb, _e = m
+                        return _modes_to_M(Wf, Vf, Wb, Vb), lf, lb
+                    W, V, lam, _e = m
+                    return _modes_to_M(W, V, W, -V), lam, -lam
+                M_prev = _modes_to_M(Wref, Vref, Wref, -Vref)
+                S = None
+                gen_ifc, gen_prop = [], []
+                for i, m in enumerate(modes):
+                    Ml, lf, lb = _gblocks(m)
+                    Si = _interface_smatrix_general(M_prev, Ml)
+                    S = Si if S is None else _redheffer_star(S, Si)
+                    S = _propagation_star_general(
+                        S, lf, lb, k0 * self._layers[i].thickness)
+                    M_prev = Ml
+                    if retain_internal:
+                        gen_ifc.append(Si)
+                        gen_prop.append(_propagation_smatrix_general(
+                            lf, lb, k0 * self._layers[i].thickness))
+                Msub = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
+                ifc_sub = _interface_smatrix_general(M_prev, Msub)
+                S = _redheffer_star(S, ifc_sub)
                 if retain_internal:
-                    gen_ifc.append(Si)
-                    gen_prop.append(_propagation_smatrix_general(
-                        lf, lb, k0 * self._layers[i].thickness))
-            Msub = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
-            ifc_sub = _interface_smatrix_general(M_prev, Msub)
-            S = _redheffer_star(S, ifc_sub)
-            if retain_internal:
-                gen_ifc.append(ifc_sub)
-        if S is not None:
-            S11, _S12, S21, _S22 = S
+                    gen_ifc.append(ifc_sub)
+            return modes, any_oop, S, gen_ifc, gen_prop
+
+        if bname == "jax":
+            def _rt():
+                S_ = _cascade()[2]
+                return S_[0], S_[2]
+
+            S11, S21 = _jax_cluster_routed(_rt)
+            modes, any_oop, S = [], False, None
+        else:
+            modes, any_oop, S, gen_ifc, gen_prop = _cascade()
+            if S is not None:
+                S11, _S12, S21, _S22 = S
 
         p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
         delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))

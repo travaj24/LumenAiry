@@ -1,0 +1,64 @@
+{
+ "berreman_exy_d0": {
+  "numpy": "cd589ac12b40d6b99db44d56d3f2a554fcea56035095b1e75c62253ddd46abf2",
+  "jax_eager": "8ab05e43a0b650ef394925fe84fb7986c689ceaadb5cd60fa0c0b4e6da5fed44",
+  "jax_eager_api": "6570339bab91641b46d5258bc67bcfda9836219cc605a4788a048a983bf03b24",
+  "jax_jit": "579fe0779f5f5675d43d44b43d991d1c2394cbc471e1a2e6e43734cf10793d54",
+  "max_abs_jit_minus_numpy": 4.965068306494546e-16
+ },
+ "berreman_exy_d1e-3": {
+  "numpy": "04ae93f8680c6483c1f5f46e79b7d1b8ca95d07fe8c74b4e6a440a9ed6e54832",
+  "jax_eager": "1ae965c4860e240f4df7c9e1f369017576bafe9e1cb11c53aa8bb7df3f909f18",
+  "jax_eager_api": "e8dbd85b030be1a6d0b3e222b8eced0ca90b1339c018c014bc213134dd07f2fd",
+  "jax_jit": "d38f778952c6cae5dab1454821fcbdefb40768825c1810f2c9d3d1b359a2b7a9",
+  "max_abs_jit_minus_numpy": 2.9976021664879227e-15
+ },
+ "pmmjones1d_0": {
+  "numpy": "f9e19ec02af23075fe904409ade65a711377bffd4e206be82d702807a5b4f6ca",
+  "jax_eager": "be659b07ff9d45b0a7671a28cc7c9efcddbff2384690b791a68779c9621b9739",
+  "jax_jit": "8f9c2d9a31f67e4bb4caa65ef01cfa2350167411efff18adcde578fdd914f141",
+  "max_abs_jit_minus_numpy": 6.178363233009052e-15
+ },
+ "pmmjones1d_0.2": {
+  "numpy": "dfaaf327d71f0374f098debaeaad2ec48bd61cce2f24d53d7ac3e40f9e01482d",
+  "jax_eager": "fce7c2e200883566321aa39a0addcb1e1b540d9ca0969428401636844dfb1900",
+  "jax_jit": "a74294e324d15536d4074b42a91371899e4ed76023283826e9f6f332abe46981",
+  "max_abs_jit_minus_numpy": 1.3405943022348765e-14
+ },
+ "pmmstack_shared_2L": {
+  "numpy": "f78768d87c0d845db5a1ee94ae693798788d49d87b324dccc049a5f4ff294edc",
+  "jax_eager": "1ed08b9d6757218eabfe80da1ebe1f8372e2248f5689eb1dbf254da913da5d1b",
+  "jax_jit": "ce9af23623684c5226d2595409fdd9c20b95948827e7cdd0fe6c108c259ccf3f",
+  "max_abs_jit_minus_numpy": 2.886579864025407e-14
+ },
+ "pmmstack_shared_spacer": {
+  "numpy": "8b2267dec98077ce41b14a066527495c604f79d9bdeb019ef9422001d6475c27",
+  "jax_eager": "b5205d94c71970d12a42b3050845d7b0892c247b1fcfc6ec950ff8f473ac62a7",
+  "jax_jit": "a6a22ee4cac7fe7debda348c40a290d340518423db02f50a6d31ce30f9c57f98",
+  "max_abs_jit_minus_numpy": 2.6645352591003757e-15
+ },
+ "pmmstack_perlayer_3L": {
+  "numpy": "c25138eb097a6a9673ed102c2b73b1cdddbe0ad014ca7146c04f24c08ce3f7bc",
+  "jax_eager": "4378bbf593aa45f5d3b387554a04fd5729eb00fa380039831bc23d6a5d705486",
+  "jax_jit": "0cc3567b8c8c412d1e2ed957df8ddef1a1757ddcb2d07c5244261cd38582750b",
+  "max_abs_jit_minus_numpy": 2.1871393585115584e-13
+ },
+ "stack2d_traced_laurent": {
+  "jax_eager": "af01956684766adc8fb09ca11a51b9fa4184808b76da28cbfbf525dfe22a5e8c",
+  "jax_jit": "2b606f4bfe84c5950cad1d83d144ca9e9d6f664a4322d8389dade983e96dc070",
+  "max_abs_jit_minus_eager": 3.2987125042640325e-15
+ },
+ "stack2d_traced_li": {
+  "jax_eager": "6a6b4c8a01c77ec7ec28433ac797c2adb5439adc8c3cf6bd3e5e4bb7c4ad0342",
+  "jax_jit": "5474713f550fc3e09b61b80c1b7102fce2865fbaed44e42ffae5007710b97679",
+  "max_abs_jit_minus_eager": 5.109740411221384e-15
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/pre_tree/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

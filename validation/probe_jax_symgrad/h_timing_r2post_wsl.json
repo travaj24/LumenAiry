@@ -1,0 +1,46 @@
+{
+ "berreman_exy_0": {
+  "grad_compile_s": 6.758178300000509,
+  "grad_s": 0.0013323000002856134,
+  "fwd_compile_s": 1.4013736999995672,
+  "fwd_s": 0.00010259999999107094
+ },
+ "pmmjones1d_0": {
+  "grad_compile_s": 10.761089799999354,
+  "grad_s": 0.039485599999352416,
+  "fwd_compile_s": 1.6845892000001186,
+  "fwd_s": 0.014286700000411656
+ },
+ "pmmjones1d_02": {
+  "grad_compile_s": 9.946272299999691,
+  "grad_s": 0.042311800000788935,
+  "fwd_compile_s": 0.005025700000260258,
+  "fwd_s": 0.004278600000361621
+ },
+ "pmmstack_shared_2L_0": {
+  "grad_compile_s": 21.138266099999782,
+  "grad_s": 0.3183570999999574,
+  "fwd_compile_s": 3.145180100000289,
+  "fwd_s": 0.029819399999723828
+ },
+ "stack2d_c4v_laurent_0": {
+  "grad_compile_s": 7.1109152999997605,
+  "grad_s": 0.19090890000006766,
+  "fwd_compile_s": 1.2998281000000134,
+  "fwd_s": 0.03598320000037347
+ },
+ "stack2d_traced_corner_laurent_0": {
+  "grad_compile_s": 7.213375000000269,
+  "grad_s": 0.19193259999974543,
+  "fwd_compile_s": 1.960697600000458,
+  "fwd_s": 0.02508369999941351
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_symgrad/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}
