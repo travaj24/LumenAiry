@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import importlib.util as _importlib_util
 import os as _os
+import threading as _threading
 from typing import Any, Optional, cast
 
 import numpy as np
@@ -256,63 +257,154 @@ def to_backend(x: Any, xp: Any) -> Any:
 # pass is correct at a DEGENERATE eigenvalue cluster (a symmetric structure
 # differentiated in a symmetry-breaking direction -- without it such a
 # gradient is wrong by percent to hundreds of percent, by an amount that
-# differs between BLAS builds).  The rule costs nothing in the forward pass;
-# a gradient THROUGH a cluster is evaluated at four lifted points, and a
-# jitted gradient compiles both branches.  A caller who knows every point it
-# differentiates is far from any symmetry can switch the rule off with this
-# setting.  OFF AT A SYMMETRIC POINT THE GRADIENT IS WRONG.
+# differs between BLAS builds).  A caller who knows every point it
+# differentiates is far from any symmetry can switch the rule off to drop
+# its compile time and memory (the CHANGELOG's cost table).  OFF AT
+# A SYMMETRIC POINT THE GRADIENT IS WRONG.
 #
-# The setting is read when a solve is TRACED: it applies to every call made
-# while it is set, and a ``jax.jit``-compiled function keeps the setting it
-# was compiled with (re-create the jitted function after changing it).
-# Default ON; the environment variable ``LUMENAIRY_JAX_CLUSTER_RULE=0`` sets
-# the process default OFF.
+# SEMANTICS (as implemented).
+# * The effective setting is: the innermost ACTIVE ``jax_cluster_rule``
+#   scope of the CURRENT THREAD, else the process value
+#   (``set_jax_cluster_rule``; at import ``LUMENAIRY_JAX_CLUSTER_RULE``,
+#   default on).  Scopes are removed by identity on exit, so two scopes left
+#   out of order do not clobber each other, and a scope in one thread does
+#   not affect another thread.
+# * It is part of the JAX TRACE CACHE KEY (a ``jax`` config state with
+#   ``include_in_trace_context``): a jitted function called under a new
+#   setting is retraced with it -- whether it is the same ``jax.jit`` object
+#   or a new wrapper of the same callable.  The setting that applies is the
+#   one in force AT THE CALL.  If the running JAX lacks that (private)
+#   config hook, the setting is still honoured by every new trace but a
+#   cached compiled function keeps the setting of its first trace
+#   (``jax_cluster_rule_trace_keyed()`` says which; ``jax.clear_caches()``
+#   forces a retrace).
 
-_JAX_CLUSTER_RULE = (_os.environ.get('LUMENAIRY_JAX_CLUSTER_RULE', '1')
-                     .strip().lower() not in ('0', 'off', 'false', 'no'))
+_ENV_TRUE = ('1', 'on', 'true', 'yes')
+_ENV_FALSE = ('0', 'off', 'false', 'no')
+
+
+def _parse_rule_env(raw: Optional[str]) -> bool:
+    """``LUMENAIRY_JAX_CLUSTER_RULE``: unset / empty -> on; one of
+    ``1 on true yes`` / ``0 off false no`` (any case); anything else is
+    REFUSED (``ValueError``) rather than silently leaving the rule on."""
+    if raw is None or raw.strip() == '':
+        return True
+    v = raw.strip().lower()
+    if v in _ENV_TRUE:
+        return True
+    if v in _ENV_FALSE:
+        return False
+    raise ValueError(
+        f"LUMENAIRY_JAX_CLUSTER_RULE={raw!r} is not a recognised value: use "
+        f"one of {', '.join(_ENV_TRUE)} (rule on) or {', '.join(_ENV_FALSE)} "
+        f"(rule off), or unset it.")
+
+
+_JAX_CLUSTER_RULE = _parse_rule_env(_os.environ.get('LUMENAIRY_JAX_CLUSTER_RULE'))
+_RULE_SCOPES = _threading.local()
+_RULE_STATE: Any = None          # the jax config state, built on first use
+_RULE_UNSET: Any = None          # its "no thread-local value" sentinel
+
+
+def _rule_state() -> Any:
+    """The ``jax`` config state that carries the effective setting into
+    JAX's trace cache key, or ``None`` when JAX (or the private hook) is not
+    available."""
+    global _RULE_STATE, _RULE_UNSET
+    if _RULE_STATE is None:
+        try:
+            from jax._src import config as _jc
+            st = _jc.bool_state(
+                name='lumenairy_jax_cluster_rule_trace_key',
+                default=_JAX_CLUSTER_RULE,
+                help='lumenairy: the degenerate-cluster gradient rule '
+                     '(managed by lumenairy.backend.set_jax_cluster_rule).',
+                include_in_jit_key=True, include_in_trace_context=True)
+            _RULE_UNSET = st.get_local()
+            st.set_global(_JAX_CLUSTER_RULE)
+            _RULE_STATE = st
+        except Exception:        # pragma: no cover - JAX absent or changed
+            _RULE_STATE = False
+    return None if _RULE_STATE is False else _RULE_STATE
+
+
+def _scope_stack() -> "list[jax_cluster_rule]":
+    st = getattr(_RULE_SCOPES, 'stack', None)
+    if st is None:
+        st = _RULE_SCOPES.stack = []
+    return st
+
+
+def _sync_rule_state() -> None:
+    state = _rule_state()
+    if state is None:
+        return
+    stack = _scope_stack()
+    state.set_local(stack[-1].enabled if stack else _RULE_UNSET)
 
 
 def jax_cluster_rule_enabled() -> bool:
-    """True if the JAX twins differentiate through degenerate eigenvalue
-    clusters with the cluster rule (the default); see
-    :func:`set_jax_cluster_rule`."""
+    """The effective setting of the degenerate-cluster rule for solves traced
+    now in this thread (see :func:`set_jax_cluster_rule`)."""
+    stack = getattr(_RULE_SCOPES, 'stack', None)
+    if stack:
+        return bool(stack[-1].enabled)
     return _JAX_CLUSTER_RULE
 
 
+def jax_cluster_rule_trace_keyed() -> bool:
+    """True when the setting is part of JAX's trace cache key on this JAX
+    (a jitted function is retraced when it changes); False when the private
+    JAX hook is unavailable and a cached compiled function keeps the setting
+    of its first trace."""
+    return _rule_state() is not None
+
+
 def set_jax_cluster_rule(enabled: bool) -> bool:
-    """Switch the degenerate-cluster rule of every JAX twin ON (default) or
-    OFF, for every solve traced from now on; returns the previous setting.
+    """Set the PROCESS value of the degenerate-cluster rule of every JAX
+    twin (default ON); returns the previous process value.  A
+    :class:`jax_cluster_rule` scope active in a thread overrides it there.
 
     OFF makes a gradient through a degenerate eigenvalue cluster WRONG (a
-    symmetric structure -- a four-fold pixel cell, a mirror-symmetric
-    grating at exactly normal incidence, an isotropic layer -- differentiated
-    in a direction that breaks the symmetry), and leaves every other
-    gradient unchanged.  Its only use is to drop the rule's cost where no
-    cluster can occur.  A ``jax.jit``-compiled function keeps the setting it
-    was traced with.  Use :class:`jax_cluster_rule` to scope it to a
-    block."""
+    symmetric structure -- a four-fold cell, a mirror-symmetric grating at
+    exactly normal incidence, an isotropic layer, a uniform layer of a
+    stack -- differentiated in a direction that breaks the symmetry) and
+    leaves every other gradient unchanged; use it only away from any
+    symmetry, to save the rule's compile time and memory (the CHANGELOG's
+    cost table).  The setting in force WHEN A JITTED FUNCTION IS
+    CALLED applies: it is part of JAX's trace cache key, so a change
+    retraces (see ``jax_cluster_rule_trace_keyed``)."""
     global _JAX_CLUSTER_RULE
     previous = _JAX_CLUSTER_RULE
     _JAX_CLUSTER_RULE = bool(enabled)
+    state = _rule_state()
+    if state is not None:
+        state.set_global(_JAX_CLUSTER_RULE)
     return previous
 
 
 class jax_cluster_rule:
-    """Context manager: ``with jax_cluster_rule(False): ...`` traces the
-    solves inside the block with the degenerate-cluster rule set as given
-    and restores the previous setting on exit (see
-    :func:`set_jax_cluster_rule` for what OFF means)."""
+    """Context manager: ``with jax_cluster_rule(False): ...`` -- the rule's
+    setting for this THREAD while the scope is active (see
+    :func:`set_jax_cluster_rule` for what OFF means).  Scopes nest; one left
+    out of order is removed by identity, so it cannot clobber another
+    scope's setting."""
 
     def __init__(self, enabled: bool) -> None:
         self.enabled = bool(enabled)
-        self._previous: Optional[bool] = None
 
     def __enter__(self) -> "jax_cluster_rule":
-        self._previous = set_jax_cluster_rule(self.enabled)
+        _scope_stack().append(self)
+        _sync_rule_state()
         return self
 
     def __exit__(self, *exc: Any) -> None:
-        set_jax_cluster_rule(bool(self._previous))
+        stack = _scope_stack()
+        for i in range(len(stack) - 1, -1, -1):
+            if stack[i] is self:
+                del stack[i]
+                break
+        _sync_rule_state()
 
 
 __all__ = [
@@ -320,6 +412,7 @@ __all__ = [
     'JAX_AVAILABLE',
     'jax_cluster_rule',
     'jax_cluster_rule_enabled',
+    'jax_cluster_rule_trace_keyed',
     'set_jax_cluster_rule',
     'is_numpy_array',
     'is_cupy_array',

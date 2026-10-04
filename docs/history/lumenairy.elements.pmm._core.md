@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 0cd415d8c28df8f0ee7855e55c885e64917cb2e0df732625fb2bae1d3fdb8020
-token_sha256: 4b32906cb95d21dbaac263e183f593a672ae017c719a810f6c3114e74a0199b2
+ast_sha256: 2e2ecb7795e3fcd9a69bd782360fad2aa6842c1be48c8900a2bc07b44eca390d
+token_sha256: 86235b28c2b4f75334d50feee5bbf429a18f5944c6d638df59510b811c3e0d08
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -12,6 +12,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-10-03 -- the curved-cell map, Phase E2: _interface_smatrix_mortar_2d / _interface_smatrix_general_mortar_2d apply a DENSE (non-separable) cross operator when cr.dense -- two layers on different coordinate maps; the separable arithmetic is unchanged (BUILD_PMM2D_CURVED_E2_2026_10_03)
 re_recorded: 2026-10-03 -- JAX 1-D twin: _jpmm_sem_modes split into _jpmm_sem_problem / _jpmm_sem_modes_from_eig; _jpmm_solve routes its three modal pencils and the rest of the solve through rcwa._core._jax_eig_cluster_adjoint (correct d/d(angle) at exactly normal incidence); forward values byte-identical
 re_recorded: 2026-10-04 -- JAX 1-D, Jones twins routed through rcwa._core._jax_cluster_routed (round 1 explicit split removed); eig called on the pencil / with the S0 lift Gram; forward values byte-identical
+re_recorded: 2026-10-04 -- round 3: the half-space geometric eig carries its Rayleigh-anomaly anchors (eps of the half-spaces) into the cluster rule; symmetric-point docstring note with limits
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`

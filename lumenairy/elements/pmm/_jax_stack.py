@@ -345,7 +345,7 @@ def _pmm_stack_solve_jax(stack):
             Cwj = jnp.asarray(Cwg, cj)
             op = op - 1j * kx0 * (Cwj - Cwj.T) + (kx0 * kx0) * S0j
         Kx2 = (1.0 / (k0 * k0)) * (jnp.linalg.inv(S0j) @ op)
-        mu_geo, w_geo = eig(Kx2, None, S0j)
+        mu_geo, w_geo = eig(Kx2, None, S0j, (0.0, eps_sup, eps_sub))
         Wsup, Vsup, _ls, _qs = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
                                                      eps_sup)
         Wsub, Vsub, _lb, _qb = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
@@ -603,7 +603,7 @@ def _pmm_stack_solve_jax_perlayer(stack):
                 Cwj = jnp.asarray(Cwg, cj)
                 op = op - 1j * kx0 * (Cwj - Cwj.T) + (kx0 * kx0) * S0j
             Kx2 = (1.0 / (k0 * k0)) * (jnp.linalg.inv(S0j) @ op)
-            mu_geo, w_geo = eig(Kx2, None, S0j)
+            mu_geo, w_geo = eig(Kx2, None, S0j, (0.0, eps_x))
             return _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp, eps_x)
 
         Wsup, Vsup, _ls, _qs = _uniform_modes(statics[0], eps_sup)

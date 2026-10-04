@@ -983,6 +983,10 @@ from .backend import (
     is_cupy_array,
     is_jax_array,
     is_numpy_array,
+    jax_cluster_rule,
+    jax_cluster_rule_enabled,
+    jax_cluster_rule_trace_keyed,
+    set_jax_cluster_rule,
     to_backend,
     to_numpy,
 )
@@ -1980,6 +1984,12 @@ __all__ = [
     'to_numpy',
     'to_backend',
     'RandomState',
+    # The ONE switch of the JAX twins' degenerate-cluster gradient rule
+    # -- a process / thread knob like set_fft_threads, so it is top level too.
+    'set_jax_cluster_rule',
+    'jax_cluster_rule',
+    'jax_cluster_rule_enabled',
+    'jax_cluster_rule_trace_keyed',
 
     # Precision + default-config knobs
     'set_default_complex_dtype',
