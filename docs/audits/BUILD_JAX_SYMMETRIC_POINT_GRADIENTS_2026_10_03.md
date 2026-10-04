@@ -703,3 +703,194 @@ disable-JAX files):
   cluster-symmetric functions of them have a gradient there.
 * The hybrid stack's 'li' operator does not keep the C4v degeneracy (gap
   2.8e-6, section 5) -- not investigated (no gradient defect follows).
+
+## 11. Round 3 (2026-10-04): the round-2 verification
+
+Builder: Claude Opus 5.5 (`claude-opus-5-5`).  Object: the independent
+verification of round 2 (`VERIFY_JAX_SYMMETRIC_POINT_GRADIENTS_R2_2026_10_04.md`,
+merged from the integration tip `2b7eeb54` first: it confirmed the routing,
+the forward bytes, the traced 'li' route, the cache fix and the record /
+replay mechanism, and left six strict xfails -- all six now pass, markers
+removed).  Probes `m1_anomaly.py`, `n1_uniform_layer.py` (tag `r3`); the
+earlier byte probes re-run.
+
+### 11.1 P1-1: per-problem anchors; the floor next to a Rayleigh anomaly
+
+`_jax_cluster_routed` gave every recorded problem the anchor 0.  The
+half-space GEOMETRIC eig of `pmm_jones_1d` and `PMMStack` (`Kx2`, whose
+eigenvalues `mu` feed `q = sqrt(eps_half - mu)`) has its consumer's branch
+point at `mu = eps_half` -- a Rayleigh anomaly -- so near one the
+unshortened lift crossed it.  Now every problem carries its own anchors:
+`_jax_twin_eig(L, G, K, anchors)` records them (default `(0,)`, the branch
+point of a modal `sqrt`); `_juniform_geo_eig` and both stack twins pass
+`(0, eps_sup, eps_sub)` / `(0, eps_half)`; the anchors travel into the rule
+as DATA (traced permittivities allowed; zero cotangent), not as static
+numbers.  Families checked for the same consumer non-smoothness: the scalar
+`pmm_efficiency_1d` half-space problems are pencils whose eigenvalue IS
+`q^2` (anchor 0 is the anomaly -- unchanged, confirmed by `m1 pmm1d`); the
+RCWA, hybrid-stack and Berreman half-spaces are analytic (no eig); their
+layer problems feed a modal `sqrt` / a flux split with branch point 0.
+
+**The sweep** (`m1_anomaly`, exactly normal incidence, wavelength
+`wl_c (1 + delta)` with the m = +-1 substrate orders grazing at `wl_c`;
+relative error of AD vs a Richardson FD whose steps scale with delta, and
+the FD-free mirror defect):
+
+| delta | `pmm_jones_1d` anchors / anchor 0 | `PMMStack` anchors / anchor 0 | `pmm_efficiency_1d` | FD's own mirror defect |
+|---|---|---|---|---|
+| 1e-2 | 3.3e-8 / 3.4e-8 | 1.3e-8 / 1.7e-7 | 3.3e-8 | 1e-10 |
+| 1e-3 | 4.6e-8 / 1.8e-5 | 5.0e-8 / 3.4e-3 | 4.6e-8 | 3e-10 - 7e-10 |
+| 3e-4 | 2.1e-7 / 1.7e-3 | 3.6e-7 / 1.7 | 2.4e-7 | 7e-10 - 5e-9 |
+| 1e-4 | 1.2e-6 / 19 | 2.2e-6 / 3.3 | 1.4e-6 | 2e-9 - 8e-9 |
+| 3e-5 | 8.1e-6 / 8.4 | 1.6e-5 / 2.6 | 1.0e-5 | 3e-9 - 2e-8 |
+| 1e-5 | 4.6e-5 / 4.3 | 9.5e-5 / 1.9 | 6.0e-5 | 1e-8 |
+| 3e-6 | 3.1e-4 / 1.9 | 6.6e-4 / 1.4 | 4.2e-4 | 1e-8 - 5e-8 |
+| 1e-6 | 1.8e-3 / 1.1 | 3.8e-3 / 1.2 | 2.5e-3 | 4e-8 - 3e-7 |
+| 3e-7 | 1.2e-2 / 0.78 | 2.6e-2 / 1.1 | 1.7e-2 | 6e-7 - 4e-6 |
+| 1e-7 | 6.9e-2 / 0.66 | 0.12 / 1.0 | 9.6e-2 | 3e-6 - 2e-5 |
+
+(Windows; WSL identical to two digits on every entry, `m1_anomaly_*_r3_wsl.json`.  Rule OFF: 0.7 - 38 at every delta -- the exact
+`+-m` pairs.  FD premise 11.0 - 11.9 throughout.)
+
+**Where the residual sits and why.**  The anchors remove the anomaly
+CROSSING (anchor 0: 19 at 1e-4; anchors: 1.2e-6).  What remains is the
+rule's own floor near a branch point, and it is the same curve with or
+without a Kx2 problem (`pmm_efficiency_1d`, whose anchor was always right,
+reads it too): the anchor SHORTENS the lift to
+`d = 0.25 a (eps_mach max|lam| / a)^(1/5)` (`a` the distance to the anchor,
+~2 delta here), and the lifted pair's splitting `d / max|lam|` then drops
+toward the eigenvector VJP's own resolving floor -- the W9 envelope of
+section 2 / `_jax_eig_stable` (4.9e-6 at a relative splitting of 1e-9,
+5.4e-4 at 1e-10, 5.4e-2 at 1e-11).  Computed for the jones fixture
+(`max|lam|` ~ 700): `d / max|lam|` = 1.1e-9 at delta 1e-4 and 2.7e-11 at
+1e-6, where the envelope predicts ~5e-6 and ~3e-3 -- measured 1.2e-6 and
+1.8e-3.  The error grows ~40x per decade of delta.  So: an anchor only
+shortens the lift; the remaining floor is the eig VJP's resolution at the
+shortened splitting, ~1e-6 at 1e-4 of the anomaly wavelength and ~1e-3 at
+1e-6.  The anchor cap's exponent was derived (E3 round 2) for a round-off
+that falls as `eps_mach / d`; the measured envelope falls as `d^-2` with a
+larger constant, so re-deriving the cap against it could buy about one
+decade near an anomaly -- not done (it changes the round-2 constant every
+twin shares; listed in 11.6).
+
+### 11.2 P1-2: the uniform-layer select
+
+`_layer_eigenmodes` (JAX) computes the analytic uniform modes and the eig
+modes and returns `where(uniform, analytic, eig)`.  At an EXACTLY uniform
+layer the select sends the eig branch a zero cotangent, and the analytic
+modes do not move with a pattern direction (a pattern changes only the
+off-diagonal convolution entries the uniform test reads), so the gradient
+missed the first-order coupling to the other layers' diffracted orders.
+Straight-through on the MODES (`analytic + (eig - stop_gradient(eig))`)
+would be wrong: the consumer's cotangent at the analytic basis applied to
+the eig basis' derivative mixes two bases of the same degenerate subspace.
+Straight-through on the OUTPUT needs a second consumer in every forward.
+Chosen: the select's boolean comes from `_core._jax_uniform_select`, which
+the routed solve reads as `uniform` in every value-producing pass and as
+`uniform AND NOT grad_branch` in the reverse pass; the cluster rule's core
+takes `grad_branch` as a consumer input (False in the primal and the forward
+of the gradient; True in the reverse pass when a shortcut was taken,
+`sflag`), so the derivative is the EIG branch's, through the rule (the fully
+degenerate uniform-layer cluster is exactly its case).  The extra consumer
+VJP runs only when a shortcut was taken (`lax.cond`, batch-OR under vmap).
+Same select in `_layer_eigenmodes_tensor` (the isotropic-uniform blend).
+`PMMStack` and the hybrid stack have no traced shortcut (a traced layer
+always takes the eig: `Mbig` / the projected `P @ Q`).
+
+Measured (`n1_uniform_layer`, uniform eps 2.25 over a cross, zero-mean
+random pattern, `RCWAStack`): AD(0) vs FD 4.66 -> 8.6e-9 (normal), 1.36 ->
+4.0e-10 (conical 0.2, 0.3), Windows; 4.66 -> 5.7e-9 and 1.36 -> 6.8e-10,
+WSL.  The forward at t = 0 is
+byte-identical PRE vs r3 (jit and eager SHA-256), and the verifier's pin
+(8.5 / 5.7 on its fixture) passes.
+
+### 11.3 The switch, as finally implemented (P2-1, P3-2, P3-3, env)
+
+* Process value: `set_jax_cluster_rule(enabled)` (returns the previous);
+  at import `LUMENAIRY_JAX_CLUSTER_RULE` -- `1 on true yes` / `0 off false
+  no` (any case), empty or unset = on, ANY OTHER VALUE REFUSES TO IMPORT
+  (`ValueError` naming the variable).
+* Scopes: `jax_cluster_rule(enabled)` is THREAD-local; scopes nest and are
+  removed BY IDENTITY on exit, so two scopes left out of order do not
+  clobber each other (verifier's interleave pin) and a scope in one thread
+  does not reach another (new two-thread pin).
+* JIT: the effective value is mirrored into a `jax` config state created
+  with `include_in_trace_context=True`, which makes it part of JAX's trace
+  cache key: a jitted function -- the same `jax.jit` object or a new
+  wrapper of the same callable -- called under a new setting is RETRACED
+  with it.  The setting in force AT THE CALL applies (verifier P2-1 pin;
+  measured: compiled OFF, switched ON, re-wrapped -> exact again).  This
+  replaces round 2's "keeps the setting it was compiled with" (verifier
+  P3-3), and the verifier's pin of that old behaviour was rewritten to pin
+  the new one two-sidedly (ON exact, OFF wrong, ON exact, same jit object).
+  The hook is private JAX API (`jax._src.config.bool_state`, present in
+  jax 0.10.2 and 0.11.0); `jax_cluster_rule_trace_keyed()` reports it, and
+  if it is missing the setting still applies to every new trace while a
+  cached compiled function keeps its first trace's setting (documented).
+* Top level: the four names (`set_jax_cluster_rule`, `jax_cluster_rule`,
+  `jax_cluster_rule_enabled`, `jax_cluster_rule_trace_keyed`) are also
+  re-exported from `lumenairy` (`la.set_jax_cluster_rule(False)`), like the
+  other process knobs (`set_fft_threads`, `reset_fft_backend`); the
+  submodule <-> top-level `__all__` walker
+  (`test_v4_16_0_walker_all_symmetry.py`) flagged them as neither
+  re-exported nor exempt.  The docstrings name no release number (the
+  `test_public_api` version-claim gate).
+* P3-1: a replay that asks for more eigs than were recorded raises the
+  named `RuntimeError` ("... eigs on replay ..."), not a bare
+  `StopIteration`.
+
+### 11.4 P2-2 / P2-3: one cost table, the real limits
+
+The CHANGELOG's Fixed entry now carries ONE cost table (the verification's
+rule-on-vs-off measurements, with this build's interleaved PRE / POST in
+brackets, and the 121-order memory and jacrev rows); the public docstrings
+point at it instead of carrying their own numbers.  The forward VALUES are
+unchanged; the forward COMPILE is 1.1 - 1.9x longer (the solve is traced
+three times).  Every "exact" statement (docstrings, the W9 note, the
+CHANGELOG's root-cause paragraph) now states the limits: the anomaly floor
+(11.1), reverse mode only (`jax.hessian` only for a parameter downstream of
+the eig), and the analytic-shortcut form (11.2).
+
+### 11.5 Tests
+
+* `tests/unit/test_verify_jax_symmetric_point_gradients_r2.py`: the six
+  strict xfails pass, markers removed (each keeps the defect it pinned as a
+  comment); `test_r2v_a_jitted_function_keeps_its_setting_per_compiled_signature`
+  rewritten to the implemented semantics (11.3).
+* `tests/unit/test_jax_symmetric_point_gradients.py`: the environment
+  value parsed or refused (five spellings, in a subprocess), and a scope in
+  one thread not reaching another.
+* The CHANGELOG's 5.47.0 source-line citations into `rcwa/twod.py` moved by
+  this round's docstring change: re-anchored with
+  `scripts/reanchor_citations.py --base f4f18851 --block 5.47.0` (three), and
+  the verifier's two `EDITED_IN_PLACE` targets moved by two lines (2099 ->
+  2101, 2021 -> 2023).
+
+Results:
+* Windows (`-n 2`, BLAS threads 2): the gate set (both verification files,
+  this file, the E3 and W9 files, the solvers' own JAX files, autodiff, a12
+  / a14 / w7, disable-JAX) with the doc-identifier, changelog-walker,
+  citation, history, census, re-export, public-API files and `test_rcwa`:
+  `855 passed, 7 skipped, 1 failed` -- the failure was the version-claim
+  gate on the docstrings' "5.50.0" (fixed: no release number in source);
+  re-run with the walker-symmetry file after the top-level re-export: the
+  API / walker / re-export / citation / doc / own files `86 passed`.
+* WSL, serial (import path asserted), the gate set plus the walker,
+  public-API, citation and history files: `720 passed, 3 failed` -- all
+  three ENVIRONMENT: `test_installed_metadata_version_matches_source_version`
+  (the WSL venv's stale editable-install metadata, 5.11.0 vs 5.49.0) and the
+  two 5.47.0 citation tests, which report themselves as "ENVIRONMENT, not a
+  citation finding" (git cannot resolve this worktree's Windows-path `.git`
+  from WSL); the citation check is git-only and passes on Windows.  ruff
+  clean.
+* `python -m mypy`: no issues in 33 files; history fingerprints OK
+  (`pmm/_core` re-recorded in the code commit).
+* Forward bytes PRE vs r3: 33 / 33, 24 / 24, 27 / 27 per build, and the
+  uniform-layer fixture (jit and eager) on both.
+
+### 11.6 Not done
+
+* Re-deriving the anchor cap against the measured eig-VJP envelope (could
+  lower the floor near an anomaly by about a decade; it changes a constant
+  every routed solver shares, so it needs its own measurement round).
+* GPU; an idle-box WSL timing.

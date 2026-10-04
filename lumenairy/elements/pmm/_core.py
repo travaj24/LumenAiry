@@ -4334,7 +4334,7 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     return W2, V2, lam, q
 
 
-def _juniform_geo_eig(mats, jnp, eig, k0, kx0=0.0):
+def _juniform_geo_eig(mats, jnp, eig, k0, kx0=0.0, eps_anchors=()):
     """Eps-free GEOMETRIC eigendecomposition for a uniform isotropic medium --
     the differentiable twin of :func:`_uniform_geo_eig` (backlog A2).  For a
     uniform isotropic ``eps`` the coupled :func:`_jpmm_sem_modes_tensor`
@@ -4353,8 +4353,12 @@ def _juniform_geo_eig(mats, jnp, eig, k0, kx0=0.0):
         op = op - 1j * kx0 * (Cw - Cw.T) + (kx0 * kx0) * mats["mass"]["one"]
     Kx2 = (1.0 / k02) * (iS0 @ op)
     # the value is eig(Kx2); S0 is the cluster rule's lift Gram (Kx2 = S0^-1
-    # op with op Hermitian for real kx0: S0-self-adjoint)
-    mu, w = eig(Kx2, None, mats["S0"])
+    # op with op Hermitian for real kx0: S0-self-adjoint), and the anchors
+    # are where the consumer q = sqrt(eps - mu) of each half-space served by
+    # this eig is not smooth: mu = eps (a Rayleigh anomaly) -- the rule
+    # shortens its lift of a cluster near one (build record, section 11.1)
+    mu, w = eig(Kx2, None, mats["S0"],
+                (0.0,) + tuple(eps_anchors))
     return mu, w, Kx2
 
 
@@ -4370,7 +4374,7 @@ def _jpmm_sem_modes_uniform(mats, jnp, eig, k0, kx0, eps, geo=None):
     n = mats["n_glob"]
     eps = jnp.asarray(eps, dtype=cj)
     if geo is None:
-        geo = _juniform_geo_eig(mats, jnp, eig, k0, kx0)
+        geo = _juniform_geo_eig(mats, jnp, eig, k0, kx0, eps_anchors=(eps,))
     mu, w, _Kx2 = geo
     q2 = eps - mu
     q = jnp.sqrt(jnp.concatenate([q2, q2]))
@@ -4438,7 +4442,8 @@ def _jpmm_jones_solve(static, orders, Tp, jnp, eig, period, t_ridge, t_groove,
         # eigs -- Kx2 is eps-free and identical for sup/sub on the shared mesh.
         # Mirrors the numpy _pmm_jones_solve_core, which already does this; the JAX
         # twin now matches that oracle's shared-eig gauge exactly.
-        _geo = _juniform_geo_eig(mats_sup, jnp, eig, k0, kx0)
+        _geo = _juniform_geo_eig(mats_sup, jnp, eig, k0, kx0,
+                                 eps_anchors=(eps_sup, eps_sub))
         Wsup, Vsup, _ls, _qs = _jpmm_sem_modes_uniform(
             mats_sup, jnp, eig, k0, kx0, eps_sup, geo=_geo)
         Wsub, Vsub, _lb, _qb = _jpmm_sem_modes_uniform(

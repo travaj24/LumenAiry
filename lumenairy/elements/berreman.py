@@ -861,16 +861,17 @@ def berreman_jones_1d(
 
     JAX gradients at a SYMMETRIC configuration (exactly degenerate modes -- a
     four-fold cell, a mirror-symmetric grating at exactly normal incidence, an
-    isotropic layer -- differentiated in a symmetry-breaking direction) are
-    exact: the eigen-solves and everything downstream of them are
-    differentiated by the degenerate-cluster rule
-    (``rcwa._core._jax_eig_cluster_adjoint``). It costs nothing in the forward
-    pass; a gradient through a cluster takes 4 - 13x longer, and a jitted
-    gradient compiles 2.5 - 5x longer.
-    :func:`lumenairy.backend.set_jax_cluster_rule` (or the
-    :class:`~lumenairy.backend.jax_cluster_rule` context manager) switches it
-    off library-wide -- which makes such a gradient WRONG; use it only away
-    from any symmetry.
+    isotropic or uniform layer -- differentiated in a symmetry-breaking
+    direction) go through the degenerate-cluster rule
+    (``rcwa._core._jax_eig_cluster_adjoint``) and agree with finite differences
+    to ~1e-9. Limits: next to a Rayleigh anomaly the error grows (measured
+    ~1e-6 at 1e-4 relative wavelength distance, ~2e-3 at 1e-6); reverse mode
+    only (``jax.jvp`` / ``jax.jacfwd`` raise, ``jax.hessian`` works only for a
+    parameter downstream of the eig). Cost: the CHANGELOG's cost table.
+    :func:`lumenairy.backend.set_jax_cluster_rule` /
+    :class:`~lumenairy.backend.jax_cluster_rule` switch the rule off (the
+    setting in force at the call applies) -- which makes such a gradient WRONG;
+    use it only away from any symmetry.
     """
     # Differentiable (JAX) dispatch: any traced input routes to the jnp twin.
     from ..backend import is_jax_array

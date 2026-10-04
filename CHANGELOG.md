@@ -66,6 +66,7 @@ builds.  Measured before (relative error, Windows / WSL):
 | `rcwa_jones_2d` (JAX tensor cell) | the same cell | 34 % / 38 % |
 | `rcwa_jones_2d` | isotropic four-fold cell, `d / d eps_xy` (the truth is 0) | 0.088 / 0.083 absolute |
 | `RCWAStack` (JAX input) | the same cell, alone / over a spacer / over a second patterned layer | 23 - 28 % / 13 - 14 % / 15 - 21 % |
+| `RCWAStack` (JAX input) | an EXACTLY uniform layer over a patterned one, `d / d(pattern)` (a topology optimisation's start) | 466 % (normal), 136 % (conical); the verification's fixture 850 % / 574 % |
 | `pmm_efficiency_1d` | mirror-symmetric grating, `d / d(angle)` at exactly normal incidence | 28 % (TE), 590 % (TM) |
 | `pmm_jones_1d` | the same | 270 % |
 | `PMMStack` (JAX, shared and per-layer grids) | the same, 1 - 3 layers, with and without a uniform spacer | 105 - 660 % |
@@ -80,14 +81,19 @@ off the symmetric point by more than about 1e-10 of the eigenvalue spectrum
 point eigenvalues of the solve coincide EXACTLY (in the four-fold RCWA cell
 50 of the 98 layer eigenvalues sit in pairs; a mirror-symmetric grating's
 half-spaces carry the `+-m` orders as pairs at normal incidence; an isotropic
-layer's polarizations are degenerate).  A parameter that breaks the symmetry
-splits those pairs, and how each pair rotates as it splits is information the
-reverse pass of an eigen-solve never receives -- the solve downstream does
-not care which basis of a pair it gets.  The gradient therefore carried a
-term set by the basis LAPACK happened to return: rotating that basis (forward
-unchanged to 5e-15) moved it by 1 - 600 %.  No other candidate contributed
-(no eigenvalue sorting, no branch point near the pairs, no host branch on
-`theta == 0`, no Wood-anomaly wavelength shift).
+or uniform layer's modes are degenerate).  A parameter that breaks the
+symmetry splits those pairs, and how each pair rotates as it splits is
+information the reverse pass of an eigen-solve never receives -- the solve
+downstream does not care which basis of a pair it gets.  The gradient
+therefore carried a term set by the basis LAPACK happened to return: rotating
+that basis (forward unchanged to 5e-15) moved it by 1 - 600 %.  On the
+fixtures measured no other candidate contributed (no eigenvalue sorting, no
+host branch on `theta == 0`, no Wood-anomaly wavelength shift; the branch
+points of the solves' square roots were far from the pairs -- next to a
+Rayleigh anomaly they are not: see the limits below).  The uniform-layer row
+had a second cause: the RCWA eigensolver takes the ANALYTIC modes of a
+uniform layer through a `where`, which sent the eig branch a zero cotangent,
+and the analytic modes do not move with a pattern.
 
 **The fix.**  Every one of these solvers now differentiates its eigen-solves
 TOGETHER with everything downstream of them through the degenerate-cluster
@@ -96,10 +102,17 @@ where eigenvalues coincide to 1e-6 of the spectrum, the reverse pass is
 evaluated at slightly separated copies of the cluster and combined to fourth
 order).  The solvers take it through one helper,
 `rcwa._core._jax_cluster_routed`, which records the eigen-problems of a solve
-and replays their eigenpairs into it, so no solver was restructured by hand.
-Where the operator is self-adjoint in a mass matrix (the PMM 1-D, Jones and
-stack twins) the mass matrix is the lift's inner product: the Euclidean one
-was measured wrong by up to 7e4 just off normal incidence.
+and replays their eigenpairs into it.  Each problem carries its own lift
+inner product (the mass matrix for the PMM 1-D, Jones and stack twins -- the
+Euclidean one was measured wrong by up to 7e4 just off normal incidence) and
+its own ANCHORS, the points where its consumer is not smooth (the
+half-spaces' permittivities for the PMM Jones / stack twins' shared
+geometric eig, whose consumer `sqrt(eps - mu)` has its branch point at a
+Rayleigh anomaly; 0 for every modal `sqrt`) -- with a single anchor at 0 the
+`pmm_jones_1d` / `PMMStack` gradient at normal incidence was wrong by 1.9e1 /
+3.3 at 1e-4 relative distance from an anomaly.  An analytic shortcut (the
+uniform-layer modes) keeps its forward value byte for byte and takes the eig
+branch's derivative through the rule (`rcwa._core._jax_uniform_select`).
 
 ROUTED, every entry that can meet a degenerate cluster: `rcwa_efficiency_2d`,
 `rcwa_jones_2d` and `RCWAStack` on JAX input (every RCWA entry with a JAX
@@ -112,18 +125,34 @@ release).  NOT routed, measured correct or not of this class: BOR and BOR-SEM
 cascade (concrete tensors: no first-order splitting), the hybrid 2-D PMM
 cell twin, and the EME mode solver (it returns sorted eigenvalues, whose
 individual members have no derivative where a cluster splits; their sums are
-exact).
+exact).  `PMMStack` and the hybrid stack have no analytic uniform-layer
+shortcut under tracing (a traced layer always takes the eig).
 
 **After.**  AD vs a premise-checked finite difference at the symmetric point,
 relative, Windows / WSL: `rcwa_efficiency_2d` 2.8e-10 / 6.4e-11 (TE),
 1.4e-9 / 5.1e-10 (TM); `rcwa_jones_2d` 2.0e-10 / 4.4e-10; `RCWAStack`
-1.8e-10 .. 4.7e-10; `pmm_efficiency_1d` <= 3.1e-10; `pmm_jones_1d`
-1.3e-10 / 6.0e-11; `PMMStack` 8e-11 .. 3.3e-10 (1.0e-8 on a per-layer
-three-layer fixture whose discretization itself breaks the mirror);
-`berreman_jones_1d` 1.5e-9 / 1.7e-9; hybrid `PMM2DStack` 2.3e-10 /
-2.0e-10.  The gradient no longer moves when the basis inside a pair is
-rotated (<= 6.4e-10).  Forward values are unchanged byte for byte (SHA-256,
-NumPy / JAX eager / `jax.jit`: 33 + 24 + 27 fixtures per build).
+1.8e-10 .. 4.7e-10, at a uniform layer 8.6e-9 (normal) / 4.0e-10 (conical);
+`pmm_efficiency_1d` <= 3.1e-10; `pmm_jones_1d` 1.3e-10 / 6.0e-11;
+`PMMStack` 8e-11 .. 3.3e-10 (1.0e-8 on a per-layer three-layer fixture whose
+discretization itself breaks the mirror); `berreman_jones_1d` 1.5e-9 /
+1.7e-9; hybrid `PMM2DStack` 2.3e-10 / 2.0e-10.  The gradient no longer
+moves when the basis inside a pair is rotated (<= 6.4e-10).  Forward values
+are unchanged byte for byte (SHA-256, NumPy / JAX eager / `jax.jit`: 33 + 24
++ 27 fixtures per build, and the uniform-layer fixture).
+
+**Limits** (measured; build record section 11).
+* Next to a Rayleigh anomaly the rule shortens its lift (the anchors), and
+  the lifted splitting then falls toward the eigen-solve VJP's own
+  resolution, so the error at an exactly degenerate point grows as the
+  anomaly is approached: `pmm_jones_1d` / `PMMStack` / `pmm_efficiency_1d`
+  at exactly normal incidence, relative wavelength distance 1e-3 / 1e-4 /
+  1e-5 / 1e-6 / 1e-7 -> 5e-8 / 1-2e-6 / 5-10e-5 / 2-4e-3 / 7-12e-2 (the
+  finite difference itself degrades too: its own mirror identity holds to
+  1e-8 at 1e-5 and 2e-5 at 1e-7).
+* Reverse mode only: `jax.jvp` / `jax.jacfwd` raise; `jax.hessian` works
+  for a parameter downstream of the eig (a thickness) and raises
+  `NotImplementedError` for one that enters it (a permittivity, the angle),
+  as before.
 
 **Also fixed, found on the way.**
 * `rcwa_jones_2d(formulation='li')` on a TRACED tensor cell (under
@@ -132,53 +161,60 @@ NumPy / JAX eager / `jax.jit`: 33 + 24 + 27 fixtures per build).
   branch.  The jitted forward was 7.6e-2 off the NumPy 'li' answer and the
   'li' gradient 21 - 62 % wrong at ANY cell; the eager call was right.  The
   traced call now takes the Li operators exactly when the tensor's value is
-  in-plane (the same test the concrete routing uses), so it solves what the
-  concrete call solves: jitted forward = NumPy 'li' to 1.2e-15, gradient
-  2.6e-10 / 3.2e-10 at the four-fold cell.
+  in-plane (the same test the concrete routing uses): jitted forward = NumPy
+  'li' to 1.2e-15, gradient 2.6e-10 / 3.2e-10 at the four-fold cell.
 * `RCWAStack` on JAX input cached its half-space modes in a module-level
   cache even inside a `jax.jit` trace, so `jit(f)` followed by
   `jit(grad(f))` or an eager `f` raised `UnexpectedTracerError` (on the
   previous release too).  A traced solve now computes them uncached.
 
-**The switch.**  `lumenairy.backend.set_jax_cluster_rule(False)` (or the
-context manager `with lumenairy.backend.jax_cluster_rule(False): ...`;
-`jax_cluster_rule_enabled()` reads it; environment default
-`LUMENAIRY_JAX_CLUSTER_RULE=0`) turns the rule off for every solver at once.
-**Off, a gradient at a symmetric point is WRONG** (pinned: 23 - 47 % on the
-RCWA cell); away from any symmetry it changes nothing (<= 4e-16).  The
-setting is read when a solve is traced: a `jax.jit`-compiled function keeps
-the setting it was compiled with.  Default: on.
+**The switch** (in `lumenairy.backend`, and re-exported at the top level).
+`set_jax_cluster_rule(enabled)` sets the
+process value (returns the previous one); `with
+lumenairy.backend.jax_cluster_rule(enabled): ...` sets it for the current
+THREAD while the scope is active (scopes nest; one left out of order is
+removed by identity and cannot clobber another); `jax_cluster_rule_enabled()`
+reads the effective value; `LUMENAIRY_JAX_CLUSTER_RULE` (`1 on true yes` /
+`0 off false no`, any case) sets the process value at import and any other
+value REFUSES to import.  Default: on.  **Off, a gradient at a symmetric
+point is WRONG** (pinned: 23 - 47 % on the RCWA cell); away from any
+symmetry it changes nothing (<= 4e-16).  The setting is part of JAX's trace
+cache key: the setting in force AT THE CALL applies, for a new `jax.jit`
+wrapper and for an already-compiled function alike (it retraces).  (This
+uses a private JAX config hook; `jax_cluster_rule_trace_keyed()` reports
+whether it is active -- if a future JAX drops it, a cached compiled function
+keeps the setting of its first trace.)
 
-**Cost** (jitted, test sizes; Windows on a quiet box, WSL alongside other
-work).  The forward pass and its compile are unchanged.  A gradient THROUGH a
-degenerate cluster evaluates the solve and its reverse pass at four lifted
-points: 4 - 5x the previous gradient time (RCWA four-fold cell 0.025 ->
-0.10 - 0.11 s; 1-D twin at normal incidence 0.003 -> 0.014 s).  Without a
-cluster the plain reverse pass runs: 1.0 - 1.1x (the lift is built only on
-the lifted branch).  A jitted gradient COMPILES 2 - 4x longer (both branches
-are compiled).  Under `jax.vmap` the branch is chosen once for the whole
-batch (the OR over the batch): a batch with no cluster anywhere runs the
-plain branch (vmap of 4, no cluster: 0.052 - 0.059 s against 0.054 s
-before; WSL 0.088 s on, 0.046 s off), a batch with one runs the lifted
-branch for every member (exact for all of them).  An accidental
-near-degeneracy counts as a cluster: the `pmm_jones_1d` fixture at 0.2 rad
-has one (3.1e-7 of the spectrum) and pays the lifted cost.  The independent
-verification measured, rule on vs off in one process: jitted with a cluster
-4.0 - 5.4x, without 0.93 - 1.48x, compile 2.8 - 4.6x, vmapped without a
-cluster 3.5 - 5.4x (before the batch-reduced branch and the lazily built
-lift of this round), first eager gradient at a cluster 16 - 24 s against
-3.3 - 4.7 s.
+**Cost** -- THE cost table (jitted; rule on vs the gradient without it;
+Windows; the independent verification's numbers, rule on vs off in one
+process on a loaded box, with this build's interleaved PRE / POST on a
+quieter box in brackets):
 
-**Scope notes.**  Reverse mode only, as before: `jax.hessian` works for a
-parameter downstream of the eig (a thickness), and for one that enters the
-eig (a permittivity, the angle) it raises `NotImplementedError` -- with or
-without this fix.
+| case | gradient run | gradient compile | forward run | forward compile |
+|---|---|---|---|---|
+| RCWA, cell with a cluster | 4.0 - 7.8x [4.0 - 4.4x] | 3.4 - 4.2x [2.2 - 2.4x] | ~1x | 1.1x |
+| RCWA, no cluster | 0.96 - 1.14x [1.0x] | 2.8 - 2.9x [2.1 - 3.0x] | ~1x | 1.7x |
+| `pmm_jones_1d` / 1-D twins, with a cluster | 2.5 - 4.4x [4.0 - 4.7x] | 2.2 - 4.2x | ~1x | 1.3x |
+| `PMMStack`, 2 layers, with a cluster | 3.7 - 4.3x [4.2x] | 5.7 - 5.9x | ~1.5x | 1.9x |
+| Berreman, with a cluster | 2.3 - 7.9x | 3.9 - 4.1x | ~1x | 1.9x |
+| `jax.vmap` of 4, no cluster | 0.75 - 1.01x [1.0x] | 3.5 - 3.9x | -- | -- |
+| `jax.vmap` of 4, one cluster in the batch | 3.5 - 4.0x | 3.6 - 3.8x | -- | -- |
+| `rcwa_efficiency_2d`, 121 orders, `jit(grad)` | 5.1x; peak memory 0.73 vs 0.56 GB | first call 5.3 vs 2.2 s | | |
+| the same, `jit(jacrev)`, 242 outputs | 4.0x (34 vs 8.5 s); peak memory 12.8 vs 4.1 GB | first call 43 vs 12 s | | |
+
+A batch under `jax.vmap` takes one branch for all its members (the OR over
+the batch): with no cluster anywhere it runs the plain reverse pass; with one
+anywhere, the lifted pass for every member (exact for all).  An accidental
+near-degeneracy counts as a cluster (the `pmm_jones_1d` fixture at 0.2 rad
+has one, 3.1e-7 of the spectrum).  The forward VALUES are unchanged; the
+forward compile is 1.1 - 1.9x longer (the solve is traced three times).
 
 Build record: `docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md`
-(sections 1 - 9 the first round, section 10 this one); verification:
-`docs/audits/VERIFY_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_04.md`; tests:
-`tests/unit/test_jax_symmetric_point_gradients.py`,
-`tests/unit/test_verify_jax_symmetric_point_gradients.py` and the two
+(sections 1 - 9 the first round, 10 the second, 11 the third); verification:
+`docs/audits/VERIFY_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_04.md` and
+`..._R2_2026_10_04.md`; tests: `tests/unit/test_jax_symmetric_point_gradients.py`,
+`tests/unit/test_verify_jax_symmetric_point_gradients.py`,
+`tests/unit/test_verify_jax_symmetric_point_gradients_r2.py` and the two
 formerly strict-xfail gates of `tests/unit/test_pmm2d_staggered_curved_e3.py`.
 
 ### Added -- pure 2-D PMM (curved cells, Phase E1): out-of-plane tensors and slanted walls inside curved cells
@@ -7155,8 +7191,8 @@ outright and the star reduces to
 -- seven mat-vecs, ONE `2N` product and ONE inverse.  Wired at
 `rcwa/oned.py:721` (planar TE/TM fast path), `rcwa/oned.py:756` (the 2N path of `rcwa_efficiency_1d`),
 `rcwa/oned.py:1153` (`rcwa_jones_1d` / `rcwa_jones_1d_segments`, both polarizations in one
-block), `rcwa/twod.py:2485` (`rcwa_efficiency_2d`), `rcwa/twod.py:1399` (`PreparedRCWA2D.solve`),
-`rcwa/twod.py:2099` (`rcwa_jones_2d`, in-plane and full-3x3), `rcwa/twod.py:2485`
+block), `rcwa/twod.py:2487` (`rcwa_efficiency_2d`), `rcwa/twod.py:1400` (`PreparedRCWA2D.solve`),
+`rcwa/twod.py:2101` (`rcwa_jones_2d`, in-plane and full-3x3), `rcwa/twod.py:2487`
 (`rcwa_efficiency_2d_shapes`) and `rcwa/_core.py:2559` (`_symmetric_solve_rt`, the single-layer
 even-parity fold).
 
@@ -7238,7 +7274,7 @@ in-plane argument with the component permutation `(x, y, z) -> (y, x, z)`: `exx<
 `exy<->eyx`, `exz<->eyz`, `ezx<->ezy`, `ezz` alone, the pixel grid transposed and the
 order-label columns swapped, so that `T P L2L1(eps) P T = L1L2(P eps^T P)` and the nine
 blocks come back in the same retained-order basis.  The mean is taken on the RAW `ehat`
-blocks, which puts the caller's `l3-` `E_z` fold after it (`rcwa/twod.py:2021`) -- the mean of
+blocks, which puts the caller's `l3-` `E_z` fold after it (`rcwa/twod.py:2023`) -- the mean of
 two Schur complements is not the Schur complement of the mean.
 
 Measured on a uniaxial pillar (`n_o = 2.0`, `n_e = 2.6`, director polar 40 deg) in air,

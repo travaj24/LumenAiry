@@ -184,13 +184,13 @@ EDITED_IN_PLACE = {
     # human's answer is recorded here (content digest is whitespace-stripped).
     #   expected: '# on the two sources rather than assembled (_redheffer_star_rt).'  inside "def rcwa_jones_2d("
     ('lumenairy/elements/rcwa/twod.py', 2035): (
-        2099, 'symmetric-point gradients 5.50.0: the closed-star comment moved '
+        2101, 'symmetric-point gradients 5.50.0: the closed-star comment moved '
         'into the routed solve of rcwa_jones_2d (re-indented, text unchanged)',
         '1c79cd4d1049c92103efc6b46bb5e2ac124e18d14c131b7dc180feee67a86fed',
         '5.50.0', 'def rcwa_jones_2d('),
     #   expected: '# no scope signal at all.'  inside "def rcwa_jones_2d("
     ('lumenairy/elements/rcwa/twod.py', 1977): (
-        2021, 'symmetric-point gradients 5.50.0: the Li scope-notice comment moved '
+        2023, 'symmetric-point gradients 5.50.0: the Li scope-notice comment moved '
         'into the traced-li block of rcwa_jones_2d (re-indented, text unchanged)',
         '9911028483b8dcec900878551f949f4baf0937992c2cf68aaee148d1c52125e0',
         '5.50.0', 'def rcwa_jones_2d('),

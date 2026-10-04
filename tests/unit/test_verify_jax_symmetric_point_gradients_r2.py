@@ -545,12 +545,14 @@ def test_r2v_fewer_eigs_on_the_replay_raise_the_named_error():
         jax.jit(jax.grad(f))(0.0)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT P3-1 (verifier r2): a solve that takes MORE eigs on the replay "
-    "than recorded surfaces as a bare StopIteration from next(it) in "
-    "_jax_cluster_routed's replay (rcwa/_core.py:5090), not the helper's "
-    "named RuntimeError; flips when the replay raises that error itself"))
 def test_r2v_more_eigs_on_the_replay_raise_the_named_error():
+    # Was a STRICT XFAIL; FIXED in the builder's round 3 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 11).  The
+    # pinned defect, as the verifier recorded it:
+    #    DEFECT P3-1 (verifier r2): a solve that takes MORE eigs on the replay
+    #   than recorded surfaces as a bare StopIteration from next(it) in
+    #   _jax_cluster_routed's replay (rcwa/_core.py:5090), not the helper's
+    #   named RuntimeError; flips when the replay raises that error itself
     import jax
     import jax.numpy as jnp
 
@@ -729,14 +731,16 @@ def test_r2v_context_manager_restores_on_exception_and_nesting():
     assert jax_cluster_rule_enabled()
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT P3-2 (verifier r2): the switch is one module global "
-    "(backend/array.py _JAX_CLUSTER_RULE) and the context manager restores "
-    "the value it saw on entry, so two scopes left out of order -- what two "
-    "THREADS each using `with jax_cluster_rule(...)` do -- leave the process "
-    "with the rule OFF; flips if the setting becomes context-local (or the "
-    "scopes otherwise cannot clobber each other)"))
 def test_r2v_interleaved_switch_scopes_do_not_leave_the_rule_off():
+    # Was a STRICT XFAIL; FIXED in the builder's round 3 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 11).  The
+    # pinned defect, as the verifier recorded it:
+    #    DEFECT P3-2 (verifier r2): the switch is one module global
+    #   (backend/array.py _JAX_CLUSTER_RULE) and the context manager restores
+    #   the value it saw on entry, so two scopes left out of order -- what two
+    #   THREADS each using `with jax_cluster_rule(...)` do -- leave the process
+    #   with the rule OFF; flips if the setting becomes context-local (or the
+    #   scopes otherwise cannot clobber each other)
     from lumenairy.backend import jax_cluster_rule, jax_cluster_rule_enabled
     a, b = jax_cluster_rule(False), jax_cluster_rule(True)
     a.__enter__()
@@ -747,24 +751,28 @@ def test_r2v_interleaved_switch_scopes_do_not_leave_the_rule_off():
 
 
 def test_r2v_a_jitted_function_keeps_its_setting_per_compiled_signature():
-    """What 'a jax.jit-compiled function keeps the setting it was compiled
-    with' means, measured (one-layer Berreman, symmetric point): the SAME
-    compiled signature keeps ON after the switch goes OFF (exact, 9.4e-9 on
-    p5), but the same jitted function RETRACED for a new input dtype under
-    OFF takes OFF (wrong, 1.6).  Bars 1e-7 / 1e-2."""
+    """What the switch means for a jitted function, AS IMPLEMENTED in the
+    builder's round 3 (the setting is part of JAX's trace cache key): the
+    setting in force AT THE CALL applies, for the same ``jax.jit`` object,
+    both ways.  (The verifier pinned the round-2 behaviour here -- the same
+    compiled signature kept ON after the switch went OFF -- which round 3
+    changes by design; build record section 11.3.)  One-layer Berreman at
+    its symmetric point: ON exact (bar 1e-7; 9.4e-9 on p5), OFF wrong (bar
+    1e-2; 1.6), ON again exact."""
     import jax
     import jax.numpy as jnp
 
-    from lumenairy.backend import jax_cluster_rule
+    from lumenairy.backend import jax_cluster_rule, jax_cluster_rule_trace_keyed
+    assert jax_cluster_rule_trace_keyed()
     f = _berreman(0.35, n_layers=1)
     fd = _fd(lambda d: f(d, np), 0.0)
     g = jax.jit(jax.jacrev(lambda d: f(d, jnp)))
     with jax_cluster_rule(True):
         assert _rel(np.asarray(g(0.0)), fd) < 1e-7
     with jax_cluster_rule(False):
+        assert _rel(np.asarray(g(0.0)), fd) > 1e-2
+    with jax_cluster_rule(True):
         assert _rel(np.asarray(g(0.0)), fd) < 1e-7
-        g32 = np.asarray(g(jnp.asarray(0.0, jnp.float32))).astype(float)
-        assert _rel(g32, fd) > 1e-2
 
 
 # =================================================== claim (7): controls
@@ -805,20 +813,21 @@ def test_r2v_controls_rcwa_1d_and_bor_are_exact_at_their_symmetric_points():
 _RA_ER = 4.0 * np.eye(3, dtype=complex)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT P1-1 (verifier r2): _jax_cluster_routed passes ONE anchor (0) "
-    "for every problem (rcwa/_core.py:5104-5106; Kx2 eig pmm/_core.py:4357, "
-    "routed at pmm/_core.py:4507, pmm/_jax_stack.py:459/746), but the "
-    "half-space geometric eig Kx2 of "
-    "pmm_jones_1d / PMMStack feeds q = sqrt(eps_half - mu), non-smooth at "
-    "mu = eps_half (a Rayleigh anomaly).  At normal incidence the +-m pair "
-    "of Kx2 is a cluster and the unshortened lift crosses that branch "
-    "point: d/dangle wrong by 1.8e-5 / 1.7e-3 / 19 at 0.1 / 0.03 / 0.01 % "
-    "from the m = 1 anomaly (both builds); FD-free: the mirror identity "
-    "dR_{+1} = -dR_{-1} broken by 0.50 (FD: 1.1e-7).  Patching the anchors "
-    "to (0, eps_sub, eps_sup) gives 1.2e-6 -- flips when the Kx2 problem "
-    "carries its own anchors"))
 def test_r2v_pmm_jones_1d_mirror_identity_near_a_rayleigh_anomaly():
+    # Was a STRICT XFAIL; FIXED in the builder's round 3 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 11).  The
+    # pinned defect, as the verifier recorded it:
+    #    DEFECT P1-1 (verifier r2): _jax_cluster_routed passes ONE anchor (0)
+    #   for every problem (rcwa/_core.py:5104-5106; Kx2 eig pmm/_core.py:4357,
+    #   routed at pmm/_core.py:4507, pmm/_jax_stack.py:459/746), but the half-
+    #   space geometric eig Kx2 of pmm_jones_1d / PMMStack feeds q =
+    #   sqrt(eps_half - mu), non-smooth at mu = eps_half (a Rayleigh anomaly).
+    #   At normal incidence the +-m pair of Kx2 is a cluster and the unshortened
+    #   lift crosses that branch point: d/dangle wrong by 1.8e-5 / 1.7e-3 / 19
+    #   at 0.1 / 0.03 / 0.01 % from the m = 1 anomaly (both builds); FD-free:
+    #   the mirror identity dR_{+1} = -dR_{-1} broken by 0.50 (FD: 1.1e-7).
+    #   Patching the anchors to (0, eps_sub, eps_sup) gives 1.2e-6 -- flips when
+    #   the Kx2 problem carries its own anchors
     """P 1.2, ridge 4 / groove 1, n_sub 1.0, n_sup 1.45, degree 12, wl =
     1.2 (1 + 1e-4): the m = +-1 substrate orders are 1e-4 from grazing.
     The grating is mirror-symmetric, so at exactly normal incidence
@@ -846,19 +855,21 @@ def test_r2v_pmm_jones_1d_mirror_identity_near_a_rayleigh_anomaly():
     assert np.max(np.abs(g[0::2] + g[1::2])) < 1e-4 * np.max(np.abs(g))
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT P1-2 (verifier r2; pre-existing, identical on the base tree "
-    "7c0bc8bd): RCWAStack (JAX) at an EXACTLY uniform scalar eps_cell "
-    "layer differentiated in a pattern direction.  rcwa/_core.py:2785-2792 "
-    "(_layer_eigenmodes) selects the analytic uniform modes with "
-    "xp.where(uniform, ...), so at t = 0 the gradient flows through W = I "
-    "and EPS[0, 0] only and misses the first-order coupling of the pattern "
-    "to the other layer's diffracted orders; the eig branch, which the "
-    "cluster rule now makes exact, is discarded.  Measured: AD(0) vs FD "
-    "8.5 (normal) / 5.7 (conical 0.2, 0.3), both builds; AD(+-1e-6) vs FD "
-    "4e-9 / 2e-9.  Flips when the uniform select stops severing the "
-    "gradient (e.g. the eig branch through the cluster rule)"))
 def test_r2v_rcwastack_uniform_layer_pattern_gradient_at_the_uniform_point():
+    # Was a STRICT XFAIL; FIXED in the builder's round 3 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 11).  The
+    # pinned defect, as the verifier recorded it:
+    #    DEFECT P1-2 (verifier r2; pre-existing, identical on the base tree
+    #   7c0bc8bd): RCWAStack (JAX) at an EXACTLY uniform scalar eps_cell layer
+    #   differentiated in a pattern direction. rcwa/_core.py:2785-2792
+    #   (_layer_eigenmodes) selects the analytic uniform modes with
+    #   xp.where(uniform, ...), so at t = 0 the gradient flows through W = I and
+    #   EPS[0, 0] only and misses the first-order coupling of the pattern to the
+    #   other layer's diffracted orders; the eig branch, which the cluster rule
+    #   now makes exact, is discarded. Measured: AD(0) vs FD 8.5 (normal) / 5.7
+    #   (conical 0.2, 0.3), both builds; AD(+-1e-6) vs FD 4e-9 / 2e-9. Flips
+    #   when the uniform select stops severing the gradient (e.g. the eig branch
+    #   through the cluster rule)
     """Topology optimisation from a uniform start: a uniform eps 2.25 layer
     (t x a zero-mean random pattern) over a cross layer, normal incidence.
     The gradient AT t = 0 must equal the limit of the gradients next to it
@@ -870,13 +881,15 @@ def test_r2v_rcwastack_uniform_layer_pattern_gradient_at_the_uniform_point():
     assert _rel(g0, g_near) < 1e-5
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT P1-1, second family: PMMStack shares the half-space geometric "
-    "Kx2 eig (pmm/_jax_stack.py) and its anchor-0 lift: near the m = 1 "
-    "substrate Rayleigh anomaly d/dangle at normal incidence is wrong by "
-    "3.4e-3 at 0.1 % and 3.3 at 0.01 % (p10b, Windows); mirror identity "
-    "broken by 6.6e-2 (FD 4.7e-8)"))
 def test_r2v_pmmstack_mirror_identity_near_a_rayleigh_anomaly():
+    # Was a STRICT XFAIL; FIXED in the builder's round 3 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 11).  The
+    # pinned defect, as the verifier recorded it:
+    #    DEFECT P1-1, second family: PMMStack shares the half-space geometric
+    #   Kx2 eig (pmm/_jax_stack.py) and its anchor-0 lift: near the m = 1
+    #   substrate Rayleigh anomaly d/dangle at normal incidence is wrong by
+    #   3.4e-3 at 0.1 % and 3.3 at 0.01 % (p10b, Windows); mirror identity
+    #   broken by 6.6e-2 (FD 4.7e-8)
     """PMMStack, P 1 um, layer [3 | 6+0.3j | 3 | 1.5] (mirror about 0.25 P)
     over a 2.1 spacer, n_sup 1.45, n_sub 1.0, degree 10, wl = 1 um
     (1 + 1e-4).  Mirror identity of the +-1 orders at normal incidence, bar
@@ -906,16 +919,18 @@ def test_r2v_pmmstack_mirror_identity_near_a_rayleigh_anomaly():
     assert np.max(np.abs(g[0::2] + g[1::2])) < 1e-4 * np.max(np.abs(g))
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT P2-1 (verifier r2): set_jax_cluster_rule's docstring says to "
-    "'re-create the jitted function after changing it', but jax.jit caches "
-    "the compiled program by the wrapped CALLABLE, so a new jax.jit wrapper "
-    "of the same callable reuses the program traced under the old setting: "
-    "compiled OFF, switched back ON and re-wrapped, the gradient at a "
-    "symmetric point stays WRONG (1.6, both builds; p11).  Flips when the "
-    "setting is part of JAX's trace cache key (or the re-wrap otherwise "
-    "takes the new setting)"))
 def test_r2v_rewrapping_a_jitted_callable_takes_the_new_setting():
+    # Was a STRICT XFAIL; FIXED in the builder's round 3 (docs/audits/
+    # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md, section 11).  The
+    # pinned defect, as the verifier recorded it:
+    #    DEFECT P2-1 (verifier r2): set_jax_cluster_rule's docstring says to
+    #   're-create the jitted function after changing it', but jax.jit caches
+    #   the compiled program by the wrapped CALLABLE, so a new jax.jit wrapper
+    #   of the same callable reuses the program traced under the old setting:
+    #   compiled OFF, switched back ON and re-wrapped, the gradient at a
+    #   symmetric point stays WRONG (1.6, both builds; p11). Flips when the
+    #   setting is part of JAX's trace cache key (or the re-wrap otherwise takes
+    #   the new setting)
     import jax
     import jax.numpy as jnp
 

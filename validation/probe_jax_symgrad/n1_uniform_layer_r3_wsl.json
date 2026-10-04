@@ -1,0 +1,26 @@
+{
+ "normal": {
+  "AD0_vs_FD": 5.69251726863461e-09,
+  "AD0_vs_near": 6.212576784986438e-09,
+  "near_vs_FD": 2.0056732742253515e-09,
+  "sha_jit": "85cd81a1b748f308656a36c7508074c8091bf61e2848289be22fc319427084e5",
+  "sha_eager": "d3aa4b663397e54dd70e87e3e1fd91f102454fc91a0c58bda4f8efe9ec486973",
+  "jit_vs_numpy": 2.3869795029440866e-15
+ },
+ "conical": {
+  "AD0_vs_FD": 6.792686010451898e-10,
+  "AD0_vs_near": 1.1099566218967768e-13,
+  "near_vs_FD": 6.793120632020638e-10,
+  "sha_jit": "4e0dfd2975273a33369ad91c716399774682c5554502b01c6ceff9cfc45530ab",
+  "sha_eager": "2ad4c6bf77738ff974e7cda2bf38caed1ef52b7f7691e8082465937988f926b0",
+  "jit_vs_numpy": 2.4424906541753444e-15
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_symgrad/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

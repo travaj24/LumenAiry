@@ -631,3 +631,51 @@ def test_rcwa_stack_jit_then_grad_then_eager_does_not_leak_tracers():
     g = float(jax.jit(jax.grad(f))(1e-2))
     assert np.isfinite(g)
     assert abs(float(f(1e-2)) - v) < 1e-12
+
+
+# ============================================ round 3: the switch's semantics
+@pytest.mark.parametrize("value,expect", [("0", "False"), ("off", "False"),
+                                          ("YES", "True"), ("", "True"),
+                                          ("maybe", "ValueError")])
+def test_the_switch_environment_value_is_parsed_or_refused(value, expect):
+    """``LUMENAIRY_JAX_CLUSTER_RULE`` is read once at import: the eight
+    recognised spellings set the process value; anything else REFUSES to
+    import (it used to leave the rule on silently)."""
+    import subprocess
+    import sys
+    env = dict(os.environ, LUMENAIRY_JAX_CLUSTER_RULE=value)
+    code = ("from lumenairy.backend import jax_cluster_rule_enabled as e; "
+            "print(e())")
+    r = subprocess.run([sys.executable, "-c", code], env=env,
+                       capture_output=True, text=True, timeout=300)
+    if expect == "ValueError":
+        assert r.returncode != 0 and "LUMENAIRY_JAX_CLUSTER_RULE" in r.stderr
+    else:
+        assert r.returncode == 0, r.stderr
+        assert r.stdout.strip().splitlines()[-1] == expect
+
+
+def test_a_switch_scope_in_one_thread_does_not_reach_another():
+    """The scope is THREAD-local (and part of JAX's trace key): a thread
+    holding ``jax_cluster_rule(False)`` does not turn the rule off for a
+    thread that traces at the same time."""
+    import threading
+
+    from lumenairy.backend import jax_cluster_rule, jax_cluster_rule_enabled
+    seen = {}
+    inside, release = threading.Event(), threading.Event()
+
+    def off():
+        with jax_cluster_rule(False):
+            seen["off"] = jax_cluster_rule_enabled()
+            inside.set()
+            release.wait(30)
+
+    t = threading.Thread(target=off)
+    t.start()
+    inside.wait(30)
+    seen["main"] = jax_cluster_rule_enabled()
+    release.set()
+    t.join(30)
+    assert seen == {"off": False, "main": True}
+    assert jax_cluster_rule_enabled()

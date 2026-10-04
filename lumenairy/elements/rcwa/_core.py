@@ -2786,7 +2786,7 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None, *,
     Ws, Vs, lams = _structured_modes()
     diagmax = xp.max(xp.abs(xp.diag(EPS)))
     scale = xp.where(diagmax > 1.0, diagmax, 1.0)
-    uniform = xp.max(xp.abs(offdiag)) < 1e-12 * scale
+    uniform = _jax_uniform_select(xp.max(xp.abs(offdiag)) < 1e-12 * scale)
     return (xp.where(uniform, Wu, Ws),
             xp.where(uniform, Vu, Vs),
             xp.where(uniform, lamu, lams))
@@ -4285,7 +4285,7 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
     aniso = (xp.max(xp.abs(Cxx - eps0 * I)) + xp.max(xp.abs(Cyy - eps0 * I))
              + xp.max(xp.abs(Cxy)) + xp.max(xp.abs(Cyx)))
     scale = xp.where(xp.abs(eps0) > 1.0, xp.abs(eps0), 1.0)
-    iso_uniform = aniso < 1e-10 * scale
+    iso_uniform = _jax_uniform_select(aniso < 1e-10 * scale)
     return (xp.where(iso_uniform, Wu, W),
             xp.where(iso_uniform, Vu, V),
             xp.where(iso_uniform, lam_u, lam))
@@ -4524,12 +4524,22 @@ def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
 # WHAT REPLACED THE LIMIT (2026-10-03/04): every JAX twin whose solve can
 # meet a degenerate cluster wraps its eig(s) and the rest of its solve in
 # :func:`_jax_eig_cluster_adjoint` below (through :func:`_jax_cluster_routed`
-# for all but the pure staggered 2-D PMM twin), and is then exact at and
-# near the degenerate point (docs/audits/
+# for all but the pure staggered 2-D PMM twin), and then agrees with finite
+# differences at and near the degenerate point to ~1e-9 (docs/audits/
 # BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md: the table above is the
-# 1-D twin BEFORE that fix; after it, d R / d theta at exactly 0.0 is exact
-# to 1.2e-11 (TE) / 3.1e-10 (TM) relative and every theta of the ladder to
-# <= 2.6e-9).  The users of this eig that are NOT routed were measured
+# 1-D twin BEFORE that fix; after it, d R / d theta at exactly 0.0 agrees to
+# 1.2e-11 (TE) / 3.1e-10 (TM) relative and every theta of the ladder to
+# <= 2.6e-9).  ITS LIMITS: (1) next to a point where the CONSUMER is not
+# smooth -- a Rayleigh anomaly, i.e. an anchor of the problem -- the rule
+# shortens its lift, and the lifted splitting then falls toward this VJP's
+# own resolution (the envelope above), so the error grows as the anomaly is
+# approached (measured, pmm_jones_1d / PMMStack / pmm_efficiency_1d at
+# exactly normal incidence: ~1e-6 at 1e-4 relative wavelength distance,
+# ~1e-4 at 1e-5, ~2e-3 at 1e-6, ~1e-1 at 1e-7; record section 11.1); (2)
+# reverse mode only (``jax.jvp`` / ``jax.jacfwd`` raise; ``jax.hessian``
+# only for a parameter downstream of the eig); (3) an analytic shortcut
+# (a uniform layer's modes) keeps its forward value and takes the eig
+# branch's derivative (:func:`_jax_uniform_select`).  The users of this eig that are NOT routed were measured
 # correct at their symmetric points or are not of this class (BOR / BOR-SEM:
 # no exact degeneracy at a fixed azimuthal order; EME modes: the consumer
 # returns sorted eigenvalues; the native Berreman cascade and the hybrid
@@ -4762,6 +4772,7 @@ def _eig_cluster_lift(lam, V, G, gap_rel, split_rel, anchors=()):
       basis inside the cluster changes ``Q_c`` by a unitary ``W`` and
       ``Y_c`` to ``W^H Y_c W``), so ``N`` does not depend on the basis the
       eigensolver picked."""
+    import jax
     import jax.numpy as jnp
     n = lam.shape[0]
     scale = jnp.max(jnp.abs(lam))
@@ -4798,9 +4809,9 @@ def _eig_cluster_lift(lam, V, G, gap_rel, split_rel, anchors=()):
     rms = jnp.sqrt(ms)
     Y = Y / jnp.where(member & (rms > 0), rms, 1.0)[:, None]
     step = split_rel * scale
-    if anchors:
-        a = jnp.min(jnp.abs(lam[:, None] - jnp.asarray(
-            [complex(x) for x in anchors])[None, :]), axis=1)
+    if anchors is not None and getattr(anchors, "size", len(anchors)) > 0:
+        anc = jax.lax.stop_gradient(jnp.asarray(anchors, jnp.complex128))
+        a = jnp.min(jnp.abs(lam[:, None] - jnp.ravel(anc)[None, :]), axis=1)
         a = jnp.min(jnp.where(K, a[None, :], jnp.inf), axis=1)   # cluster-wide
         cap = _EIG_CLUSTER_ANCHOR_K * a * (
             np.finfo(np.float64).eps * scale / jnp.maximum(a, 1e-300)) ** 0.2
@@ -4854,14 +4865,23 @@ def _jax_eig_cluster_vjp():
     def eigs_of(eig_fn, Ls, Gs):
         return tuple(eig_fn(L, G) for L, G in zip(Ls, Gs))
 
+    # ``conv(eigs, grad_branch, *consts)``: ``grad_branch`` is a traced
+    # boolean the routed solves read through ``_jax_uniform_select`` -- False
+    # for every value this core returns (the forward), True where the
+    # reverse pass must differentiate the EIG branch of an analytic shortcut
+    # (``sflag``: some such select took its shortcut; build record 11.2).
+    # ``As`` are the per-problem anchors (arrays or None) and ``Ks`` the lift
+    # Grams; neither is a value input, both get zero cotangents.
     @partial(jax.custom_vjp, nondiff_argnums=(0, 1, 2, 3, 4))
-    def core(conv, eig_fn, gap_rel, split_rel, anchors, Ls, Gs, Ks, *consts):
-        return conv(eigs_of(eig_fn, Ls, Gs), *consts)
+    def core(conv, eig_fn, gap_rel, split_rel, has_select, Ls, Gs, Ks, As,
+             sflag, *consts):
+        return conv(eigs_of(eig_fn, Ls, Gs), jnp.asarray(False), *consts)
 
-    def core_fwd(conv, eig_fn, gap_rel, split_rel, anchors, Ls, Gs, Ks,
-                 *consts):
+    def core_fwd(conv, eig_fn, gap_rel, split_rel, has_select, Ls, Gs, Ks,
+                 As, sflag, *consts):
         eo, evjp = jax.vjp(lambda a, b: eigs_of(eig_fn, a, b), Ls, Gs)
-        out, dvjp = jax.vjp(conv, eo, *consts)
+        out, dvjp = jax.vjp(
+            lambda e, *c: conv(e, jnp.asarray(False), *c), eo, *consts)
         # only the CLUSTER TEST runs here (O(n^2) per problem); the lift
         # itself (an eigh, a solve and a few products per problem, ~the
         # cost of the eig) is built in the reverse pass's lifted branch, so a
@@ -4870,24 +4890,41 @@ def _jax_eig_cluster_vjp():
         # 1.0 - 1.1x after it; build record, section 10.6)
         anyc = jnp.any(jnp.stack([_eig_cluster_flag(lam, gap_rel)
                                   for lam, _V in eo]))
-        return out, (Ls, Gs, Ks, consts, evjp, dvjp, eo, anyc)
+        return out, (Ls, Gs, Ks, As, sflag, consts, evjp, dvjp, eo, anyc)
 
-    def core_bwd(conv, eig_fn, gap_rel, split_rel, anchors, res, ct):
-        Ls, Gs, Ks, consts, evjp, dvjp, eo, anyc = res
-        eb, *cb = dvjp(ct)
-        # the lift Grams only shape the lift's direction: no cotangent
-        Kb = jax.tree_util.tree_map(jnp.zeros_like, Ks)
+    def core_bwd(conv, eig_fn, gap_rel, split_rel, has_select, res, ct):
+        Ls, Gs, Ks, As, sflag, consts, evjp, dvjp, eo, anyc = res
+        # the lift Grams, the anchors and the select flag only steer the
+        # reverse pass: no cotangent
+        Kb, Ab, Sb = (jax.tree_util.tree_map(jnp.zeros_like, x)
+                      for x in (Ks, As, sflag))
+        if has_select:
+            # the eig branch of every analytic shortcut that was taken: the
+            # forward value is the shortcut's, the derivative the eig
+            # branch's (evaluated here, at the same eigenpairs, only when a
+            # shortcut was taken; OR over a vmapped batch, exact for the
+            # other members -- their select takes the eig branch anyway)
+            use = _batch_any()(sflag > 0)
+
+            def at_eig(_):
+                _o, v = jax.vjp(lambda e, *c: conv(e, jnp.asarray(True), *c),
+                                eo, *consts)
+                return v(ct)
+            eb, *cb = jax.lax.cond(use, at_eig, lambda _: dvjp(ct), None)
+        else:
+            use = jnp.asarray(False)
+            eb, *cb = dvjp(ct)
 
         def plain(_):
             return evjp(eb)
 
         def lifted(_):
             def g(a, b):
-                return conv(eigs_of(eig_fn, a, b), *consts)
+                return conv(eigs_of(eig_fn, a, b), use, *consts)
             lifts = tuple(
                 _eig_cluster_lift(lam, V, G if K is None else K, gap_rel,
                                   split_rel, an)[0]
-                for (lam, V), G, K, an in zip(eo, Gs, Ks, anchors))
+                for (lam, V), G, K, an in zip(eo, Gs, Ks, As))
             acc = None
             for t, wt in _EIG_CLUSTER_STENCILS[_EIG_CLUSTER_ORDER]:
                 Lx = tuple(L + (t * dN if G is None else G @ (t * dN))
@@ -4912,7 +4949,7 @@ def _jax_eig_cluster_vjp():
             LGb = jax.lax.cond(_batch_any()(anyc), lifted, plain, None)
         else:
             LGb = lifted(None) if flag else plain(None)
-        return (*LGb, Kb, *cb)
+        return (*LGb, Kb, Ab, Sb, *cb)
 
     core.defvjp(core_fwd, core_bwd)
     _JAX_EIG_CLUSTER_VJP = core
@@ -4920,7 +4957,7 @@ def _jax_eig_cluster_vjp():
 
 
 def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
-                             split_rel=None, anchors=None):
+                             split_rel=None, anchors=None, select_flag=None):
     """``consumer(tuple(eig_fn(L, G) for (L, G) in problems))`` with a
     reverse-mode rule that is correct at degenerate eigenvalue CLUSTERS
     (block comment above).
@@ -4934,11 +4971,18 @@ def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
     ``consumer`` maps the tuple of eigenpairs to a pytree of arrays and may
     close over any traced value (it is closure-converted here, so the closed
     values receive their cotangents).  ``anchors`` (one tuple of concrete
-    numbers per problem, or ``None``) are the points where the consumer is
-    not smooth in that problem's eigenvalues -- the lift of a cluster near
+    numbers or one array per problem, or ``None``; traced values allowed) are
+    the points where the consumer is not smooth in that problem's
+    eigenvalues -- the lift of a cluster near
     one is shortened (:func:`_eig_cluster_lift`).  ``gap_rel <= 0`` switches the rule off
     (the plain composition, the gradient without the rule).  Forward values
-    are those of the plain composition, byte for byte."""
+    are those of the plain composition, byte for byte.
+
+    ``select_flag`` (a traced boolean, or ``None``) switches on the
+    analytic-shortcut form: ``consumer(eigs, grad_branch)`` then takes a
+    second argument, False for every value returned, and the reverse pass
+    differentiates ``consumer(eigs, True)`` wherever ``select_flag`` is
+    True (see :func:`_jax_uniform_select`)."""
     import jax
     import jax.numpy as jnp
     gap = _EIG_CLUSTER_GAP_REL if gap_rel is None else float(gap_rel)
@@ -4955,7 +4999,9 @@ def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
     if (not problems or gap <= 0.0 or not jax_cluster_rule_enabled()
             or not any(isinstance(x, jax.core.Tracer)
                        for x in jax.tree_util.tree_leaves(problems))):
-        return consumer(tuple(eig_fn(p[0], p[1]) for p in problems))
+        eigs = tuple(eig_fn(p[0], p[1]) for p in problems)
+        return (consumer(eigs) if select_flag is None
+                else consumer(eigs, False))
     Ls = tuple(p[0] for p in problems)
     Gs = tuple(p[1] for p in problems)
     Ks = tuple(p[2] if len(p) > 2 else None for p in problems)
@@ -4966,12 +5012,21 @@ def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
     # ``closure_convert`` caches its result in a STRONG LRU keyed by the
     # (fresh, per-call) consumer: with leak checking on it takes its uncached
     # path, so an eager loop of gradients does not pin every call's arrays.
+    has_select = select_flag is not None
+    fn = consumer if has_select else (lambda e, _u: consumer(e))
     with jax.checking_leaks():
-        conv, consts = jax.closure_convert(consumer, example)
-    an = (tuple(() for _p in problems) if anchors is None else
-          tuple(tuple(complex(x) for x in a) for a in anchors))
-    return _jax_eig_cluster_vjp()(conv, eig_fn, gap, split, an, Ls, Gs, Ks,
-                                  *consts)
+        conv, consts = jax.closure_convert(fn, example, jnp.asarray(False))
+
+    def _anc(a):
+        if a is None or (not hasattr(a, "shape") and len(a) == 0):
+            return None
+        return jnp.asarray(a, jnp.complex128).reshape(-1)
+    an = (tuple(None for _p in problems) if anchors is None else
+          tuple(_anc(a) for a in anchors))
+    sflag = jnp.asarray(select_flag if has_select else False,
+                        jnp.float64)
+    return _jax_eig_cluster_vjp()(conv, eig_fn, gap, split, has_select, Ls,
+                                  Gs, Ks, an, sflag, *consts)
 
 
 # ---------------------------------------------------------------------------
@@ -5017,35 +5072,89 @@ def _jax_twin_eig_plain(L, G=None):
     return eig(jnp.linalg.solve(G, L))
 
 
-def _jax_twin_eig(L, G=None, K=None):
+def _jax_twin_eig(L, G=None, K=None, anchors=(0.0,)):
     """THE eig of every routed JAX twin: ``(lam, V)`` of ``G^-1 L``.  ``K``
-    (optional) is the lift's inner product for the cluster rule (see
-    :func:`_jax_eig_cluster_adjoint`); it does not change the value.  Inside
-    :func:`_jax_cluster_routed` the call is recorded (first pass) or replayed
-    (the rule's consumer); outside, it is the plain eig."""
+    (optional) is the lift's inner product for the cluster rule and
+    ``anchors`` the points of the eigenvalue plane where the CONSUMER of this
+    problem is not smooth (default 0, the branch point of a modal
+    ``sqrt(lam)``; a half-space geometric eig whose consumer is
+    ``sqrt(eps - mu)`` passes the half-spaces' eps -- a Rayleigh anomaly);
+    neither changes the value (see :func:`_jax_eig_cluster_adjoint`).
+    Inside :func:`_jax_cluster_routed` the call is recorded (first pass) or
+    replayed (the rule's consumer); outside, it is the plain eig."""
     route = _JAX_TWIN_EIG_ROUTE.get()
     if route is not None:
-        return route(L, G, K)
+        return route.eig(L, G, K, anchors)
     return _jax_twin_eig_plain(L, G)
 
 
-def _jax_cluster_routed(solve, *, anchor=0.0, gap_rel=None):
-    """``solve()`` with the reverse pass of the degenerate-cluster rule over
-    EVERY ``_jax_twin_eig`` it calls (block comment above).  ``anchor`` is
-    the branch point of the solve's modal square root in the eigenvalue
-    plane (``lam^2 = 0`` / ``q^2 = 0``: 0, the default)."""
-    import jax
-    problems = []
+def _jax_uniform_select(uniform):
+    """The boolean an ANALYTIC SHORTCUT select of a routed solve uses
+    (``where(uniform, analytic_modes, eig_modes)``, e.g. the uniform-layer
+    branch of :func:`_layer_eigenmodes`): ``uniform`` itself for every value
+    -- so the shortcut's forward value is kept byte for byte -- and, in the
+    reverse pass of :func:`_jax_cluster_routed`, ``False`` wherever a
+    shortcut was taken, so the derivative is the EIG branch's (through the
+    cluster rule, which is exact at the fully degenerate cluster a uniform
+    layer is).  ``where`` would otherwise send the eig branch a zero
+    cotangent and differentiate the shortcut, whose modes do not move with
+    a pattern (build record, section 11.2)."""
+    route = _JAX_TWIN_EIG_ROUTE.get()
+    if route is not None:
+        return route.select(uniform)
+    return uniform
 
-    def record(L, G, K):
-        problems.append((L, G, K))
+
+class _RouteRecord:
+    """First / re-record pass of :func:`_jax_cluster_routed`."""
+
+    def __init__(self):
+        self.problems, self.anchors, self.flags = [], [], []
+
+    def eig(self, L, G, K, anchors):
+        self.problems.append((L, G, K))
+        self.anchors.append(anchors)
         return _jax_twin_eig_plain(L, G)
 
-    token = _JAX_TWIN_EIG_ROUTE.set(record)
+    def select(self, uniform):
+        self.flags.append(uniform)
+        return uniform
+
+
+class _RouteReplay:
+    """The consumer pass of :func:`_jax_cluster_routed`."""
+
+    def __init__(self, eigs, grad_branch):
+        self.eigs, self.used, self.grad_branch = eigs, 0, grad_branch
+
+    def eig(self, L, G, K, anchors):
+        if self.used >= len(self.eigs):
+            raise RuntimeError(
+                f"_jax_cluster_routed: the solve took more than "
+                f"{len(self.eigs)} eigs on replay but {len(self.eigs)} when "
+                f"recorded -- its control flow depends on a traced value")
+        self.used += 1
+        return self.eigs[self.used - 1]
+
+    def select(self, uniform):
+        import jax.numpy as jnp
+        return jnp.logical_and(uniform, jnp.logical_not(self.grad_branch))
+
+
+def _jax_cluster_routed(solve, *, gap_rel=None):
+    """``solve()`` with the reverse pass of the degenerate-cluster rule over
+    EVERY ``_jax_twin_eig`` it calls (block comment above), each problem
+    with its own anchors, and the eig-branch derivative of every
+    :func:`_jax_uniform_select` shortcut the solve takes."""
+    import jax
+    import jax.numpy as jnp
+    rec0 = _RouteRecord()
+    token = _JAX_TWIN_EIG_ROUTE.set(rec0)
     try:
         out = solve()
     finally:
         _JAX_TWIN_EIG_ROUTE.reset(token)
+    problems = rec0.problems
     gap = _EIG_CLUSTER_GAP_REL if gap_rel is None else float(gap_rel)
     from ...backend import jax_cluster_rule_enabled
     if (not problems or gap <= 0.0 or not jax_cluster_rule_enabled()
@@ -5064,46 +5173,42 @@ def _jax_cluster_routed(solve, *, anchor=0.0, gap_rel=None):
     # end of the recorded list).  Under ``jax.jit`` both regimes are traced
     # and the two recordings are the same operations.
     def rerecord():
-        recs = []
-
-        def rec(L, G, K):
-            recs.append((L, G, K))
-            return _jax_twin_eig_plain(L, G)
-
+        rec = _RouteRecord()
         tok = _JAX_TWIN_EIG_ROUTE.set(rec)
         try:
             solve()
         finally:
             _JAX_TWIN_EIG_ROUTE.reset(tok)
-        return recs
+        anchors = [jnp.asarray(a, jnp.complex128).reshape(-1)
+                   for a in rec.anchors]
+        flag = (jnp.any(jnp.stack([jnp.asarray(f) for f in rec.flags]))
+                if rec.flags else jnp.asarray(False))
+        return rec.problems, anchors, flag
 
     with jax.checking_leaks():
         conv_r, consts_r = jax.closure_convert(rerecord)
-    problems = conv_r(*consts_r)
+    problems, anchors, flag = conv_r(*consts_r)
+    has_select = bool(rec0.flags)
 
-    def consumer(eigs):
-        it = iter(eigs)
-        used = [0]
-
-        def replay(L, G, K):
-            used[0] += 1
-            return next(it)
-
-        tok = _JAX_TWIN_EIG_ROUTE.set(replay)
+    def consumer(eigs, grad_branch=False):
+        rep_ = _RouteReplay(eigs, grad_branch)
+        tok = _JAX_TWIN_EIG_ROUTE.set(rep_)
         try:
             res = solve()
         finally:
             _JAX_TWIN_EIG_ROUTE.reset(tok)
-        if used[0] != len(eigs):
+        if rep_.used != len(eigs):
             raise RuntimeError(
-                f"_jax_cluster_routed: the solve took {used[0]} eigs on "
+                f"_jax_cluster_routed: the solve took {rep_.used} eigs on "
                 f"replay but {len(eigs)} when recorded -- its control flow "
                 f"depends on a traced value")
         return res
 
     return _jax_eig_cluster_adjoint(
-        _jax_twin_eig_plain, problems, consumer, gap_rel=gap_rel,
-        anchors=((anchor,),) * len(problems))
+        _jax_twin_eig_plain, problems,
+        consumer if has_select else (lambda e: consumer(e)),
+        gap_rel=gap_rel, anchors=anchors,
+        select_flag=flag if has_select else None)
 
 
 
@@ -5289,6 +5394,7 @@ __all__ = [
     "_jax_eig_cluster_adjoint",
     "_jax_cluster_routed",
     "_jax_twin_eig",
+    "_jax_uniform_select",
     "_HOMOG_CACHE",
     "_HOMOG_LOCK",
     "_clear_rcwa_caches",
