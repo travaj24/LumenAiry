@@ -1099,8 +1099,24 @@ def _build_jax_prescription(prescription, wavelength,
                                  asph_pairs, aux)
     if hit is not None:
         return hit
-    jp = _build_jax_leaves(jnp, radii_py, conics_py, thicks_py,
-                           asph_pairs, aux)
+    # Build the leaves CONCRETELY even when this runs inside a jit / grad
+    # trace.  On jax >= 0.11 ``jnp.asarray`` of Python floats under a trace
+    # yields a TRACER (constants are tracked as intermediates), and a tracer
+    # stored in this process-wide cache poisons every later call: the next
+    # eager ``trace_jax`` on the same prescription raises
+    # ``UnexpectedTracerError`` (measured 2026-10-04 on jax 0.11.0 / 0.11.2:
+    # a jit-first call on a fresh prescription, then an eager call -- CI run
+    # 37199167691 shard 1, where pytest-split's reordering ran the jitted
+    # test before the eager ones; in file order the eager call always came
+    # first and the cache held concrete leaves).  ``ensure_compile_time_eval``
+    # evaluates the conversions at trace time as constants; the concreteness
+    # check below is the second line of defence -- a tracer is never cached.
+    import jax
+    with jax.ensure_compile_time_eval():
+        jp = _build_jax_leaves(jnp, radii_py, conics_py, thicks_py,
+                               asph_pairs, aux)
+    if not _leaves_are_concrete(jp):
+        return jp
     with _JAX_PRESCRIPTION_CACHE_LOCK:
         _JAX_PRESCRIPTION_CACHE[aux] = jp
         while len(_JAX_PRESCRIPTION_CACHE) > _JAX_PRESCRIPTION_CACHE_MAXSIZE:

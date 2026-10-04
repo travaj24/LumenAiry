@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/jax_trace.py
-ast_sha256: 28147c2954849ca39828847f34cef62559b9d18394c2196358f686de5343dd78
-token_sha256: 18469a977cae843b311705ffbd58ae439965fe6b1da8e4490b6dc61c4b9f241d
+ast_sha256: dbf04a8ebe5b1ba78f3eb8fb61a72d2381317938ff2e51e3bdf472e5ee648755
+token_sha256: 810f09d15f42d2e44e8eb6e73c8c6a5ab074bc5579308aa3e49120369fc465e7
 pre_relocation_lines: 1821
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B9 item 4: _build_jax_prescription memoises its built JaxPrescription on the aux content signature (LRU 32, lock-guarded, registered with the central cache registry); leaf construction split into _build_jax_leaves
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-10-04 -- 5.50.0: _build_jax_prescription builds its JAX leaves under jax.ensure_compile_time_eval and never caches a tracer -- a jit-first trace_jax on a fresh prescription cached tracer leaves on jax >= 0.11 and the next eager call raised UnexpectedTracerError (CI run 37199167691 shard 1; reproduced locally on jax 0.11.0)
 -->
 
 

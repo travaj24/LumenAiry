@@ -2478,3 +2478,46 @@ class TestAuditFixesV4_13_2_agent_a_StrehlPolyDxDy:
             "polychromatic_psf(dy=None) != polychromatic_psf(dy=dx); "
             "back-compat broken."
         )
+
+
+@_requires_jax
+class TestPrescriptionCacheJitFirst:
+    """5.50.0: a jit-FIRST ``trace_jax`` on a fresh prescription must not
+    poison the prescription cache for the eager calls that follow.
+
+    MEASURED 2026-10-04 (jax 0.11.0 locally, 0.11.2 on CI run 37199167691
+    shard 1): ``_build_jax_prescription`` built its leaves with
+    ``jnp.asarray`` INSIDE the caller's jit / grad trace, which on jax >= 0.11
+    yields tracers, and cached them; the next eager ``trace_jax`` raised
+    ``UnexpectedTracerError`` from the cache hit.  Every test in this module
+    that calls ``trace_jax`` eagerly first was blind to it; pytest-split's
+    duration ordering ran the jitted test first and seven tests failed.
+    The build now evaluates the leaves at compile time
+    (``jax.ensure_compile_time_eval``) and never caches a tracer.  Two-sided:
+    the eager call succeeds AND the cache holds concrete leaves only."""
+
+    def test_jit_first_then_eager_does_not_leak_a_tracer(self):
+        from jax.core import Tracer
+
+        from lumenairy.raytrace import jax_trace as JT
+        JT.clear_jax_prescription_cache()
+        JT.clear_trace_jax_cache()
+        presc = lm.make_singlet(R1=21e-3, R2=float('inf'), d=2e-3,
+                                glass='N-BK7', aperture=4e-3)
+        state = _make_state()
+
+        @jax.jit
+        def jitted(x_in):
+            local = state._replace(x=x_in)
+            return jnp.sum(trace_jax(local, presc, 633e-9).x)
+
+        g = jax.grad(jitted)(state.x)
+        assert bool(jnp.all(jnp.isfinite(g)))
+        # the eager call that followed used to raise UnexpectedTracerError
+        out = trace_jax(state, presc, 633e-9)
+        out.x.block_until_ready()
+        leaves = [l for jp in JT._JAX_PRESCRIPTION_CACHE.values()
+                  for l in jax.tree_util.tree_leaves(jp)]
+        assert leaves, 'the eager call must populate the prescription cache'
+        assert not any(isinstance(l, Tracer) for l in leaves), (
+            'a tracer is cached in _JAX_PRESCRIPTION_CACHE')
