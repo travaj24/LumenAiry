@@ -1520,7 +1520,21 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             whole solves.
         blas_per_worker : int, optional
             BLAS threads each layer worker may use (default 1).  Read only
-            when ``max_workers`` is not ``None``."""
+            when ``max_workers`` is not ``None``.
+
+        JAX gradients at a SYMMETRIC configuration (exactly degenerate modes --
+        a four-fold cell, a mirror-symmetric grating at exactly normal
+        incidence, an isotropic layer -- differentiated in a symmetry-breaking
+        direction) are exact: the eigen-solves and everything downstream of
+        them are differentiated by the degenerate-cluster rule
+        (``rcwa._core._jax_eig_cluster_adjoint``). It costs nothing in the
+        forward pass; a gradient through a cluster takes 4 - 13x longer, and a
+        jitted gradient compiles 2.5 - 5x longer.
+        :func:`lumenairy.backend.set_jax_cluster_rule` (or the
+        :class:`~lumenairy.backend.jax_cluster_rule` context manager) switches
+        it off library-wide -- which makes such a gradient WRONG; use it only
+        away from any symmetry.
+        """
         # Invalidate retained internals BEFORE any dispatch/early return
         # (audit P1-04): every solve() supersedes the retained state, so
         # internal_field/layer_absorption can only serve the LAST solve --

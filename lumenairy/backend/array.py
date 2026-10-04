@@ -246,9 +246,81 @@ def to_backend(x: Any, xp: Any) -> Any:
         f"numpy, cupy, or jax.numpy.")
 
 
+# ============================================================================
+# The degenerate-cluster rule of the JAX twins (ONE library-wide switch)
+# ============================================================================
+#
+# Every differentiable (JAX) solver that eigen-decomposes a modal operator
+# routes the eig AND everything downstream of it through
+# ``lumenairy.elements.rcwa._core._jax_eig_cluster_adjoint``, whose reverse
+# pass is correct at a DEGENERATE eigenvalue cluster (a symmetric structure
+# differentiated in a symmetry-breaking direction -- without it such a
+# gradient is wrong by percent to hundreds of percent, by an amount that
+# differs between BLAS builds).  The rule costs nothing in the forward pass;
+# a gradient THROUGH a cluster is evaluated at four lifted points, and a
+# jitted gradient compiles both branches.  A caller who knows every point it
+# differentiates is far from any symmetry can switch the rule off with this
+# setting.  OFF AT A SYMMETRIC POINT THE GRADIENT IS WRONG.
+#
+# The setting is read when a solve is TRACED: it applies to every call made
+# while it is set, and a ``jax.jit``-compiled function keeps the setting it
+# was compiled with (re-create the jitted function after changing it).
+# Default ON; the environment variable ``LUMENAIRY_JAX_CLUSTER_RULE=0`` sets
+# the process default OFF.
+
+_JAX_CLUSTER_RULE = (_os.environ.get('LUMENAIRY_JAX_CLUSTER_RULE', '1')
+                     .strip().lower() not in ('0', 'off', 'false', 'no'))
+
+
+def jax_cluster_rule_enabled() -> bool:
+    """True if the JAX twins differentiate through degenerate eigenvalue
+    clusters with the cluster rule (the default); see
+    :func:`set_jax_cluster_rule`."""
+    return _JAX_CLUSTER_RULE
+
+
+def set_jax_cluster_rule(enabled: bool) -> bool:
+    """Switch the degenerate-cluster rule of every JAX twin ON (default) or
+    OFF, for every solve traced from now on; returns the previous setting.
+
+    OFF makes a gradient through a degenerate eigenvalue cluster WRONG (a
+    symmetric structure -- a four-fold pixel cell, a mirror-symmetric
+    grating at exactly normal incidence, an isotropic layer -- differentiated
+    in a direction that breaks the symmetry), and leaves every other
+    gradient unchanged.  Its only use is to drop the rule's cost where no
+    cluster can occur.  A ``jax.jit``-compiled function keeps the setting it
+    was traced with.  Use :class:`jax_cluster_rule` to scope it to a
+    block."""
+    global _JAX_CLUSTER_RULE
+    previous = _JAX_CLUSTER_RULE
+    _JAX_CLUSTER_RULE = bool(enabled)
+    return previous
+
+
+class jax_cluster_rule:
+    """Context manager: ``with jax_cluster_rule(False): ...`` traces the
+    solves inside the block with the degenerate-cluster rule set as given
+    and restores the previous setting on exit (see
+    :func:`set_jax_cluster_rule` for what OFF means)."""
+
+    def __init__(self, enabled: bool) -> None:
+        self.enabled = bool(enabled)
+        self._previous: Optional[bool] = None
+
+    def __enter__(self) -> "jax_cluster_rule":
+        self._previous = set_jax_cluster_rule(self.enabled)
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        set_jax_cluster_rule(bool(self._previous))
+
+
 __all__ = [
     'CUPY_AVAILABLE',
     'JAX_AVAILABLE',
+    'jax_cluster_rule',
+    'jax_cluster_rule_enabled',
+    'set_jax_cluster_rule',
     'is_numpy_array',
     'is_cupy_array',
     'is_jax_array',

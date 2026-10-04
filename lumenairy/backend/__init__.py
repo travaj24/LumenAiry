@@ -7,7 +7,9 @@ operations:
 
 * :mod:`lumenairy.backend.array` -- ``array_namespace``,
   ``is_numpy_array`` / ``is_cupy_array`` / ``is_jax_array``,
-  ``to_numpy`` / ``to_backend``.
+  ``to_numpy`` / ``to_backend``; and the ONE switch of the JAX twins'
+  degenerate-cluster gradient rule, ``set_jax_cluster_rule`` /
+  ``jax_cluster_rule`` (context manager) / ``jax_cluster_rule_enabled``.
 * :mod:`lumenairy.backend.fft` -- ``fft2`` / ``ifft2`` / 1-D FFT /
   ``fftshift`` / ``fftfreq`` -- preserves the
   pyFFTW > scipy.fft > numpy.fft priority chain plus CuPy and JAX
@@ -39,6 +41,9 @@ from .array import (
     is_cupy_array,
     is_jax_array,
     is_numpy_array,
+    jax_cluster_rule,
+    jax_cluster_rule_enabled,
+    set_jax_cluster_rule,
     to_backend,
     to_numpy,
 )
@@ -97,6 +102,9 @@ __all__ = [
     'to_backend',
     'CUPY_AVAILABLE',
     'JAX_AVAILABLE',
+    'jax_cluster_rule',
+    'jax_cluster_rule_enabled',
+    'set_jax_cluster_rule',
     'fft2', 'ifft2', 'fft', 'ifft',
     'fftshift', 'ifftshift', 'fftfreq',
     'fft_backend_for',

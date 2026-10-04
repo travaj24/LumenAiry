@@ -858,6 +858,19 @@ def berreman_jones_1d(
     :func:`~lumenairy.elements.coatings.coating_reflectance` TMM instead carries
     a COMPLEX Snell invariant, so the two agree only for a lossless incidence
     medium (verified: 1.9e-15 across 48 lossless-superstrate configs).
+
+    JAX gradients at a SYMMETRIC configuration (exactly degenerate modes -- a
+    four-fold cell, a mirror-symmetric grating at exactly normal incidence, an
+    isotropic layer -- differentiated in a symmetry-breaking direction) are
+    exact: the eigen-solves and everything downstream of them are
+    differentiated by the degenerate-cluster rule
+    (``rcwa._core._jax_eig_cluster_adjoint``). It costs nothing in the forward
+    pass; a gradient through a cluster takes 4 - 13x longer, and a jitted
+    gradient compiles 2.5 - 5x longer.
+    :func:`lumenairy.backend.set_jax_cluster_rule` (or the
+    :class:`~lumenairy.backend.jax_cluster_rule` context manager) switches it
+    off library-wide -- which makes such a gradient WRONG; use it only away
+    from any symmetry.
     """
     # Differentiable (JAX) dispatch: any traced input routes to the jnp twin.
     from ..backend import is_jax_array

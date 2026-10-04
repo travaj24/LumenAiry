@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 8d711be52b2b11b235608870b89c36fda8bb3ab38d9c4c0be29347c4f7cdb4d7
-token_sha256: da9e678b4bd03d2798478718ef8baaac426553a9f496bc95dbeb2afbb08a66dc
+ast_sha256: 5d7508cf5d3f39f761be80c132cb83242f1c8981863c2c4a2206814b544d89c1
+token_sha256: 2d9bc29fcb96726f94a9e89ec4b6dc0caadacc4ab3385543bd39a58acd3cd610
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-10-04 -- RCWAStack JAX cascade routed through _jax_cluster_routed; half-space mode cache skipped inside a jax trace (leaked tracers); symmetric-point docstring note
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`
@@ -191,3 +192,14 @@ below as *Left in the source*.
         ``_li_convolutions_2d_tensor`` body is now ``_li_tensor_l2l1``,
         unchanged)."""
 ```
+
+### `RCWAStack._solve_once`, the half-space mode cache under a JAX trace (2026-10-04)
+
+*Why the cache is skipped inside a trace:* measured 2026-10-04 by the
+symmetric-point gradient campaign's probe `g1`
+(`validation/probe_jax_symgrad/g1_rcwa_others.py`): with a concrete source,
+`jax.jit(f)` stored the half-space modes it built from TRACED `Kx` / `Ky` in
+the module-level cache, and the next `jax.jit(jax.jacrev(f))` or eager `f`
+raised `UnexpectedTracerError` (a leaked complex128[98, 98] from
+`_homogeneous_eigenmodes`), on the 5.49 tree as well.  Build record:
+`docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md`, section 10.5.

@@ -415,34 +415,48 @@ def _offplane_solve_jax(eps_layers, thicks, eps_sup, eps_sub, wl, kx0, ky0, jnp)
     """Differentiable generalized S-matrix solve for a stack containing an
     out-of-plane tensor layer (any incidence).  Returns ``(R, T, Jr, Jt)`` in the
     PUBLIC convention.  Mirrors ``berreman._offplane_oblique_solve``."""
-    from .rcwa import _jax_eig_stable
     from .rcwa._core import (
         _forward_flux_kz,
         _homogeneous_eigenmodes,
         _interface_smatrix_general,
+        _jax_cluster_routed,
+        _jax_twin_eig,
         _modes_to_M,
         _propagation_star_general,
         _redheffer_star,
         _sqrt_forward,
     )
     cj = jnp.complex128
-    eig = _jax_eig_stable()
+    eig = _jax_twin_eig
     k0 = 2.0 * jnp.pi / wl
     Kx1 = jnp.reshape(jnp.asarray(kx0, cj), (1, 1))
     Ky1 = jnp.reshape(jnp.asarray(ky0, cj), (1, 1))
     Wr, Vr, _kzr = _homogeneous_eigenmodes(Kx1, Ky1, jnp.conj(eps_sup))
     Wt, Vt, _kzt = _homogeneous_eigenmodes(Kx1, Ky1, jnp.conj(eps_sub))
-    M_prev = _modes_to_M(Wr, Vr, Wr, -Vr)
-    S = None
-    for e, thk in zip(eps_layers, thicks):
-        Ml, lf, lb = _layer_M_gen_jax(jnp.conj(e), kx0, ky0, jnp, eig)
-        Si = _interface_smatrix_general(M_prev, Ml)
-        S = Si if S is None else _redheffer_star(S, Si)
-        S = _propagation_star_general(S, lf, lb, k0 * thk)
-        M_prev = Ml
-    S = _redheffer_star(
-        S, _interface_smatrix_general(M_prev, _modes_to_M(Wt, Vt, Wt, -Vt)))
-    S11, _S12, S21, _S22 = S
+
+    # Every layer's Delta eig and the cascade downstream of it go through the
+    # degenerate-cluster rule (rcwa._core._jax_cluster_routed): an isotropic
+    # (or uniaxial-about-z) layer at normal incidence has two exactly
+    # degenerate pairs, and an in-plane anisotropy (d / d eps_xy) splits them.
+    # The rule's lift moves a cluster along the REAL axis of ``gam``; a
+    # propagating (flux-carrying) mode is classified by its Poynting flux, not
+    # by Re(gam), so the lifted points keep the same forward / backward split.
+    def _cascade():
+        M_prev = _modes_to_M(Wr, Vr, Wr, -Vr)
+        S = None
+        for e, thk in zip(eps_layers, thicks):
+            Ml, lf, lb = _layer_M_gen_jax(jnp.conj(e), kx0, ky0, jnp, eig)
+            Si = _interface_smatrix_general(M_prev, Ml)
+            S = Si if S is None else _redheffer_star(S, Si)
+            S = _propagation_star_general(S, lf, lb, k0 * thk)
+            M_prev = Ml
+        S = _redheffer_star(
+            S, _interface_smatrix_general(M_prev,
+                                          _modes_to_M(Wt, Vt, Wt, -Vt)))
+        S11, _S12, S21, _S22 = S
+        return S11, S21
+
+    S11, S21 = _jax_cluster_routed(_cascade)
     kz_inc = jnp.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2))
     # W6 F-1 (2026-07-26): mirror the NumPy fix -- ``_forward_flux_kz`` expects the
     # INTERNAL-gauge eps and un-conjugates it itself, so the PUBLIC eps held here
