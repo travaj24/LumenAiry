@@ -1,0 +1,47 @@
+{
+ "build": "wsl",
+ "eff1d": [
+  {
+   "delta": 0.001,
+   "pol": "te",
+   "err": 2.3024422503875694e-08,
+   "mirror": 5.393516214971753e-08,
+   "premise": true
+  },
+  {
+   "delta": 0.001,
+   "pol": "tm",
+   "err": 1.0085068124075008e-08,
+   "mirror": 1.3144527649775148e-08,
+   "premise": true
+  },
+  {
+   "delta": 0.0001,
+   "pol": "te",
+   "err": 3.260214619314006e-06,
+   "mirror": 7.228393854388532e-06,
+   "premise": false
+  },
+  {
+   "delta": 0.0001,
+   "pol": "tm",
+   "err": 3.884996368626881e-07,
+   "mirror": 5.104403804636201e-07,
+   "premise": true
+  }
+ ],
+ "jones_patched": [
+  {
+   "delta": 0.001,
+   "err_as_shipped": 1.816407658656747e-05,
+   "err_anchor_patched": 3.956608062076624e-08,
+   "premise": true
+  },
+  {
+   "delta": 0.0001,
+   "err_as_shipped": 19.33668644988706,
+   "err_anchor_patched": 1.1788840343432493e-06,
+   "premise": true
+  }
+ ]
+}

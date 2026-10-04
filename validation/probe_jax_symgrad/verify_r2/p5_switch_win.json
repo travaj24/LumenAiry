@@ -1,0 +1,49 @@
+{
+ "build": "win",
+ "root": "C:\\tmp\\lum_symgrad_verify2",
+ "cache_leak": {
+  "jit": 0.060936976757475336,
+  "jit_grad": 0.0035400524508484056,
+  "eager": 0.06093697675747528,
+  "eager_minus_jit": 5.551115123125783e-17,
+  "cache_len": 2,
+  "cache_has_tracer": false
+ },
+ "env": {
+  "env_before_import": "False",
+  "env_after_import": "True",
+  "env_OFF_word": "False",
+  "env_typo_disable": "True"
+ },
+ "jit_keeps": {
+  "on": 9.374901906707778e-09,
+  "compiled_on_called_off": 9.374901906707778e-09,
+  "same_fn_retraced_new_dtype_under_off": 1.5958912183041836,
+  "eager_off": 1.5958912081430612,
+  "premise": true
+ },
+ "vmap_mixed": {
+  "True": {
+   "vmap_vs_pointwise": 5.308005146531514e-10,
+   "vmap_vs_fd": [
+    1.8987116233549592e-11,
+    4.707306777724591e-11,
+    8.779452093889394e-11
+   ]
+  },
+  "False": {
+   "vmap_vs_pointwise": 7.175535610137729e-09,
+   "vmap_vs_fd": [
+    1.6474321206441682,
+    4.707306777724591e-11,
+    8.779452093889394e-11
+   ]
+  }
+ },
+ "eig_count_two_layers": {
+  "True": 14,
+  "True_fwd_plain": 6,
+  "False": 2,
+  "False_fwd_plain": 6
+ }
+}

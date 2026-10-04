@@ -1,0 +1,103 @@
+{
+ "build": "win",
+ "a_toy": {
+  "g_true": -50.25962211384182,
+  "on": -50.25962207842048,
+  "off": 15.559429071780272,
+  "on_eager": -50.259622078420435,
+  "err_on": 7.047674174677574e-10,
+  "err_off": 1.309581099446729
+ },
+ "b_nested": {
+  "g_true": -102.00256603231612,
+  "jit": -102.00256610628733,
+  "eager": -102.00256610628728,
+  "err_jit": 7.251896761329689e-10,
+  "err_eager": 7.251891188585681e-10,
+  "route_after": "None"
+ },
+ "c_exceptions": [
+  {
+   "raise_at_pass": 1,
+   "err": "ValueError: boom at pass 1",
+   "route_after": "None",
+   "next_grad_err": 7.047674174677574e-10
+  },
+  {
+   "raise_at_pass": 2,
+   "err": "ValueError: boom at pass 2",
+   "route_after": "None",
+   "next_grad_err": 7.047674174677574e-10
+  },
+  {
+   "raise_at_pass": 3,
+   "err": "ValueError: boom at pass 3",
+   "route_after": "None",
+   "next_grad_err": 7.047674174677574e-10
+  }
+ ],
+ "d_count_mismatch": [
+  {
+   "delta": -1,
+   "err": "RuntimeError: _jax_cluster_routed: the solve took 1 eigs on replay but 2 when recorded -- its control flow depends on a traced value",
+   "value": null,
+   "route_after": "None"
+  },
+  {
+   "delta": 1,
+   "err": "StopIteration: ",
+   "value": null,
+   "route_after": "None"
+  }
+ ],
+ "e_reorder": {
+  "v_true": 79.26708094566729,
+  "v_jit": 65.25108427621576,
+  "rel": 0.1768198917159398
+ },
+ "f_threads": {
+  "1": 7.047674174677574e-10,
+  "0": 7.047674174677574e-10,
+  "3": 7.047674174677574e-10,
+  "2": 7.047674174677574e-10
+ },
+ "g_interleaved_ctx_final_state": false,
+ "g_ctx_restores_on_exception": true,
+ "h_inner_transform": {
+  "vmap": {
+   "exc": "Exception: Leaked trace BatchTrace. Leaked tracer(s):\n\nVmapTracer(aval=complex128[5,5], batched=complex128[2,5,",
+   "route_after": "None"
+  },
+  "scan": {
+   "exc": "Exception: Leaked trace DynamicJaxprTrace. Leaked tracer(s):\n\nJitTracer(complex128[5,5])\nThe error occurred whi",
+   "route_after": "None"
+  }
+ },
+ "i_static_shapes": {
+  "5": [
+   7.047674174677574e-10,
+   7.047674174677574e-10
+  ],
+  "2": [
+   1.2683146355743495e-12
+  ]
+ },
+ "j_forward_mode": {
+  "jvp": {
+   "ok": false,
+   "exc": "TypeError: can't apply forward-mode autodiff (jvp) to a custom_vjp function."
+  },
+  "jacfwd": {
+   "ok": false,
+   "exc": "TypeError: can't apply forward-mode autodiff (jvp) to a custom_vjp function."
+  },
+  "hessian": {
+   "ok": false,
+   "exc": "NotImplementedError: Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs "
+  },
+  "grad_of_grad": {
+   "ok": false,
+   "exc": "NotImplementedError: Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs "
+  }
+ }
+}

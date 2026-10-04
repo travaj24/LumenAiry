@@ -1,0 +1,31 @@
+{
+ "build": "win",
+ "rows": [
+  {
+   "on": "OFF",
+   "mode": "grad",
+   "err": "te-packages\\jax\\_src\\numpy\\ufuncs.py\", line 1281, in multiply\n    return lax.mul(x, y) if x.dtype != bool else lax.bitwise_and(x, y)\n           ~~~~~~~^^^^^^\nTypeError: mul got incompatible shapes for broadcasting: (242,), (50,).\n--------------------\nFor simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.\n"
+  },
+  {
+   "on": "ON",
+   "mode": "grad",
+   "err": "te-packages\\jax\\_src\\numpy\\ufuncs.py\", line 1281, in multiply\n    return lax.mul(x, y) if x.dtype != bool else lax.bitwise_and(x, y)\n           ~~~~~~~^^^^^^\nTypeError: mul got incompatible shapes for broadcasting: (242,), (50,).\n--------------------\nFor simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.\n"
+  },
+  {
+   "on": "OFF",
+   "mode": "jacrev",
+   "first_s": 11.881828500001575,
+   "run_s": 8.504670599999372,
+   "peak_rss_gb": 4.123078656,
+   "rss_before_gb": 0.136384512
+  },
+  {
+   "on": "ON",
+   "mode": "jacrev",
+   "first_s": 42.66994619999605,
+   "run_s": 34.39795589999994,
+   "peak_rss_gb": 12.75465728,
+   "rss_before_gb": 0.137097216
+  }
+ ]
+}
