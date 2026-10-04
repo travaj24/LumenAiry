@@ -4,6 +4,23 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.50.0] — 2026-10-04
+
+Curved in-plane geometry for the pure (no-floor) staggered 2-D polynomial modal
+method: circles, ellipses, filleted rectangles and sinusoidal walls are now exact
+shapes, not staircases of rectangles.  A smooth periodic coordinate map bends the
+solver's rectangular grid so that every material boundary is a grid line, and the
+material becomes a smoothly varying effective tensor assembled by quadrature; the
+unknown count, the eigenproblem and the cascade are unchanged, and every call that
+passes no shape and no map is byte-identical to 5.49.0.  Built in five phases, each
+with its own independent verification (`docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`
+and the `BUILD_PMM2D_CURVED_*` / `VERIFY_PMM2D_CURVED_*` documents): the mapped
+assembly (A), transfinite maps with a corner quadrature at the map's singular
+vertices (B), the shape primitives and the public API (C), anisotropic and magnetic
+materials inside curved cells (D), and out-of-plane tensors and slanted walls under
+a map, a different map in every layer joined by a curved mortar, and a JAX twin
+differentiable in shape parameters (E1-E3).  A circular pillar lands on an
+independent 3-D finite-element oracle inside that oracle's own mesh spread.
 ### Removed -- the 5.46 deprecations: three GBD no-op converters and the `CarrierField` assignment warning
 
 Both items were deprecated in 5.46.0, scheduled for removal in 5.48, and
@@ -216,6 +233,244 @@ Build record: `docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md`
 `tests/unit/test_verify_jax_symmetric_point_gradients.py`,
 `tests/unit/test_verify_jax_symmetric_point_gradients_r2.py` and the two
 formerly strict-xfail gates of `tests/unit/test_pmm2d_staggered_curved_e3.py`.
+
+### Added -- pure 2-D PMM (curved cells, Phase A): the coordinate-map machinery, gated on a separable stretch
+
+The pure (no-floor) staggered 2-D PMM can now solve a cell under a COORDINATE
+MAP `(x, y) = Phi(u, v)`: the solver keeps its straight `(u, v)` wall grid and
+the map bends (in this phase: stretches) it in the physical plane.  This is
+Phase A of `docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`; the curved
+shape maps (circles, fillets, sinusoidal walls) come in later phases.  Build
+doc and every number: `docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md`.
+
+* NO SHIPPED ANSWER MOVES.  `cmap=None` (the default everywhere) is a dispatch
+  to the shipped Kronecker assembly; 109 of 109 SHA-256 hashes of operators,
+  modes, R / T / Jones and absorption over every dispatch branch of the family
+  are byte-identical to the parent commit (gate A1).
+* The map is reachable only through `pmm_jones_2d_staggered(..., cmap=)` and
+  `PMM2DStackPure(..., cmap=)` (one map owned by the stack, shared by every
+  layer and both half-spaces).  `pmm_efficiency_2d_staggered(..., cmap=)`
+  raises and points at the Jones entry.  Maps live in
+  `lumenairy.elements.pmm._curvemap`: the protocol (`CellMap`: `geom`,
+  `fingerprint`, `validate`), `IdentityMap`, `SineStretch` and
+  `SeparableStretch` (with `from_physical_walls`).
+* Under a map the solver works on the covariant field components with the
+  effective tensors `eps' = sqrt(g) g^-1 eps`, `mu' = sqrt(g) g^-1`; every
+  mapped region is a tensor + magnetic region, all 18 weighted blocks are
+  assembled by 2-D Gauss quadrature in one function
+  (`_stag_quad_weighted`), the H partner and the absorption flux use the
+  PLAIN block Gram, and the far field uses the cofactor `det J J^-T`.
+  Measured: the identity map reproduces the shipped operators to 5.5e-14; a
+  uniform film under a 33:1 stretch matches the Airy slab to 1.3e-12 at
+  `M = 6`; a stripe under the stretch converges to the exact 1-D oracle
+  (9.7e-07 at `M = 10`); the three traps of the plan each fail loudly when
+  re-introduced (0.22 without the cofactor, 0.16 closure with mixed H
+  partners, 0.070 absorption defect with `-R` as the flux form).
+* Found in the build and fixed: the planning probe's fixed quadrature
+  (`2 M + 8` nodes) leaves R / T up to 5.2e-04 wrong under a strong stretch;
+  the node count is now chosen from the map (Legendre-moment convergence of
+  the geometric weights), and the identity map keeps `2 M + 8`.
+* In this phase a map takes scalar permittivity on the shared grid only:
+  tensor or magnetic layers, `slant`, `layer_grids='per-layer'` and the two
+  viewers raise under a map, naming the phase that adds them.
+
+### Added -- pure 2-D PMM (curved cells, Phase B): transfinite maps -- circles, ellipses, fillets and sinusoidal walls as exact grid lines
+
+The pure (no-floor) staggered 2-D PMM can now solve cells whose material
+boundaries are CURVED: a `TransfiniteMap` bends chosen edges of the solver's
+`(u, v)` wall grid into given curves (`Line`, `Arc`, `EllipseArc`,
+`Sinusoid`) and fills every cell by blending its four edge curves (the
+Gordon-Hall construction).  This is Phase B of
+`docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`; build doc and every
+number: `docs/audits/BUILD_PMM2D_CURVED_B_2026_10_02.md`.
+
+* NO SHIPPED ANSWER MOVES.  Without a map the solver runs the shipped code:
+  109 of 109 SHA-256 hashes of operators, modes, R / T / Jones and absorption
+  over every dispatch branch are byte-identical to the Phase-A commit
+  `539ce4a3`.
+* The map is still an EXPERT-LEVEL object: you lay out the wall grid and the
+  edge curves yourself (`lumenairy.elements.pmm._curvemap`, passed as
+  `cmap=` to `PMM2DStackPure` / `pmm_jones_2d_staggered`).  Shape primitives
+  that build the maps for you (`circle`, `ellipse`, `fillet_rect`,
+  `sinusoidal_wall`) are Phase C.
+* A circular dielectric pillar on a 3 x 3 grid lands on an independent 3-D
+  finite-element oracle to 7.8e-06 per diffraction order at `M = 11`, inside
+  that oracle's own 8.3e-06 mesh spread; the shipped staircases of the same
+  circle are 7.1e-02 (4 steps) to 5.7e-03 (16 steps) away and converge toward
+  the curved answer.  A uniform film under the circle map matches the Airy
+  slab to 5.4e-14 (`M = 8`), at oblique and conical incidence spectrally too.
+* The four points where a closed smooth curve meets the tensor grid at a
+  right angle in `(u, v)` (`det J = 0`, e.g. the circle's 45-degree points)
+  are integrated by a Duffy-collapsed rule: the planning rule there
+  converged only like `n^-2` (operators 6 % wrong at the default node count,
+  R / T 3e-07), the corner rule reaches round-off at 16 nodes per direction.
+* Found in the build: the map validation required the whole Jacobian to be
+  periodic across the cell boundary -- only the derivative ALONG each side
+  must be (every curved map violated the stronger form); a map with a tiny
+  shear was held to round-off by the node-count criterion; the curved
+  solve's R / T depend on the far-field window (`n_orders`) at ~1e-7 at
+  `M = 6` (falling with `M`) and carry a geometry-dependent round-off floor
+  of 1e-9 .. 1e-8, both from the windowed least-squares incident projection
+  inherited from Phase A (its verifier's F-V2); measured, not changed in
+  this phase -- Phase C's unique L2 modal projection (window-free) of the incident wave
+  removes both (window dependence down to 9.4e-16).
+* Found by the Phase B verifier and fixed in Phase D: a `TransfiniteMap`
+  edge curve whose analytic derivative disagreed with its value was accepted
+  silently (a 10 % derivative bug moved R / T by 3.2e-2 at `M = 5`); the
+  constructor now checks each curve's derivative against a central
+  difference of its value and refuses a mismatch.
+
+### Added -- pure 2-D PMM (curved cells, Phase C): the shape primitives and the public API
+
+You can now describe a layer of the pure (no-floor) staggered 2-D PMM by the
+PHYSICAL outlines of its features -- a circle, an ellipse, a rectangle with
+rounded corners, a sinusoidal wall -- and the solver models those outlines
+EXACTLY instead of as a staircase of rectangles:
+
+```python
+from lumenairy.elements.pmm import Circle, FilletRect, PMM2DStackPure
+
+st = PMM2DStackPure(1.2e-6, n_substrate=1.45, n_modes=4)
+st.add_layer(0.5e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.3e-6, eps=4.0)],
+             background_eps=1.0)
+st.add_layer(0.2e-6, shapes=[FilletRect(0.6e-6, 0.6e-6, 0.9e-6, 0.9e-6,
+                                        0.09e-6, eps=2.25)],
+             background_eps=1.0)
+st.set_source(1.0e-6)
+orders, R, T, jones = st.solve()
+```
+
+The primitives (`Rect`, `FilletRect`, `Circle`, `Ellipse`, `SinusoidalWall`,
+in `lumenairy.elements.pmm`) lay out the solver's wall grid and coordinate
+map themselves: every corner, 45-degree point and fillet tangency point
+becomes a grid vertex at its own physical position, and every arc an exact
+grid edge, so the walls always sit where the physical boundaries are -- the
+trap of handing a map the wrong walls (a different device, or a much slower
+convergence) cannot be reached through them.  Within one layer the shapes are
+painted in order onto `background_eps` (a circular hole in a slab is
+`[Rect(..., eps=12.1), Circle(..., eps=1.0)]`).  The STACK merges the shapes
+of all its layers into ONE wall grid and ONE map, shared by every layer and
+both half-spaces; two layers may share a curve, and the merge refuses -- at
+the `add_layer` that causes it, naming both shapes and their layers --
+outlines that cross in plan view, two different curves on one cell edge, a
+map that folds between two outlines that come too close, and segments below
+the solver's sliver contract (a fillet radius below 1.414e-3 of the period is
+refused with the advice to use a sharp corner).
+`pmm_jones_2d_staggered(..., eps_cell=None, shapes=[...],
+background_eps=...)` is the single-layer convenience (byte-identical to the
+one-layer stack); `compile_shapes(...)` returns the `eps_cell`, walls and map
+for the explicit `cmap=` route; the stack viewers now draw curved cells as
+curves.  This is Phase C of `docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`;
+build doc and every number: `docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md`.
+
+A rounded corner is GEOMETRY FIDELITY, not a convergence accelerator: a fillet
+of 0.2 of the side moves the zeroth-order transmission of a pillar by 7.4e-3
+(about 700 times the convergence level, and a same-area square is no
+substitute), but the efficiencies stay capped near 1e-5 per refinement step
+by the pillar's top and bottom rim, exactly as for a sharp pillar.  Use a
+fillet because the fabricated device has one.
+
+* NO SHIPPED ANSWER MOVES.  Without `shapes=` / `cmap=` the solver runs the
+  shipped code: 109 / 109 SHA-256 hashes on Phase B's fixture set and
+  181 / 181 on the Phase A verifier's (operators, modes, far projectors,
+  R / T / Jones, absorption, over every dispatch branch) are byte-identical
+  to the Phase-B commit `91d00288`.  No `Migration-Guide.md` entry is needed.
+* The primitives build EXACTLY the maps the Phase B gates were measured on
+  (same fingerprint), and the shapes route reproduces the explicit-map solve
+  to the bit: the circle lands on the independent 3-D finite-element oracle
+  as before: 7.8e-6 per diffraction order at `M = 11`,
+  inside the oracle's own 8.3e-6 mesh spread.
+* Under a curved map the incident plane wave now enters through its unique
+  L2 modal projection (window-free; an L2 projection, renormalised on the specular
+  order) instead of an under-determined least-squares fit: the round-off
+  floor of the curved solve drops from 6.8e-10 to 8.0e-15 at `M = 6`, and
+  `R` / `T` no longer depend on `n_orders` (2.9e-7 before, below 1e-15
+  after).  A vacuum spacer on top of a curved stack still moves `R` / `T` at
+  the discretisation level (2.0e-6 at `M = 6`, falling with `M`): the
+  half-space modes under a curved map are not plane waves.  Unmapped solves
+  keep the shipped least-squares overlap bit for bit.
+* Known limits: a TENSOR (or magnetic) material under a curved map raises
+  (Phase D -- rectangles-only layers, which need no map, accept tensors);
+  out-of-plane tensors, `slant=`, per-layer grids and the JAX twin under a map
+  are Phase E; `pmm_efficiency_2d_staggered` takes no shapes (it raises and
+  points at the Jones entry); shapes must lie inside the unit cell.
+
+### Added -- pure 2-D PMM (curved cells, Phase D): anisotropic and magnetic materials inside curved cells
+
+Curved cells (circles, ellipses, rounded corners, sinusoidal walls) of the
+pure (no-floor) staggered 2-D PMM can now hold ANISOTROPIC and MAGNETIC
+materials.  Until now a liquid crystal or any other tensor
+permittivity on a circle raised `NotImplementedError`; now it is solved, and
+so is a relative permeability:
+
+```python
+import numpy as np
+from lumenairy.elements.pmm import Circle, Rect, pmm_jones_2d_staggered
+from lumenairy.elements.rcwa._core import uniaxial_tensor
+
+lc = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=np.pi / 6)   # director in the plane, 30 deg
+orders, R, T, J = pmm_jones_2d_staggered(
+    1.2e-6, 1.2e-6, None, 1.45, 1.0, 0.5e-6, 1.0e-6, n_modes=8,
+    shapes=[Rect(0.6e-6, 0.6e-6, 1.2e-6, 1.2e-6, eps=4.0),     # a slab ...
+            Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=lc)],          # ... with an LC-filled hole
+    background_eps=1.0)
+```
+
+What it means physically.  The solver bends its grid so a circle is an exact
+grid line; inside the bent grid a material looks different -- it is
+squeezed and sheared along with the grid.  For an ordinary (isotropic)
+material only the grid's stretching enters; for an anisotropic one (a
+liquid-crystal director, a magneto-optic, gyrotropic medium) the direction
+of the material axes matters too, so the solver now carries the full
+Jacobian of the bending through the material at every integration point.
+A permeability rides along the same way.  A shape takes `mu=` next to its
+`eps` (`Circle(..., eps=..., mu=np.diag([2, 2, 1]))`), a shape layer takes
+`background_mu=`, and a uniform layer `add_layer(t, eps=..., mu=...)` -- all
+under the stack's curved map.
+
+* NO SHIPPED ANSWER MOVES.  Without a map: 122 of 122 SHA-256 hashes over
+  every dispatch branch (tensor, magnetic, out-of-plane, slant, the mortar,
+  absorption) and 181 of 181 on the Phase A verifier's set are
+  byte-identical to the Phase C commit -- and that set includes 13 MAPPED
+  SCALAR solves, so no circle, fillet or stretch answer of Phases A-C moved
+  either.
+* Gates (`docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md`): a uniform
+  liquid-crystal film and a gyrotropic film under a stretch, a sheared map
+  and the circle map match the exact Berreman 4x4 answer -- reflection,
+  transmission AND the complex Jones matrix -- to ~1e-13 by `M = 8` at
+  normal incidence (~1e-10 at conical incidence under the circle map); the
+  liquid-crystal circular pillar's two independent grid layouts agree to
+  ~4e-6 (the finer layout still moves 3e-6 per rung at `M = 11 / 12`) and the shipped 2-D tensor RCWA with the exact disk form factor
+  approaches that answer like 1/N (a 1e-4-class corroboration: its
+  Richardson pairs wander 5e-5 .. 3e-4); Li's published
+  gyrotropic crossed grating (J. Opt. A 5:345 (2003)) is reproduced to the
+  shipped 8.74e-5 under an identity map and converges under a stretch; a
+  magnetic film matches the exact (eps, mu) slab to 5.5e-14; a magnetic
+  pillar is the electromagnetic dual of its dielectric twin; reciprocity
+  holds spectrally at oblique and conical incidence.
+* Every engineered defect of the transformation -- the tensor transposed,
+  the two Jacobian sides swapped, `sqrt(g)` dropped from `eps_zz`, the
+  mixed components' sign flipped, the permeability inverted after the
+  integration instead of before, the H recovery through the wrong Gram --
+  is caught by two decades or more.  Three of them are invisible to the
+  efficiencies of a uniform film (at normal incidence a transposed
+  gyrotropic tensor and a mirrored director change only the Jones matrix; `eps_zz` does not enter at
+  normal incidence), which is why the gates read the Jones matrix and run
+  at oblique incidence.
+* Cost: a tensor or magnetic cell costs what a scalar curved cell costs
+  (same pencil, assembly within the load noise).
+* Limits: an OUT-OF-PLANE tensor (a tilted director, `eps_xz != 0`) or
+  `slant=` under a curved map still raises (Phase E of the curved-cell plan;
+  lifted by Phase E1, above);
+  `compile_shapes` returns the permeability grid only with `with_mu=True`
+  and refuses the four-output form for a magnetic layer rather than drop
+  `mu` silently.
+* Folded in from the Phase B verifier: a user `EdgeCurve` whose analytic
+  derivative disagrees with its value is now refused (it moved R / T by
+  3.2e-2 silently); the mapped stack's missing `n_orders` cap is documented
+  as deliberate (measured window-free above it to 9.3e-16); the
+  `material_key` export of the stack viewers is registered with the
+  `__all__` walker.
 
 ### Added -- pure 2-D PMM (curved cells, Phase E1): out-of-plane tensors and slanted walls inside curved cells
 
@@ -483,244 +738,6 @@ Known limits:
 
 Build record: `docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md`; tests:
 `tests/unit/test_pmm2d_staggered_curved_e3.py`.
-
-### Added -- pure 2-D PMM (curved cells, Phase D): anisotropic and magnetic materials inside curved cells
-
-Curved cells (circles, ellipses, rounded corners, sinusoidal walls) of the
-pure (no-floor) staggered 2-D PMM can now hold ANISOTROPIC and MAGNETIC
-materials.  Until now a liquid crystal or any other tensor
-permittivity on a circle raised `NotImplementedError`; now it is solved, and
-so is a relative permeability:
-
-```python
-import numpy as np
-from lumenairy.elements.pmm import Circle, Rect, pmm_jones_2d_staggered
-from lumenairy.elements.rcwa._core import uniaxial_tensor
-
-lc = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=np.pi / 6)   # director in the plane, 30 deg
-orders, R, T, J = pmm_jones_2d_staggered(
-    1.2e-6, 1.2e-6, None, 1.45, 1.0, 0.5e-6, 1.0e-6, n_modes=8,
-    shapes=[Rect(0.6e-6, 0.6e-6, 1.2e-6, 1.2e-6, eps=4.0),     # a slab ...
-            Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=lc)],          # ... with an LC-filled hole
-    background_eps=1.0)
-```
-
-What it means physically.  The solver bends its grid so a circle is an exact
-grid line; inside the bent grid a material looks different -- it is
-squeezed and sheared along with the grid.  For an ordinary (isotropic)
-material only the grid's stretching enters; for an anisotropic one (a
-liquid-crystal director, a magneto-optic, gyrotropic medium) the direction
-of the material axes matters too, so the solver now carries the full
-Jacobian of the bending through the material at every integration point.
-A permeability rides along the same way.  A shape takes `mu=` next to its
-`eps` (`Circle(..., eps=..., mu=np.diag([2, 2, 1]))`), a shape layer takes
-`background_mu=`, and a uniform layer `add_layer(t, eps=..., mu=...)` -- all
-under the stack's curved map.
-
-* NO SHIPPED ANSWER MOVES.  Without a map: 122 of 122 SHA-256 hashes over
-  every dispatch branch (tensor, magnetic, out-of-plane, slant, the mortar,
-  absorption) and 181 of 181 on the Phase A verifier's set are
-  byte-identical to the Phase C commit -- and that set includes 13 MAPPED
-  SCALAR solves, so no circle, fillet or stretch answer of Phases A-C moved
-  either.
-* Gates (`docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md`): a uniform
-  liquid-crystal film and a gyrotropic film under a stretch, a sheared map
-  and the circle map match the exact Berreman 4x4 answer -- reflection,
-  transmission AND the complex Jones matrix -- to ~1e-13 by `M = 8` at
-  normal incidence (~1e-10 at conical incidence under the circle map); the
-  liquid-crystal circular pillar's two independent grid layouts agree to
-  ~4e-6 (the finer layout still moves 3e-6 per rung at `M = 11 / 12`) and the shipped 2-D tensor RCWA with the exact disk form factor
-  approaches that answer like 1/N (a 1e-4-class corroboration: its
-  Richardson pairs wander 5e-5 .. 3e-4); Li's published
-  gyrotropic crossed grating (J. Opt. A 5:345 (2003)) is reproduced to the
-  shipped 8.74e-5 under an identity map and converges under a stretch; a
-  magnetic film matches the exact (eps, mu) slab to 5.5e-14; a magnetic
-  pillar is the electromagnetic dual of its dielectric twin; reciprocity
-  holds spectrally at oblique and conical incidence.
-* Every engineered defect of the transformation -- the tensor transposed,
-  the two Jacobian sides swapped, `sqrt(g)` dropped from `eps_zz`, the
-  mixed components' sign flipped, the permeability inverted after the
-  integration instead of before, the H recovery through the wrong Gram --
-  is caught by two decades or more.  Three of them are invisible to the
-  efficiencies of a uniform film (at normal incidence a transposed
-  gyrotropic tensor and a mirrored director change only the Jones matrix; `eps_zz` does not enter at
-  normal incidence), which is why the gates read the Jones matrix and run
-  at oblique incidence.
-* Cost: a tensor or magnetic cell costs what a scalar curved cell costs
-  (same pencil, assembly within the load noise).
-* Limits: an OUT-OF-PLANE tensor (a tilted director, `eps_xz != 0`) or
-  `slant=` under a curved map still raises (Phase E of the curved-cell plan;
-  lifted by Phase E1, above);
-  `compile_shapes` returns the permeability grid only with `with_mu=True`
-  and refuses the four-output form for a magnetic layer rather than drop
-  `mu` silently.
-* Folded in from the Phase B verifier: a user `EdgeCurve` whose analytic
-  derivative disagrees with its value is now refused (it moved R / T by
-  3.2e-2 silently); the mapped stack's missing `n_orders` cap is documented
-  as deliberate (measured window-free above it to 9.3e-16); the
-  `material_key` export of the stack viewers is registered with the
-  `__all__` walker.
-
-### Added -- pure 2-D PMM (curved cells, Phase C): the shape primitives and the public API
-
-You can now describe a layer of the pure (no-floor) staggered 2-D PMM by the
-PHYSICAL outlines of its features -- a circle, an ellipse, a rectangle with
-rounded corners, a sinusoidal wall -- and the solver models those outlines
-EXACTLY instead of as a staircase of rectangles:
-
-```python
-from lumenairy.elements.pmm import Circle, FilletRect, PMM2DStackPure
-
-st = PMM2DStackPure(1.2e-6, n_substrate=1.45, n_modes=4)
-st.add_layer(0.5e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.3e-6, eps=4.0)],
-             background_eps=1.0)
-st.add_layer(0.2e-6, shapes=[FilletRect(0.6e-6, 0.6e-6, 0.9e-6, 0.9e-6,
-                                        0.09e-6, eps=2.25)],
-             background_eps=1.0)
-st.set_source(1.0e-6)
-orders, R, T, jones = st.solve()
-```
-
-The primitives (`Rect`, `FilletRect`, `Circle`, `Ellipse`, `SinusoidalWall`,
-in `lumenairy.elements.pmm`) lay out the solver's wall grid and coordinate
-map themselves: every corner, 45-degree point and fillet tangency point
-becomes a grid vertex at its own physical position, and every arc an exact
-grid edge, so the walls always sit where the physical boundaries are -- the
-trap of handing a map the wrong walls (a different device, or a much slower
-convergence) cannot be reached through them.  Within one layer the shapes are
-painted in order onto `background_eps` (a circular hole in a slab is
-`[Rect(..., eps=12.1), Circle(..., eps=1.0)]`).  The STACK merges the shapes
-of all its layers into ONE wall grid and ONE map, shared by every layer and
-both half-spaces; two layers may share a curve, and the merge refuses -- at
-the `add_layer` that causes it, naming both shapes and their layers --
-outlines that cross in plan view, two different curves on one cell edge, a
-map that folds between two outlines that come too close, and segments below
-the solver's sliver contract (a fillet radius below 1.414e-3 of the period is
-refused with the advice to use a sharp corner).
-`pmm_jones_2d_staggered(..., eps_cell=None, shapes=[...],
-background_eps=...)` is the single-layer convenience (byte-identical to the
-one-layer stack); `compile_shapes(...)` returns the `eps_cell`, walls and map
-for the explicit `cmap=` route; the stack viewers now draw curved cells as
-curves.  This is Phase C of `docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`;
-build doc and every number: `docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md`.
-
-A rounded corner is GEOMETRY FIDELITY, not a convergence accelerator: a fillet
-of 0.2 of the side moves the zeroth-order transmission of a pillar by 7.4e-3
-(about 700 times the convergence level, and a same-area square is no
-substitute), but the efficiencies stay capped near 1e-5 per refinement step
-by the pillar's top and bottom rim, exactly as for a sharp pillar.  Use a
-fillet because the fabricated device has one.
-
-* NO SHIPPED ANSWER MOVES.  Without `shapes=` / `cmap=` the solver runs the
-  shipped code: 109 / 109 SHA-256 hashes on Phase B's fixture set and
-  181 / 181 on the Phase A verifier's (operators, modes, far projectors,
-  R / T / Jones, absorption, over every dispatch branch) are byte-identical
-  to the Phase-B commit `91d00288`.  No `Migration-Guide.md` entry is needed.
-* The primitives build EXACTLY the maps the Phase B gates were measured on
-  (same fingerprint), and the shapes route reproduces the explicit-map solve
-  to the bit: the circle lands on the independent 3-D finite-element oracle
-  as before: 7.8e-6 per diffraction order at `M = 11`,
-  inside the oracle's own 8.3e-6 mesh spread.
-* Under a curved map the incident plane wave now enters through its unique
-  L2 modal projection (window-free; an L2 projection, renormalised on the specular
-  order) instead of an under-determined least-squares fit: the round-off
-  floor of the curved solve drops from 6.8e-10 to 8.0e-15 at `M = 6`, and
-  `R` / `T` no longer depend on `n_orders` (2.9e-7 before, below 1e-15
-  after).  A vacuum spacer on top of a curved stack still moves `R` / `T` at
-  the discretisation level (2.0e-6 at `M = 6`, falling with `M`): the
-  half-space modes under a curved map are not plane waves.  Unmapped solves
-  keep the shipped least-squares overlap bit for bit.
-* Known limits: a TENSOR (or magnetic) material under a curved map raises
-  (Phase D -- rectangles-only layers, which need no map, accept tensors);
-  out-of-plane tensors, `slant=`, per-layer grids and the JAX twin under a map
-  are Phase E; `pmm_efficiency_2d_staggered` takes no shapes (it raises and
-  points at the Jones entry); shapes must lie inside the unit cell.
-
-### Added -- pure 2-D PMM (curved cells, Phase B): transfinite maps -- circles, ellipses, fillets and sinusoidal walls as exact grid lines
-
-The pure (no-floor) staggered 2-D PMM can now solve cells whose material
-boundaries are CURVED: a `TransfiniteMap` bends chosen edges of the solver's
-`(u, v)` wall grid into given curves (`Line`, `Arc`, `EllipseArc`,
-`Sinusoid`) and fills every cell by blending its four edge curves (the
-Gordon-Hall construction).  This is Phase B of
-`docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`; build doc and every
-number: `docs/audits/BUILD_PMM2D_CURVED_B_2026_10_02.md`.
-
-* NO SHIPPED ANSWER MOVES.  Without a map the solver runs the shipped code:
-  109 of 109 SHA-256 hashes of operators, modes, R / T / Jones and absorption
-  over every dispatch branch are byte-identical to the Phase-A commit
-  `539ce4a3`.
-* The map is still an EXPERT-LEVEL object: you lay out the wall grid and the
-  edge curves yourself (`lumenairy.elements.pmm._curvemap`, passed as
-  `cmap=` to `PMM2DStackPure` / `pmm_jones_2d_staggered`).  Shape primitives
-  that build the maps for you (`circle`, `ellipse`, `fillet_rect`,
-  `sinusoidal_wall`) are Phase C.
-* A circular dielectric pillar on a 3 x 3 grid lands on an independent 3-D
-  finite-element oracle to 7.8e-06 per diffraction order at `M = 11`, inside
-  that oracle's own 8.3e-06 mesh spread; the shipped staircases of the same
-  circle are 7.1e-02 (4 steps) to 5.7e-03 (16 steps) away and converge toward
-  the curved answer.  A uniform film under the circle map matches the Airy
-  slab to 5.4e-14 (`M = 8`), at oblique and conical incidence spectrally too.
-* The four points where a closed smooth curve meets the tensor grid at a
-  right angle in `(u, v)` (`det J = 0`, e.g. the circle's 45-degree points)
-  are integrated by a Duffy-collapsed rule: the planning rule there
-  converged only like `n^-2` (operators 6 % wrong at the default node count,
-  R / T 3e-07), the corner rule reaches round-off at 16 nodes per direction.
-* Found in the build: the map validation required the whole Jacobian to be
-  periodic across the cell boundary -- only the derivative ALONG each side
-  must be (every curved map violated the stronger form); a map with a tiny
-  shear was held to round-off by the node-count criterion; the curved
-  solve's R / T depend on the far-field window (`n_orders`) at ~1e-7 at
-  `M = 6` (falling with `M`) and carry a geometry-dependent round-off floor
-  of 1e-9 .. 1e-8, both from the windowed least-squares incident projection
-  inherited from Phase A (its verifier's F-V2); measured, not changed in
-  this phase -- Phase C's unique L2 modal projection (window-free) of the incident wave
-  removes both (window dependence down to 9.4e-16).
-* Found by the Phase B verifier and fixed in Phase D: a `TransfiniteMap`
-  edge curve whose analytic derivative disagreed with its value was accepted
-  silently (a 10 % derivative bug moved R / T by 3.2e-2 at `M = 5`); the
-  constructor now checks each curve's derivative against a central
-  difference of its value and refuses a mismatch.
-
-### Added -- pure 2-D PMM (curved cells, Phase A): the coordinate-map machinery, gated on a separable stretch
-
-The pure (no-floor) staggered 2-D PMM can now solve a cell under a COORDINATE
-MAP `(x, y) = Phi(u, v)`: the solver keeps its straight `(u, v)` wall grid and
-the map bends (in this phase: stretches) it in the physical plane.  This is
-Phase A of `docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`; the curved
-shape maps (circles, fillets, sinusoidal walls) come in later phases.  Build
-doc and every number: `docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md`.
-
-* NO SHIPPED ANSWER MOVES.  `cmap=None` (the default everywhere) is a dispatch
-  to the shipped Kronecker assembly; 109 of 109 SHA-256 hashes of operators,
-  modes, R / T / Jones and absorption over every dispatch branch of the family
-  are byte-identical to the parent commit (gate A1).
-* The map is reachable only through `pmm_jones_2d_staggered(..., cmap=)` and
-  `PMM2DStackPure(..., cmap=)` (one map owned by the stack, shared by every
-  layer and both half-spaces).  `pmm_efficiency_2d_staggered(..., cmap=)`
-  raises and points at the Jones entry.  Maps live in
-  `lumenairy.elements.pmm._curvemap`: the protocol (`CellMap`: `geom`,
-  `fingerprint`, `validate`), `IdentityMap`, `SineStretch` and
-  `SeparableStretch` (with `from_physical_walls`).
-* Under a map the solver works on the covariant field components with the
-  effective tensors `eps' = sqrt(g) g^-1 eps`, `mu' = sqrt(g) g^-1`; every
-  mapped region is a tensor + magnetic region, all 18 weighted blocks are
-  assembled by 2-D Gauss quadrature in one function
-  (`_stag_quad_weighted`), the H partner and the absorption flux use the
-  PLAIN block Gram, and the far field uses the cofactor `det J J^-T`.
-  Measured: the identity map reproduces the shipped operators to 5.5e-14; a
-  uniform film under a 33:1 stretch matches the Airy slab to 1.3e-12 at
-  `M = 6`; a stripe under the stretch converges to the exact 1-D oracle
-  (9.7e-07 at `M = 10`); the three traps of the plan each fail loudly when
-  re-introduced (0.22 without the cofactor, 0.16 closure with mixed H
-  partners, 0.070 absorption defect with `-R` as the flux form).
-* Found in the build and fixed: the planning probe's fixed quadrature
-  (`2 M + 8` nodes) leaves R / T up to 5.2e-04 wrong under a strong stretch;
-  the node count is now chosen from the map (Legendre-moment convergence of
-  the geometric weights), and the identity map keeps `2 M + 8`.
-* In this phase a map takes scalar permittivity on the shared grid only:
-  tensor or magnetic layers, `slant`, `layer_grids='per-layer'` and the two
-  viewers raise under a map, naming the phase that adds them.
 
 ### Added -- geometry viewers for the pure staggered 2-D stack
 
