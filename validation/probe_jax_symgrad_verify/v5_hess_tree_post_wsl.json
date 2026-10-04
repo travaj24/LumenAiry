@@ -1,0 +1,14 @@
+{
+ "rcwa_x_te_sym": "NotImplementedError: Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the e",
+ "rcwa_corner_te_conical": "NotImplementedError: Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the e",
+ "pmm1d_angle_te_0.1": "NotImplementedError: Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the e",
+ "pmm1d_index_te": "NotImplementedError: Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the e",
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_symgrad_verify/lumenairy/__init__.py",
+  "build": "wsl",
+  "tag": "post"
+ }
+}

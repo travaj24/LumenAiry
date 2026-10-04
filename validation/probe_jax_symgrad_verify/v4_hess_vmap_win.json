@@ -1,0 +1,139 @@
+{
+ "rcwa_x_te_hess_x0": {
+  "hessian_error": "NotImplementedError('Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=True to jax.lax.linalg.eig to opt in. See https://github.com/jax-ml/jax/issues/2",
+  "hessian": NaN,
+  "fd_of_ad_grad": 0.00022409315461060196,
+  "premise": [
+   3.9980846753018593,
+   3.9980846753018593,
+   3.9980846753018593,
+   6.470250304410117e-11
+  ],
+  "second_diff_numpy": 0.00022409340827422852,
+  "rel_vs_fd_of_grad": NaN,
+  "rel_vs_second_diff": NaN
+ },
+ "rcwa_x_te_hess_x0.05": {
+  "hessian_error": "NotImplementedError('Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=True to jax.lax.linalg.eig to opt in. See https://github.com/jax-ml/jax/issues/2",
+  "hessian": NaN,
+  "fd_of_ad_grad": 0.00022356130311637634,
+  "premise": [
+   3.9976341117374132,
+   3.9976341117374132,
+   3.9976341117374132,
+   7.97934636314228e-11
+  ],
+  "second_diff_numpy": 0.0002235612287885639,
+  "rel_vs_fd_of_grad": NaN,
+  "rel_vs_second_diff": NaN
+ },
+ "rcwa_x_te_vmap_grad": {
+  "vmapped": [
+   0.00680763023165841,
+   0.006807854317877879,
+   0.0068071820225295045,
+   0.006809870631678033
+  ],
+  "single": [
+   0.006807630231442862,
+   0.006807854317877876,
+   0.006807182022529546,
+   0.006809870631678029
+  ],
+  "rel": 3.165229960534282e-11
+ },
+ "pmm1d_angle_te_hess_x0": {
+  "hessian_error": "NotImplementedError('Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=True to jax.lax.linalg.eig to opt in. See https://github.com/jax-ml/jax/issues/2",
+  "hessian": NaN,
+  "fd_of_ad_grad": -1.5713860441841432,
+  "premise": [
+   4.002549009552754,
+   4.002549009552754,
+   4.002549009552754,
+   1.7589839692725603e-08
+  ],
+  "second_diff_numpy": -1.571386062120909,
+  "rel_vs_fd_of_grad": NaN,
+  "rel_vs_second_diff": NaN
+ },
+ "pmm1d_angle_te_hess_x0.1": {
+  "hessian_error": "NotImplementedError('Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=True to jax.lax.linalg.eig to opt in. See https://github.com/jax-ml/jax/issues/2",
+  "hessian": NaN,
+  "fd_of_ad_grad": -2.0385666315722033,
+  "premise": [
+   4.008097301697558,
+   4.008097301697558,
+   4.008097301697558,
+   5.657073256906078e-07
+  ],
+  "second_diff_numpy": -2.0385666690073596,
+  "rel_vs_fd_of_grad": NaN,
+  "rel_vs_second_diff": NaN
+ },
+ "pmm1d_angle_te_vmap_grad": {
+  "vmapped": [
+   -0.012175826903549146,
+   -0.013746396890993391,
+   -0.00902966037647822,
+   -0.027817807850219353
+  ],
+  "single": [
+   -0.012175826903549146,
+   -0.013746396890993391,
+   -0.00902966037647822,
+   -0.02781780785021936
+  ],
+  "rel": 2.4944071586332823e-16
+ },
+ "pmm1d_angle_tm_hess_x0": {
+  "hessian_error": "NotImplementedError('Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=True to jax.lax.linalg.eig to opt in. See https://github.com/jax-ml/jax/issues/2",
+  "hessian": NaN,
+  "fd_of_ad_grad": -0.28992987259368497,
+  "premise": [
+   4.001403265448235,
+   4.001403265448235,
+   4.001403265448235,
+   1.1837608764328055e-07
+  ],
+  "second_diff_numpy": -0.2899298637929852,
+  "rel_vs_fd_of_grad": NaN,
+  "rel_vs_second_diff": NaN
+ },
+ "pmm1d_angle_tm_hess_x0.1": {
+  "hessian_error": "NotImplementedError('Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=True to jax.lax.linalg.eig to opt in. See https://github.com/jax-ml/jax/issues/2",
+  "hessian": NaN,
+  "fd_of_ad_grad": 0.9708775189048913,
+  "premise": [
+   4.0077580145266465,
+   4.0077580145266465,
+   4.0077580145266465,
+   1.7097954105495643e-06
+  ],
+  "second_diff_numpy": 0.9708776069576134,
+  "rel_vs_fd_of_grad": NaN,
+  "rel_vs_second_diff": NaN
+ },
+ "pmm1d_angle_tm_vmap_grad": {
+  "vmapped": [
+   0.016719730264065785,
+   0.016430162486572787,
+   0.017300744905686546,
+   0.013878718298528084
+  ],
+  "single": [
+   0.016719730264065785,
+   0.016430162486572787,
+   0.01730074490568555,
+   0.013878718298517709
+  ],
+  "rel": 5.997071898567569e-13
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "c:\\tmp\\lum_symgrad_verify\\lumenairy\\__init__.py",
+  "build": "win",
+  "tag": ""
+ }
+}

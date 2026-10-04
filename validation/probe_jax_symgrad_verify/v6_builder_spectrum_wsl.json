@@ -1,0 +1,19 @@
+{
+ "jax_operator_size": 98,
+ "jax_exact_pair_members": 50,
+ "jax_cluster_sizes": [
+  2
+ ],
+ "numpy_symmetry_auto_size": 50,
+ "numpy_symmetry_auto_exact_pair_members": 50,
+ "numpy_symmetry_False_size": 98,
+ "numpy_symmetry_False_exact_pair_members": 50,
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_symgrad_verify/lumenairy/__init__.py",
+  "build": "wsl",
+  "tag": ""
+ }
+}

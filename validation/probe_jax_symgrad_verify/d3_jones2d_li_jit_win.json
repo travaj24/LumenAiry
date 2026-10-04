@@ -1,0 +1,22 @@
+{
+ "c4v_post": {
+  "eager_vs_numpy_li": 9.950833455996002e-15,
+  "jit_vs_numpy_li": 0.07553778946830646,
+  "jit_vs_numpy_laurent": 5.272122057100536e-15,
+  "li_vs_laurent_numpy": 0.08170998079505856
+ },
+ "c1_random": {
+  "eager_vs_numpy_li": 1.391739878285126e-15,
+  "jit_vs_numpy_li": 0.0003467147655132818,
+  "jit_vs_numpy_laurent": 1.5195268288428907e-14,
+  "li_vs_laurent_numpy": 0.00034676286989890706
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "c:\\tmp\\lum_symgrad_verify\\lumenairy\\__init__.py",
+  "build": "win",
+  "tag": ""
+ }
+}

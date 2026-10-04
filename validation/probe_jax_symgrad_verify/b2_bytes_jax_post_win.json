@@ -1,0 +1,30 @@
+{
+ "rcwa2d_eager_c4v_te": "6f10976d3999781ab57f4de7c46fa2ff3b588d4d6cf59006476375a86828eb9a",
+ "rcwa2d_jit_c4v_te": "97359b51cececce26d1fb0b353c73068e251cd7dc59c112cd14301444d438c4b",
+ "rcwa2d_eager_c4v_tm": "e26b7ef73a3ca225b97fc66e1a12d6e5f1d9998937e3796597fbea84a6f039db",
+ "rcwa2d_jit_c4v_tm": "4fc0b662cb402cf8ec295124ba0497fd88543590a66bc47ae7411b1e14124ebf",
+ "rcwa2d_eager_c4v_li_tm": "f0eff33a98f559ec5a6fd25a542b06103f8887c81c6cd1fb39b71fdad47d915b",
+ "rcwa2d_jit_c4v_li_tm": "5587b56965bcdab2865e7a2eb1ce1b2dc17e7a1022518c7b3ac1f16c994c7d95",
+ "rcwa2d_eager_lossy_te": "b8d770efdee7859ab3ab2f360e06c53cecfb6952232288e16e71d90b4a0d041d",
+ "rcwa2d_jit_lossy_te": "1f593e25b61ceefb85d67768481e130c9254c1ca1cf5104ef296b3bdd8c5f08c",
+ "rcwa2d_eager_c1_conical_tm": "e1a92ecad1a379999f196d14327702afcd5ecfed01a89e0cd1b12acd6ff1d13d",
+ "rcwa2d_jit_c1_conical_tm": "7fba44efe41a0a60a10056e794665a3755f5bc1c9e081155677975e4920dab00",
+ "rcwa2d_eager_c1weak_conical_te": "b2b2b599d7d294ec1348716f85d722a719cf6062e7f8872c2bf8eeed57145c25",
+ "rcwa2d_jit_c1weak_conical_te": "817a463bde59223071fd15a643963b09f5856b0d264eaa9bb02b65120bea7091",
+ "pmm1d_eager_te_0.0": "4a8adeb1a99c282aa66d4ac9bf54b359cb18dfad6a7f4ad68a5fba76ac416e2f",
+ "pmm1d_jit_te_0.0": "f5c1a87c60c7e124ae30041fb180d3a8bdda07d3ab36d3774dad708ab0a517a6",
+ "pmm1d_eager_te_0.2": "97fadcfbf571f9e88abf82e7fe5d3fa5aa3592624083cbf87c0dba087f3ec519",
+ "pmm1d_jit_te_0.2": "a589c1752ca8deab1213ed17fe1ab46d537b5775c132dd3165b2ebe1df0b8fe4",
+ "pmm1d_eager_tm_0.0": "639736d1149827d9512e96c6949a659d10e6d43a9b78af73a311518b1e3ce795",
+ "pmm1d_jit_tm_0.0": "4e4eaf58f6fd43a68a73999d2f187982a17fca676b5bb497fc1250a762ccedf4",
+ "pmm1d_eager_tm_0.2": "0942f15e0b3acdf8d5cd9002905410e8f80b3fec29bb83d27656792d42c38138",
+ "pmm1d_jit_tm_0.2": "609461dd3a1789125bffa5404d3dd77ce6ebdf196f0e5fd0dd7033e36a9c2744",
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "c:\\tmp\\lum_symgrad_verify\\lumenairy\\__init__.py",
+  "build": "win",
+  "tag": "post"
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "rcwa2d_eager_c4v_te": "b61a0627dc88d9b1a7c3da37673002ecad3c6845360fe9d8120793bc7a3bd501",
+ "rcwa2d_jit_c4v_te": "ed4fb46236e57a256d0162ddf4d8203f30d69d6455a14f25966505ffff639025",
+ "rcwa2d_eager_c4v_tm": "590061bb51cb2ac6b2f87d03f06c02c4ed56de9b9071586cb85de223275ba962",
+ "rcwa2d_jit_c4v_tm": "816c90ddbf630d5cb33fe9fcd308ce8b7345589df8c761174c81de791099acd1",
+ "rcwa2d_eager_c4v_li_tm": "cac589de0278481f6fb5aa0f949f4e8ccc611be455567e5af6f9381a8e3c0e43",
+ "rcwa2d_jit_c4v_li_tm": "cb525e80796db9e6484a2d0840af667e30272bb2d1dab17e5e64df8e96fecbc0",
+ "rcwa2d_eager_lossy_te": "8db41e81e38a5b049a4c374342f3899b89ce3810c0de4211b28caececdfa09d6",
+ "rcwa2d_jit_lossy_te": "6b13f26356b68cfd5775726ddb182ecb6acb684a973c95f73a0b237d5776a18f",
+ "rcwa2d_eager_c1_conical_tm": "a21f0373992c4e181a342f317d3e4771931d559190793ab9bb1d7362e7ec81d4",
+ "rcwa2d_jit_c1_conical_tm": "f724bc8603ef91aa0ef785360270bd9952c0d113f6dc83742418cca343bc873c",
+ "rcwa2d_eager_c1weak_conical_te": "fcbf1b270498c05e6adfcaf8acfdf28720c0077a3aebc20644b6393ddc59f1f0",
+ "rcwa2d_jit_c1weak_conical_te": "c16993fe17e371e3dc1bc8eb8e7bf5b1cb5214278dddf0069c3d886c568e42a6",
+ "pmm1d_eager_te_0.0": "4a8adeb1a99c282aa66d4ac9bf54b359cb18dfad6a7f4ad68a5fba76ac416e2f",
+ "pmm1d_jit_te_0.0": "6ee0b165db1afd0d2a6524bfe6421e020d55d19f54bb75faf6fc7900d867d5a6",
+ "pmm1d_eager_te_0.2": "adf809df96811ec440a3283b73b2b81fc81757f32d180c2d229aa6426a540dbe",
+ "pmm1d_jit_te_0.2": "1de198fce9fbbc546ef8ce13257513949fe48cec66ea3734b4db90530cf51184",
+ "pmm1d_eager_tm_0.0": "639736d1149827d9512e96c6949a659d10e6d43a9b78af73a311518b1e3ce795",
+ "pmm1d_jit_tm_0.0": "4e4eaf58f6fd43a68a73999d2f187982a17fca676b5bb497fc1250a762ccedf4",
+ "pmm1d_eager_tm_0.2": "5f87bf02274ab1898182539d38b31b21b0712bc22256b26b51d5cda8229d1b54",
+ "pmm1d_jit_tm_0.2": "e7e2b01897a5c76cc347b27b85a554e790ea35d75571295593f5bfcd0bfd9812",
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_symgrad_verify/lumenairy/__init__.py",
+  "build": "wsl",
+  "tag": "post"
+ }
+}
