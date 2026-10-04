@@ -7156,7 +7156,7 @@ outright and the star reduces to
 `rcwa/oned.py:721` (planar TE/TM fast path), `rcwa/oned.py:756` (the 2N path of `rcwa_efficiency_1d`),
 `rcwa/oned.py:1153` (`rcwa_jones_1d` / `rcwa_jones_1d_segments`, both polarizations in one
 block), `rcwa/twod.py:2485` (`rcwa_efficiency_2d`), `rcwa/twod.py:1399` (`PreparedRCWA2D.solve`),
-`rcwa/twod.py:2022` (`rcwa_jones_2d`, in-plane and full-3x3), `rcwa/twod.py:2485`
+`rcwa/twod.py:2099` (`rcwa_jones_2d`, in-plane and full-3x3), `rcwa/twod.py:2485`
 (`rcwa_efficiency_2d_shapes`) and `rcwa/_core.py:2559` (`_symmetric_solve_rt`, the single-layer
 even-parity fold).
 
@@ -7238,7 +7238,7 @@ in-plane argument with the component permutation `(x, y, z) -> (y, x, z)`: `exx<
 `exy<->eyx`, `exz<->eyz`, `ezx<->ezy`, `ezz` alone, the pixel grid transposed and the
 order-label columns swapped, so that `T P L2L1(eps) P T = L1L2(P eps^T P)` and the nine
 blocks come back in the same retained-order basis.  The mean is taken on the RAW `ehat`
-blocks, which puts the caller's `l3-` `E_z` fold after it (`rcwa/twod.py:2101`) -- the mean of
+blocks, which puts the caller's `l3-` `E_z` fold after it (`rcwa/twod.py:2021`) -- the mean of
 two Schur complements is not the Schur complement of the mean.
 
 Measured on a uniaxial pillar (`n_o = 2.0`, `n_e = 2.6`, director polar 40 deg) in air,

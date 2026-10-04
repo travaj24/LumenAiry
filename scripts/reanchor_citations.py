@@ -176,6 +176,24 @@ EDITED_IN_PLACE = {
         82, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'",
         'a967d130200770f69bf7bc26d427d33cfa4f89a1da6db5cd0f15b926072475fe',
         '5.49.0', 'def trace_world('),
+    # Symmetric-point gradient fix (5.50.0): ``rcwa_jones_2d``'s JAX branch was
+    # restructured so that every eigen-decomposition is recorded and replayed
+    # through the degenerate-cluster rule, and the traced Li route was built.
+    # Two cited lines MOVED and were RE-INDENTED into the new blocks, their
+    # text unchanged; exact-text anchoring cannot follow a re-indent, so the
+    # human's answer is recorded here (content digest is whitespace-stripped).
+    #   expected: '# on the two sources rather than assembled (_redheffer_star_rt).'  inside "def rcwa_jones_2d("
+    ('lumenairy/elements/rcwa/twod.py', 2035): (
+        2099, 'symmetric-point gradients 5.50.0: the closed-star comment moved '
+        'into the routed solve of rcwa_jones_2d (re-indented, text unchanged)',
+        '1c79cd4d1049c92103efc6b46bb5e2ac124e18d14c131b7dc180feee67a86fed',
+        '5.50.0', 'def rcwa_jones_2d('),
+    #   expected: '# no scope signal at all.'  inside "def rcwa_jones_2d("
+    ('lumenairy/elements/rcwa/twod.py', 1977): (
+        2021, 'symmetric-point gradients 5.50.0: the Li scope-notice comment moved '
+        'into the traced-li block of rcwa_jones_2d (re-indented, text unchanged)',
+        '9911028483b8dcec900878551f949f4baf0937992c2cf68aaee148d1c52125e0',
+        '5.50.0', 'def rcwa_jones_2d('),
 }
 
 #: Every override this run REFUSED, as dicts carrying both lines.  The CLI
