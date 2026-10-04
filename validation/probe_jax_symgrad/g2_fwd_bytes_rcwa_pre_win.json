@@ -1,0 +1,58 @@
+{
+ "jones_a": {
+  "numpy": "ba8abbd72cf05189f65161bb9154c2f9336ec84aa8c4804f59c5e3beb8e49b1f",
+  "jax_eager": "d83e736a1d9394276140e6bf7676301e4bbfc3e5d26554abb2199a5380b4a55c",
+  "jax_jit": "8977098092344d8358e3a3fd1d39a686de4d2874ecc085820fa5d0b2a88c8d54",
+  "R0": 0.0
+ },
+ "jones_c": {
+  "numpy": "2c7b021d87e720324ef62af9f44aa687d0a0e399906a1e828abd42b8b92e3695",
+  "jax_eager": "25f8f35796f542e53716c89403976b28a22401d0a9b76a0425c36e16d522d6b6",
+  "jax_jit": "1042a1880009dfce9232eb98e998873fe39a4386178cf9fedbe9232503cb42d7",
+  "R0": 0.0
+ },
+ "jones_oop": {
+  "numpy": "ed66a3d76f917ee84f1b1c3d8a933bbcc7c5235a3b06d74f4c05d6e1ba7ed816",
+  "jax_eager": "922ff201055e7df28152eaa9eb43ff16062d8ab4213f45aac62006f4d2131c29",
+  "jax_jit": "c9b6e0cbd6ce32f90c773e2b64185cb82ea2968a89e0722bcb8aa5125e359800",
+  "R0": 0.0
+ },
+ "jones_oop_c": {
+  "numpy": "548178f24ff73b712457793171cbc8c5b36b837ecda171185da1cfd19b0c906f",
+  "jax_eager": "05bd697570cd22953a38f771f12e824eed4e00d7558d17b1055cdb3d37b07451",
+  "jax_jit": "87aa7d217be6bc2a14cfae050d8dbdf0ca9a3213562211c846975956336b761a",
+  "R0": 0.0
+ },
+ "stack1": {
+  "numpy": "9e8582e9e60dfcdd880cec1bbae7fd1296bad74daf1bb374a704f17819efa8f1",
+  "jax_eager": "67c9859a14ede0f54c7722d8c3596a0c81ab54fb32ec70fa1be6b3552b362687",
+  "jax_jit": "9cb062422b003ee21c8ff098459657e7a7bfb1682be5d841ded7a382a2761ac8",
+  "R0": 0.0
+ },
+ "stack2": {
+  "numpy": "591dda1786a5884a13ea1e677b49e54f9abf2e870371fb1eac453d9b64767355",
+  "jax_eager": "7889a5bed29a8c9e5c16e4e9ab8ce462789063b8bd6f52962dbb09f7eeac9420",
+  "jax_jit": "0a54a734b34e0008e1012420a83dbbfedf6a53bcca24d6130d94fcb31c8c0a4e",
+  "R0": 0.0
+ },
+ "stack2p": {
+  "numpy": "0d8e19f601b73be1de37c76177673523f60758d16d096a151eec9113f165965f",
+  "jax_eager": "ac67db877a46980c42674b410cbe0740c4b2afdbcb1115a61e0769bf403a26fb",
+  "jax_jit": "94bd163d4289a1cdf92cb494f608140b671e6345d2ffdc72b250e70dc24f79ce",
+  "R0": 0.0
+ },
+ "stack1_c": {
+  "numpy": "820e9cf446a1d40cce44b70a82fffba95bd173d4270df90b022862c6ed1b3c08",
+  "jax_eager": "cd13d45724ad2383b5455c9fdc17a3f569beb147b43d818325c238c56759c210",
+  "jax_jit": "8f3ee8dcda44b320f99e1905d1cb32802c910de440e733963afc1aca8bb2e764",
+  "R0": 0.0
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\pre_tree\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

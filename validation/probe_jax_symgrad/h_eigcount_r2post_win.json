@@ -1,0 +1,50 @@
+{
+ "berreman_exy": {
+  "fwd": {
+   "lowered": 2,
+   "compiled": 2
+  },
+  "jacrev": {
+   "lowered": 10,
+   "compiled": 10
+  }
+ },
+ "pmmjones1d_angle": {
+  "fwd": {
+   "lowered": 2,
+   "compiled": 2
+  },
+  "jacrev": {
+   "lowered": 10,
+   "compiled": 10
+  }
+ },
+ "pmmstack_shared_2L_angle": {
+  "fwd": {
+   "lowered": 3,
+   "compiled": 3
+  },
+  "jacrev": {
+   "lowered": 15,
+   "compiled": 15
+  }
+ },
+ "stack2d_c4v_laurent_theta": {
+  "fwd": {
+   "lowered": 1,
+   "compiled": 1
+  },
+  "jacrev": {
+   "lowered": 5,
+   "compiled": 5
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_symgrad\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

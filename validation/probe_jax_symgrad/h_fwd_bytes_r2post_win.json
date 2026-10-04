@@ -1,0 +1,64 @@
+{
+ "berreman_exy_d0": {
+  "numpy": "cd589ac12b40d6b99db44d56d3f2a554fcea56035095b1e75c62253ddd46abf2",
+  "jax_eager": "8ab05e43a0b650ef394925fe84fb7986c689ceaadb5cd60fa0c0b4e6da5fed44",
+  "jax_eager_api": "6570339bab91641b46d5258bc67bcfda9836219cc605a4788a048a983bf03b24",
+  "jax_jit": "579fe0779f5f5675d43d44b43d991d1c2394cbc471e1a2e6e43734cf10793d54",
+  "max_abs_jit_minus_numpy": 4.965068306494546e-16
+ },
+ "berreman_exy_d1e-3": {
+  "numpy": "04ae93f8680c6483c1f5f46e79b7d1b8ca95d07fe8c74b4e6a440a9ed6e54832",
+  "jax_eager": "1ae965c4860e240f4df7c9e1f369017576bafe9e1cb11c53aa8bb7df3f909f18",
+  "jax_eager_api": "e8dbd85b030be1a6d0b3e222b8eced0ca90b1339c018c014bc213134dd07f2fd",
+  "jax_jit": "d38f778952c6cae5dab1454821fcbdefb40768825c1810f2c9d3d1b359a2b7a9",
+  "max_abs_jit_minus_numpy": 2.9976021664879227e-15
+ },
+ "pmmjones1d_0": {
+  "numpy": "6ba0c9004ee696619a93c32e79040aed66a28982871cf9de0a51bc25fa006395",
+  "jax_eager": "d1921156995cda488bad648036073c39d1f10adb8140a2ee4bf7edb00921c4b8",
+  "jax_jit": "a42b83d6c1a32eca67f9003e0e3688487158978978630e64c3471a2cbcf021f2",
+  "max_abs_jit_minus_numpy": 6.121214584917563e-15
+ },
+ "pmmjones1d_0.2": {
+  "numpy": "e0b8bdff480b3a6d0d4a399344888373b6d0f39a4c856d636ce14bf485445e2c",
+  "jax_eager": "81ef4e660574cef3eea3e5aba8433150adc4a08282b083961d85b3d29c3e05bb",
+  "jax_jit": "f8b72f3021ed200578a754f93309755e0ea5eaf7414599d7b65f339e22d9ca1b",
+  "max_abs_jit_minus_numpy": 1.4932499681208355e-14
+ },
+ "pmmstack_shared_2L": {
+  "numpy": "be88ee261b0efbd730bb24b2817ae6a85b77a95e551490d2bec923b328a275f0",
+  "jax_eager": "06ad8433702bd2543b912073a9ec232f336c767e8ff4b68c981b6efaf4a782de",
+  "jax_jit": "0dd5919325d0dad35c18df0f94f2d1ee111bd979f46e51b4855857585fbb7acd",
+  "max_abs_jit_minus_numpy": 2.969846590872294e-14
+ },
+ "pmmstack_shared_spacer": {
+  "numpy": "7d927477c9c5ec77390155b64d1a71ac0b87a85609e333a7d30b77e0499cd768",
+  "jax_eager": "103943f476cb707dd1e13b5fc86e2f1b7f32f15c3b9f1a306a219339eef569e1",
+  "jax_jit": "605f653ac49c131a85543c078084fe4386cac8d91d1a7bd1187bb4cca9e8969e",
+  "max_abs_jit_minus_numpy": 2.4707529509694454e-15
+ },
+ "pmmstack_perlayer_3L": {
+  "numpy": "7de05465834407f03fa84c7cc7d65916dcac539e8e8e729860606a2a7c0834c8",
+  "jax_eager": "2825f0583f57836e8e1d9041e7d545a47a6a074e8aaaeff0701c6c53a79ffe7f",
+  "jax_jit": "476cc1c4d249eb0aaed330ec81fd2824c9815032f7c10cca1489b8c284364112",
+  "max_abs_jit_minus_numpy": 2.0722312754628547e-13
+ },
+ "stack2d_traced_laurent": {
+  "jax_eager": "b9b5271b907c09f2fd5ab4f73abee9c38e76b35c6eab0faf4bff611bf01e25ba",
+  "jax_jit": "a569cd5deedc639c0bb6fd11a89d962571e0608ebbd161523cf540fb61d17b64",
+  "max_abs_jit_minus_eager": 4.746771492854396e-15
+ },
+ "stack2d_traced_li": {
+  "jax_eager": "b9022dac867bfa44fa830a853dea42b02f24910b656157db4f7f1e698e4c6dab",
+  "jax_jit": "e67303e75ef905031e66b6d2d73d39888dce07c48b6f23516992592f41f4a6e1",
+  "max_abs_jit_minus_eager": 2.8350116126599573e-15
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_symgrad\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

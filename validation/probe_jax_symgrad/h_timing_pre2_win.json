@@ -1,0 +1,46 @@
+{
+ "berreman_exy_0": {
+  "grad_compile_s": 2.3590815999996266,
+  "grad_s": 0.00018340000679017976,
+  "fwd_compile_s": 1.0723618999982136,
+  "fwd_s": 0.00011619999713730067
+ },
+ "pmmjones1d_0": {
+  "grad_compile_s": 3.7671600000030594,
+  "grad_s": 0.013013700001465622,
+  "fwd_compile_s": 2.147270199995546,
+  "fwd_s": 0.005174600002646912
+ },
+ "pmmjones1d_02": {
+  "grad_compile_s": 2.6204068000006373,
+  "grad_s": 0.014752699993550777,
+  "fwd_compile_s": 0.0069345000010798685,
+  "fwd_s": 0.0051261999979033135
+ },
+ "pmmstack_shared_2L_0": {
+  "grad_compile_s": 4.025284600000305,
+  "grad_s": 0.06077329999970971,
+  "fwd_compile_s": 2.9284880999985035,
+  "fwd_s": 0.03372099999978673
+ },
+ "stack2d_c4v_laurent_0": {
+  "grad_compile_s": 3.5160284000012325,
+  "grad_s": 0.04514480000216281,
+  "fwd_compile_s": 1.2736863999962225,
+  "fwd_s": 0.027554599997529294
+ },
+ "stack2d_traced_corner_laurent_0": {
+  "grad_compile_s": 2.5061153000060585,
+  "grad_s": 0.06830800000170711,
+  "fwd_compile_s": 2.412189800001215,
+  "fwd_s": 0.02930010000272887
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\pre_tree\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

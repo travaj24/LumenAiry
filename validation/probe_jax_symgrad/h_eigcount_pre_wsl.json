@@ -1,0 +1,50 @@
+{
+ "berreman_exy": {
+  "fwd": {
+   "lowered": 2,
+   "compiled": 2
+  },
+  "jacrev": {
+   "lowered": 2,
+   "compiled": 2
+  }
+ },
+ "pmmjones1d_angle": {
+  "fwd": {
+   "lowered": 2,
+   "compiled": 2
+  },
+  "jacrev": {
+   "lowered": 2,
+   "compiled": 2
+  }
+ },
+ "pmmstack_shared_2L_angle": {
+  "fwd": {
+   "lowered": 3,
+   "compiled": 3
+  },
+  "jacrev": {
+   "lowered": 3,
+   "compiled": 3
+  }
+ },
+ "stack2d_c4v_laurent_theta": {
+  "fwd": {
+   "lowered": 1,
+   "compiled": 1
+  },
+  "jacrev": {
+   "lowered": 1,
+   "compiled": 1
+  }
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/pre_tree/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

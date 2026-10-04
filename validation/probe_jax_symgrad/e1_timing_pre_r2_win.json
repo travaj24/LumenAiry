@@ -1,0 +1,38 @@
+{
+ "rcwa_sym": {
+  "grad_compile_s": 2.1157061999983853,
+  "grad_s": 0.027032199999666773,
+  "fwd_compile_s": 0.8950192999982391,
+  "fwd_s": 0.019277899998996872
+ },
+ "rcwa_rect": {
+  "grad_compile_s": 1.7041955999957281,
+  "grad_s": 0.0351749999972526,
+  "fwd_compile_s": 1.0016019999966375,
+  "fwd_s": 0.024848900000506546
+ },
+ "pmm1d_0": {
+  "grad_compile_s": 2.6100769999975455,
+  "grad_s": 0.0031220000018947758,
+  "fwd_compile_s": 1.2002374000003329,
+  "fwd_s": 0.0016259000040008686
+ },
+ "pmm1d_02": {
+  "grad_compile_s": 1.6903395000044839,
+  "grad_s": 0.003496000004815869,
+  "fwd_compile_s": 1.0171927999981563,
+  "fwd_s": 0.0018935000043711625
+ },
+ "rcwa_rect_vmap4": {
+  "grad_compile_s": 1.8054698999985703,
+  "grad_s": 0.05430959999648621
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\pre_tree\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

@@ -16,8 +16,17 @@ import contextlib
 from _h import jax, jnp, ladder, min_rel_gap, n_pairs_below, np, rel
 
 import lumenairy.elements.rcwa as RCpkg
+import lumenairy.elements.rcwa._core as RCcore
 
 _orig = RCpkg._jax_eig_stable
+
+
+def _install(factory):
+    """Install an eig factory where every tree reads it: the package
+    attribute (the PRE tree's twins import it from there at call time) and
+    the ``_core`` global (the routed twins' ``_jax_twin_eig`` calls it)."""
+    RCpkg._jax_eig_stable = factory
+    RCcore._jax_eig_stable = factory
 
 
 def spec(lam):
@@ -43,12 +52,12 @@ def capture(fn):
                                ordered=True)
             return lam, V
         return eig
-    RCpkg._jax_eig_stable = factory
+    _install(factory)
     try:
         jax.block_until_ready(fn())
         jax.effects_barrier()
     finally:
-        RCpkg._jax_eig_stable = _orig
+        _install(_orig)
     return [spec(lam) for lam in got]
 
 
@@ -95,11 +104,11 @@ def rotated(seed):
         def eig(A, tau_rel=1e-12):
             return eig_rot(A, tau_rel)
         return eig
-    RCpkg._jax_eig_stable = factory
+    _install(factory)
     try:
         yield
     finally:
-        RCpkg._jax_eig_stable = _orig
+        _install(_orig)
 
 
 def premise_of(rat, fd, rows):

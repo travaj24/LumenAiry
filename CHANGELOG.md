@@ -53,95 +53,132 @@ deletes an executed entry rather than keeping it).  `NEXT_REMOVAL_VERSION`
 moves from `'5.50'` to `'5.52'`, because `check_removal_schedule()` requires it
 to lie after the running version; `API_TRANSITION_VERSION` stays bound to it.
 No live deprecation states 5.52.
-### Fixed -- JAX gradients at symmetric points: `rcwa_efficiency_2d` (symmetric cells) and `pmm_efficiency_1d` (`d / d(angle)` at normal incidence)
+### Fixed -- JAX gradients at symmetric points, in every differentiable solver; one switch for the rule that fixes them
 
-**What was wrong.**  Two differentiable (JAX) solvers returned wrong
-reverse-mode gradients at a symmetric configuration when the differentiated
-parameter breaks the symmetry:
+**What was wrong.**  The differentiable (JAX) solvers returned wrong
+reverse-mode gradients at a SYMMETRIC configuration when the differentiated
+parameter breaks the symmetry, by an amount that differed between BLAS
+builds.  Measured before (relative error, Windows / WSL):
 
-* `rcwa_efficiency_2d` with a JAX `eps_cell` on a four-fold symmetric pixel
-  cell, differentiated in a direction that keeps the mirrors but breaks the
-  90-degree rotation: 23 % (TE) / 39 % (TM) relative error on Windows,
-  28 % / 47 % on WSL -- different on different BLAS builds;
-* `pmm_efficiency_1d` (JAX), `d / d(angle)` at EXACTLY normal incidence on a
-  symmetric grating: 28 % (TE) / 590 % (TM).  The TM figure is the same
-  absolute error (0.24 TE, 0.44 TM) on a TM gradient twelve times smaller.
+| entry | configuration, parameter | before |
+|---|---|---|
+| `rcwa_efficiency_2d` (JAX `eps_cell`) | four-fold pixel cell, one pair of side blocks | 23 % / 28 % (TE), 39 % / 47 % (TM) |
+| `rcwa_jones_2d` (JAX tensor cell) | the same cell | 34 % / 38 % |
+| `rcwa_jones_2d` | isotropic four-fold cell, `d / d eps_xy` (the truth is 0) | 0.088 / 0.083 absolute |
+| `RCWAStack` (JAX input) | the same cell, alone / over a spacer / over a second patterned layer | 23 - 28 % / 13 - 14 % / 15 - 21 % |
+| `pmm_efficiency_1d` | mirror-symmetric grating, `d / d(angle)` at exactly normal incidence | 28 % (TE), 590 % (TM) |
+| `pmm_jones_1d` | the same | 270 % |
+| `PMMStack` (JAX, shared and per-layer grids) | the same, 1 - 3 layers, with and without a uniform spacer | 105 - 660 % |
+| `berreman_jones_1d` (traced tensor) | isotropic layer at normal incidence, `d / d eps_xy` | 99 % |
+| `PMM2DStack` (hybrid, traced region layout) | four-fold cell, `d / d(corner-region eps)` | 30 % / 35 % |
 
-A symmetry-keeping parameter was exact in both, and so was every gradient
-taken a little away from the symmetric point.
+A symmetry-keeping parameter was exact everywhere, and every gradient taken
+off the symmetric point by more than about 1e-10 of the eigenvalue spectrum
+(a contrast offset of 1e-8, an angle of 1e-7 rad) was exact too.
 
 **Root cause** (measured, both builds; build record below).  At the symmetric
-point eigenvalues of the solve coincide EXACTLY: every eigenvalue of the RCWA
-layer operator `P @ Q` of the four-fold cell sits in a pair, and the 1-D
-PMM's superstrate and substrate operators carry the `+-m` orders as pairs at
-normal incidence (its layer operator carries none).  A parameter that breaks
-the symmetry splits those pairs, and the eigenvector derivative inside a pair
-then depends on how the pair splits -- information the reverse pass of an
-eigen-solve never receives, because the solve downstream is insensitive to
-the choice of basis inside a pair.  The gradient therefore depended on the
-basis LAPACK happened to return: rotating that basis (which leaves every
-forward value unchanged to 5e-15) moved the RCWA gradient by 1 - 12 % and
-the 1-D PMM gradient by 0.5 - 53 %; moving the cell off symmetry by 1e-10 of
-its contrast, or the angle off normal by 1e-7 rad, made the error vanish
-(1e-8 .. 1e-10).  None of the other candidates contributed: no eigenvalue
-sorting, no `sqrt` branch point near the pairs (the closest eigenvalue sits
-2.8e-3 / 4.4e-4 of the spectrum from it), no host branch on `theta == 0`
-(a traced angle always takes the oblique path), and no Wood-anomaly
-wavelength shift (the NumPy nudge is the identity at every finite-difference
-abscissa).
+point eigenvalues of the solve coincide EXACTLY (in the four-fold RCWA cell
+50 of the 98 layer eigenvalues sit in pairs; a mirror-symmetric grating's
+half-spaces carry the `+-m` orders as pairs at normal incidence; an isotropic
+layer's polarizations are degenerate).  A parameter that breaks the symmetry
+splits those pairs, and how each pair rotates as it splits is information the
+reverse pass of an eigen-solve never receives -- the solve downstream does
+not care which basis of a pair it gets.  The gradient therefore carried a
+term set by the basis LAPACK happened to return: rotating that basis (forward
+unchanged to 5e-15) moved it by 1 - 600 %.  No other candidate contributed
+(no eigenvalue sorting, no branch point near the pairs, no host branch on
+`theta == 0`, no Wood-anomaly wavelength shift).
 
-**The fix.**  Both solvers now differentiate their eigen-solves TOGETHER with
-everything downstream of them through `rcwa._core._jax_eig_cluster_adjoint`,
-the rule the pure staggered 2-D PMM twin received in this release (where
-eigenvalues coincide to 1e-6 of the spectrum, the reverse pass is evaluated
-at slightly separated copies of the cluster and combined to fourth order).
-`rcwa_efficiency_2d` hands it the layer operator (Laurent and Li
-formulations); the 1-D PMM twin hands it its three modal pencils (layer,
-superstrate, substrate) as `(A, B)` pairs with the mass matrix `B` as the
-lift's inner product -- handing it the folded `B^-1 A` instead was measured
-wrong by up to 7e4 a little off normal incidence.  The layer-operator blocks
-now have one definition (`_layer_P_matrix`, shared by both RCWA
-eigensolvers and `_scalar_PQ` / `_tensor_PQ`).
+**The fix.**  Every one of these solvers now differentiates its eigen-solves
+TOGETHER with everything downstream of them through the degenerate-cluster
+rule of the pure staggered 2-D PMM twin (`rcwa._core._jax_eig_cluster_adjoint`:
+where eigenvalues coincide to 1e-6 of the spectrum, the reverse pass is
+evaluated at slightly separated copies of the cluster and combined to fourth
+order).  The solvers take it through one helper,
+`rcwa._core._jax_cluster_routed`, which records the eigen-problems of a solve
+and replays their eigenpairs into it, so no solver was restructured by hand.
+Where the operator is self-adjoint in a mass matrix (the PMM 1-D, Jones and
+stack twins) the mass matrix is the lift's inner product: the Euclidean one
+was measured wrong by up to 7e4 just off normal incidence.
 
-**After.**  AD vs a premise-checked finite difference, relative, Windows /
-WSL: RCWA 2.8e-10 / 1.0e-10 (TE) and 1.4e-9 / 3.6e-10 (TM); 1-D PMM at
-exactly 0 rad 1.2e-11 (TE) and 3.1e-10 (TM) on both; every point of an
-off-symmetry ladder (contrast offsets 1e-12 .. 1e-2, a no-symmetry offset,
-angles 1e-9 .. 1e-3 rad) <= 2.6e-9; the gradient no longer moves when the
-basis inside a pair is rotated (<= 4e-10).  Forward values are unchanged
-byte for byte (33 / 33 SHA-256 per build over symmetric, rectangular,
-uniform, oblique and conical fixtures, NumPy, JAX eager and `jax.jit`).
+ROUTED, every entry that can meet a degenerate cluster: `rcwa_efficiency_2d`,
+`rcwa_jones_2d` and `RCWAStack` on JAX input (every RCWA entry with a JAX
+path -- `rcwa_efficiency_2d_shapes` has none, and the 1-D RCWA has analytic
+half-spaces and no symmetry-forced layer degeneracy); `pmm_efficiency_1d`,
+`pmm_jones_1d`, `PMMStack`; the Berreman off-plane cascade (a traced tensor);
+the hybrid `PMM2DStack`; and the pure staggered `PMM2DStackPure` twin (this
+release).  NOT routed, measured correct or not of this class: BOR and BOR-SEM
+(no exact degeneracy at a fixed azimuthal order), the native Berreman
+cascade (concrete tensors: no first-order splitting), the hybrid 2-D PMM
+cell twin, and the EME mode solver (it returns sorted eigenvalues, whose
+individual members have no derivative where a cluster splits; their sums are
+exact).
 
-**Cost** (Windows, jitted, at the test sizes, on a box saturated by another
-suite, so upper bounds with scatter).  A gradient through a degenerate
-cluster evaluates the solve and its reverse pass at four lifted points:
-4 - 13x the previous gradient time (RCWA symmetric cell 0.03 -> 0.19 -
-0.32 s; 1-D twin at normal incidence 0.003 -> 0.012 - 0.023 s).  Without a
-cluster the plain reverse pass runs: 1.1 - 1.3x on the 1-D twin.  The
-jitted gradient's COMPILE time rises 2.5 - 5x (both branches are
-compiled); under `jax.vmap` both branches also RUN, so a vmapped gradient
-pays the lifted cost even without a cluster (7 - 16x on the test
-rectangle).  Forward values, forward time and eager forward calls are
-unchanged (the rule now steps aside entirely when nothing upstream of the
-eig is traced).
+**After.**  AD vs a premise-checked finite difference at the symmetric point,
+relative, Windows / WSL: `rcwa_efficiency_2d` 2.8e-10 / 6.4e-11 (TE),
+1.4e-9 / 5.1e-10 (TM); `rcwa_jones_2d` 2.0e-10 / 4.4e-10; `RCWAStack`
+1.8e-10 .. 4.7e-10; `pmm_efficiency_1d` <= 3.1e-10; `pmm_jones_1d`
+1.3e-10 / 6.0e-11; `PMMStack` 8e-11 .. 3.3e-10 (1.0e-8 on a per-layer
+three-layer fixture whose discretization itself breaks the mirror);
+`berreman_jones_1d` 1.5e-9 / 1.7e-9; hybrid `PMM2DStack` 2.3e-10 /
+2.0e-10.  The gradient no longer moves when the basis inside a pair is
+rotated (<= 6.4e-10).  Forward values are unchanged byte for byte (SHA-256,
+NumPy / JAX eager / `jax.jit`: 33 + 24 + 27 fixtures per build).
 
-**Other JAX twins (NOT fixed here; measured, one symmetric-point,
-symmetry-breaking gradient each).**  Correct: BOR-PMM and BOR-SEM (no exact
-degeneracy at fixed `m`; 1e-8 .. 2e-10), the hybrid 2-D stack for
-`d / d(theta)` at normal incidence (3e-11 .. 7e-10).  Not this class: EME
-modes return sorted eigenvalues, whose individual members are not
-differentiable where a cluster splits (cluster sums are exact).  Still
-WRONG at the symmetric point, right a little off it (1e-10 .. 3e-8):
-`berreman_jones_1d` with a traced tensor, `d / d(eps_xy)` of an isotropic
-layer at normal incidence, 99 %; `pmm_jones_1d` `d / d(angle)` at exactly
-normal incidence, 270 %; the 1-D `PMMStack` twins, same derivative,
-105 - 660 %; the hybrid 2-D stack with a traced region layout,
-`d / d(corner eps)` of a four-fold cell, 30 - 35 % (build-dependent).  Each
-needs the same restructure as the 1-D twin (build record, section 5);
-until then, evaluate those derivatives a little off the symmetric point.
+**Also fixed, found on the way.**
+* `rcwa_jones_2d(formulation='li')` on a TRACED tensor cell (under
+  `jax.jit` / `jax.grad`) silently solved the LAURENT formulation: a traced
+  tensor goes to the general (out-of-plane-capable) path, which had no 'li'
+  branch.  The jitted forward was 7.6e-2 off the NumPy 'li' answer and the
+  'li' gradient 21 - 62 % wrong at ANY cell; the eager call was right.  The
+  traced call now takes the Li operators exactly when the tensor's value is
+  in-plane (the same test the concrete routing uses), so it solves what the
+  concrete call solves: jitted forward = NumPy 'li' to 1.2e-15, gradient
+  2.6e-10 / 3.2e-10 at the four-fold cell.
+* `RCWAStack` on JAX input cached its half-space modes in a module-level
+  cache even inside a `jax.jit` trace, so `jit(f)` followed by
+  `jit(grad(f))` or an eager `f` raised `UnexpectedTracerError` (on the
+  previous release too).  A traced solve now computes them uncached.
 
-Build record: `docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md`;
-tests: `tests/unit/test_jax_symmetric_point_gradients.py` and the two
+**The switch.**  `lumenairy.backend.set_jax_cluster_rule(False)` (or the
+context manager `with lumenairy.backend.jax_cluster_rule(False): ...`;
+`jax_cluster_rule_enabled()` reads it; environment default
+`LUMENAIRY_JAX_CLUSTER_RULE=0`) turns the rule off for every solver at once.
+**Off, a gradient at a symmetric point is WRONG** (pinned: 23 - 47 % on the
+RCWA cell); away from any symmetry it changes nothing (<= 4e-16).  The
+setting is read when a solve is traced: a `jax.jit`-compiled function keeps
+the setting it was compiled with.  Default: on.
+
+**Cost** (jitted, test sizes; Windows on a quiet box, WSL alongside other
+work).  The forward pass and its compile are unchanged.  A gradient THROUGH a
+degenerate cluster evaluates the solve and its reverse pass at four lifted
+points: 4 - 5x the previous gradient time (RCWA four-fold cell 0.025 ->
+0.10 - 0.11 s; 1-D twin at normal incidence 0.003 -> 0.014 s).  Without a
+cluster the plain reverse pass runs: 1.0 - 1.1x (the lift is built only on
+the lifted branch).  A jitted gradient COMPILES 2 - 4x longer (both branches
+are compiled).  Under `jax.vmap` the branch is chosen once for the whole
+batch (the OR over the batch): a batch with no cluster anywhere runs the
+plain branch (vmap of 4, no cluster: 0.052 - 0.059 s against 0.054 s
+before; WSL 0.088 s on, 0.046 s off), a batch with one runs the lifted
+branch for every member (exact for all of them).  An accidental
+near-degeneracy counts as a cluster: the `pmm_jones_1d` fixture at 0.2 rad
+has one (3.1e-7 of the spectrum) and pays the lifted cost.  The independent
+verification measured, rule on vs off in one process: jitted with a cluster
+4.0 - 5.4x, without 0.93 - 1.48x, compile 2.8 - 4.6x, vmapped without a
+cluster 3.5 - 5.4x (before the batch-reduced branch and the lazily built
+lift of this round), first eager gradient at a cluster 16 - 24 s against
+3.3 - 4.7 s.
+
+**Scope notes.**  Reverse mode only, as before: `jax.hessian` works for a
+parameter downstream of the eig (a thickness), and for one that enters the
+eig (a permittivity, the angle) it raises `NotImplementedError` -- with or
+without this fix.
+
+Build record: `docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md`
+(sections 1 - 9 the first round, section 10 this one); verification:
+`docs/audits/VERIFY_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_04.md`; tests:
+`tests/unit/test_jax_symmetric_point_gradients.py`,
+`tests/unit/test_verify_jax_symmetric_point_gradients.py` and the two
 formerly strict-xfail gates of `tests/unit/test_pmm2d_staggered_curved_e3.py`.
 
 ### Added -- pure 2-D PMM (curved cells, Phase E1): out-of-plane tensors and slanted walls inside curved cells
@@ -390,11 +427,9 @@ Known limits:
   before (`n_modes = 3 .. 5`; four lifted eigen-solves and downstream
   passes) and about twice the compile time; a cell without one pays
   nothing.
-  The RCWA JAX path (`rcwa_efficiency_2d`) and the 1-D PMM twin
-  (`pmm_efficiency_1d`), which returned such gradients 23 - 47 % and
-  28 - 590 % wrong when this entry was written, now use the same rule (the
-  "Fixed" entry at the top of this block); the other JAX twins are listed
-  there with their measured readings.
+  Every other JAX solver that can meet such a cluster now uses the same
+  rule (the "Fixed" entry above lists them, what was wrong and the switch
+  `lumenairy.backend.set_jax_cluster_rule` that turns it off).
 * Reverse mode only (`jax.grad`, `jax.jacrev`, `jax.vjp`): forward mode
   (`jax.jvp`, `jax.jacfwd`, `jax.hessian`) raises `TypeError` and a second
   derivative (nested `jax.grad`) raises `NotImplementedError` -- the
