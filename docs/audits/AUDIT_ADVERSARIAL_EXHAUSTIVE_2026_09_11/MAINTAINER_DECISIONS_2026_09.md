@@ -395,6 +395,22 @@ the cause is the degenerate-cluster adjoint class that round 2 identified for
 the 2-D twin.  The work is recorded in
 `docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md`.
 
+Extended 2026-10-04.  The first round's survey found the same defect in four
+more families (Berreman with a traced tensor, `pmm_jones_1d`, the 1-D `PMMStack`,
+the hybrid 2-D stack with a traced layout) and left the other RCWA JAX entries
+unrouted; the maintainer decided to fix EVERY one of them in 5.50.0 rather
+than ship four documented limits next to two fixes.  Two independent
+verifications followed (`VERIFY_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_04.md`,
+`..._R2_2026_10_04.md`); their findings -- the lift not shortened near a
+Rayleigh anomaly, a uniform-layer select that discarded the eigen branch's
+gradient, the traced Li formulation silently solving Laurent, a tracer leaking
+through the RCWA stack's mode cache, and the switch's trace-cache semantics --
+were all fixed in the same release.  The one switch that turns the rule off,
+`lumenairy.set_jax_cluster_rule`, is a library setting rather than a keyword
+because the rule sits below eleven public entry points; its default is on, and
+off at a symmetric point is wrong by design (pinned).  The measured cost table
+is in the CHANGELOG entry.
+
 ## 1. Numerical defaults that measured better but move fixtures
 
 ### 1.1 `apply_aperture(edge='gray')` as the default (WP-B11 item 9)
