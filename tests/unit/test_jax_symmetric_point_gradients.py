@@ -647,7 +647,7 @@ def test_the_switch_environment_value_is_parsed_or_refused(value, expect):
     code = ("from lumenairy.backend import jax_cluster_rule_enabled as e; "
             "print(e())")
     r = subprocess.run([sys.executable, "-c", code], env=env,
-                       capture_output=True, text=True, timeout=300)
+                       capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL)
     if expect == "ValueError":
         assert r.returncode != 0 and "LUMENAIRY_JAX_CLUSTER_RULE" in r.stderr
     else:
