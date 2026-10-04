@@ -1,0 +1,76 @@
+{
+ "rcwa_sym_te": {
+  "numpy": "d1536f85fffce2c8ea89bc9c1308ededad3244be7deb3ea1136c92920dbb618a",
+  "jax_eager": "eee6914f74d99a273887f35ab73d8baacae62c677e20682cb6958fa8b040dcdf",
+  "jax_jit": "cb9471fefadc93bb8b425eb7d3b364919c0b5b5d5a06721dd2bb0ed164a9a056",
+  "R0": 0.0
+ },
+ "rcwa_sym_tm": {
+  "numpy": "4f9f6bbd5cc300d8db1e410e78cec57452e4252ca9cb1e20e4f6c5e8cecbf9ea",
+  "jax_eager": "b91e63365434ff5d0f536fa926eb4682396e4fc4e30650b622db100298d3894a",
+  "jax_jit": "378cd24a8ae492f4ce92beac79ab1eae40755b123a50825f0eb69a9db49399b7",
+  "R0": 0.0
+ },
+ "rcwa_sym_li_te": {
+  "numpy": "cee5136248c10124ac0f0e41601fc47dd9ad9695247bc1e09ee2c526d92f0a34",
+  "jax_eager": "a4c41b2406b0dec5f601b1c46327cf9c0d136a5a46db761b647516129d148a69",
+  "jax_jit": "a37323bb2dedd8115790795c5ff8163e947a33455e3732a04cb48cf82de21e47",
+  "R0": 0.0
+ },
+ "rcwa_rect_te": {
+  "numpy": "491cbc7bf0f20918ea838314668fcb8d605f28d7354718ae05829be327324d89",
+  "jax_eager": "3ff32fa3529836db0674f604325e5a55ece9f4d621135fc4307e13b9fd1cc005",
+  "jax_jit": "711247a7b9a4ca807ae6b0456735cacf4b570a5a324afaf16a2a5d020765228e",
+  "R0": 0.0
+ },
+ "rcwa_sym_oblique_tm": {
+  "numpy": "0da0e5ee45484db0f82309f746c46b8e8878aa0b0df05015781cdb8364030c60",
+  "jax_eager": "583c95a76fd2349553d294a1798d93cdd307585d732269d52014dc48a070eb6a",
+  "jax_jit": "283980a1e55c16606d197fc32d8ee03cb6163f1aef5005429cdf9a8c35216d0d",
+  "R0": 0.0
+ },
+ "rcwa_rect_conical_te": {
+  "numpy": "0e87fa6e7fae0834fd7bd5049355978c6888908b6b4236c425c870178f10b454",
+  "jax_eager": "22ef69d844b77df7fc622d02eab572449c339b3a94e01777e18ddd99dea05206",
+  "jax_jit": "9adc8814c94ef2866783cf6965887759edcb7a9bf904fe4ca2c03d62b5460ef0",
+  "R0": 0.0
+ },
+ "rcwa_uniform_te": {
+  "numpy": "1f5e5e6d8482bf70483fc824e26e9ad17c9f32744cd832a7519f423570251274",
+  "jax_eager": "ad1ae79950774ebe78108a6621f3e9abade6e351a2d5d5581db4b7333301c9e6",
+  "jax_jit": "ad1ae79950774ebe78108a6621f3e9abade6e351a2d5d5581db4b7333301c9e6",
+  "R0": 0.0
+ },
+ "pmm1d_te_0": {
+  "numpy": "7d4f082c2380413df81a96cf16496a6957ee1a50ccab05752d32bbec3222c676",
+  "jax_eager": "935f5e42d024eb541621cf064cb0f0a41a25fe79de5c5b9fad3c28985ebacdcc",
+  "jax_jit": "3c2264cf293ecc64dad6c1796a6ac06604d6386d785ea588f20d076e7ac07e83",
+  "R0": 0.0
+ },
+ "pmm1d_tm_0": {
+  "numpy": "665aef02496ec8ac67acd2d3350455da2292f2235cfb715137686b279575a37e",
+  "jax_eager": "5e346c37b28a21564578ad71755425903794078421737e7a79e57a1414dc8abe",
+  "jax_jit": "01cb083d27b5c8ad3c0cf9a6e58a0abdda9f40c6acc735e27d3d4f3fcfea16a6",
+  "R0": 0.0
+ },
+ "pmm1d_te_0.2": {
+  "numpy": "7747caa6ca65037e96248104ba909c87d70dce8e5368528e204f7834d5eb267b",
+  "jax_eager": "e0c543fd936b1ff3becb970e8c97d7744ae7bbf36654addd8898ed356fbf1713",
+  "jax_jit": "fbdd2d99f36ddfa3ca674a2295d3f01cdd7ea7c4563b4a81465a7665dd7f42a6",
+  "R0": 0.0
+ },
+ "pmm1d_tm_0.2": {
+  "numpy": "4001de44231d557b170217310e0b9cc354950ff98d39a682ee79bbee764a5f75",
+  "jax_eager": "41a307444225abae3fdaf063b66d9cf79c3f3487a247b6fe340b85918d7fab17",
+  "jax_jit": "a5988e6d48377382e733f69fffd985cbd9aec2160540871f8e5dbc595772d629",
+  "R0": 0.0
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_symgrad\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

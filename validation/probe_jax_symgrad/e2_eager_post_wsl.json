@@ -1,0 +1,26 @@
+{
+ "fwd_eager_s": 0.8522059000000013,
+ "grad_eager_s": 1.2679051000000072,
+ "grad": -1865837.9763349644,
+ "hessian": {
+  "ok": true,
+  "value": 40365737700996.95,
+  "s": 84.3610271
+ },
+ "vmap_grad": {
+  "ok": true,
+  "value": [
+   -1865837.9763349646,
+   -1437467.6142026444
+  ],
+  "s": 53.42875600000002
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_symgrad/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

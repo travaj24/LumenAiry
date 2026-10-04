@@ -19,6 +19,7 @@ from ._core import (
     _cell_lossless,
     _check_energy,
     _concrete,
+    _eig_for,
     _EnergyError,
     _forward_flux_kz,
     _grazing_safe_wavelength_pair,
@@ -26,6 +27,7 @@ from ._core import (
     _interface_smatrix,
     _interface_smatrix_general,
     _is_traced,
+    _jax_eig_cluster_adjoint,
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
     _modes_to_M,
@@ -38,6 +40,7 @@ from ._core import (
     _redheffer_star_rt,
     _require_jax_x64,
     _require_propagating_incidence,
+    _scalar_PQ,
     _sqrt_forward,
     _stabilize_bumps,
     _stabilize_closure_failure,
@@ -1239,22 +1242,51 @@ def rcwa_efficiency_2d(
     if rt is not None:
         r, t = rt
     else:
-        if formulation == "fff_nv":
-            Wl, Vl, lam = _layer_eigenmodes_tensor(
-                Kx, Ky, Cxx_nv, Cxy_nv, Cyx_nv, Cyy_nv, EZZ_nv)
-        elif li_ops is not None:
-            Zli = xp.zeros_like(li_ops[0])
-            Wl, Vl, lam = _layer_eigenmodes_tensor(
-                Kx, Ky, li_ops[0], Zli, Zli, li_ops[1], li_ops[2])
+        def _layer_modes(eig_pair=None):
+            if formulation == "fff_nv":
+                return _layer_eigenmodes_tensor(
+                    Kx, Ky, Cxx_nv, Cxy_nv, Cyx_nv, Cyy_nv, EZZ_nv)
+            if li_ops is not None:
+                Zli = xp.zeros_like(li_ops[0])
+                return _layer_eigenmodes_tensor(
+                    Kx, Ky, li_ops[0], Zli, Zli, li_ops[1], li_ops[2],
+                    eig_pair=eig_pair)
+            return _layer_eigenmodes(Kx, Ky, EPS, EPS_normal,
+                                     ez_laurent_inv=ez_inv, eig_pair=eig_pair)
+
+        def _cascade(eig_pair=None):
+            Wl, Vl, lam = _layer_modes(eig_pair)
+            S = _interface_smatrix(Wref, Vref, Wl, Vl)
+            S = _propagation_star(S, lam, k0 * depth)
+            # Only S11 / S21 are read, so the layer|substrate star is closed
+            # on the source rather than assembled (_redheffer_star_rt).
+            return _redheffer_star_rt(
+                S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn), cinc)
+
+        if is_jax:
+            # The reverse pass through the layer eig is correct at a
+            # DEGENERATE eigenvalue cluster only when the rule sees the eig
+            # AND everything downstream of it (a symmetric cell -- e.g.
+            # four-fold, where every layer eigenvalue is doubly degenerate
+            # -- differentiated in a symmetry-breaking direction; see
+            # _core._jax_eig_cluster_adjoint).  The eig's argument is the
+            # layer operator P @ Q, built outside the eig with the same
+            # expressions; the forward values are those of the plain
+            # composition.  The anchor is the branch point lam^2 = 0 of
+            # _sqrt_decay.
+            if li_ops is not None:
+                Zli = xp.zeros_like(li_ops[0])
+                P_l, Q_l = _tensor_PQ(Kx, Ky, li_ops[0], Zli, Zli, li_ops[1],
+                                      li_ops[2], xp)
+            else:
+                P_l, Q_l = _scalar_PQ(Kx, Ky, EPS, EPS_normal, ez_inv, xp)
+            Omega2 = P_l @ Q_l
+            eig = _eig_for(xp)
+            r, t = _jax_eig_cluster_adjoint(
+                lambda A, _G: eig(A), ((Omega2, None),),
+                lambda eigs: _cascade(eigs[0]), anchors=((0.0,),))
         else:
-            Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_normal,
-                                            ez_laurent_inv=ez_inv)
-        S = _interface_smatrix(Wref, Vref, Wl, Vl)
-        S = _propagation_star(S, lam, k0 * depth)
-        # Only S11 / S21 are read, so the layer|substrate star is closed on
-        # the source rather than assembled (_redheffer_star_rt).
-        r, t = _redheffer_star_rt(
-            S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn), cinc)
+            r, t = _cascade()
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
     # PUBLIC-convention forward kz for the z-flux + mask + Ez (see

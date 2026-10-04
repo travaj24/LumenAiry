@@ -2261,6 +2261,25 @@ def _layer_Q_matrix(Kx, Ky, EPS, EPS_normal):
     ])
 
 
+def _layer_P_matrix(Kx, Ky, Ez_inv):
+    """The ``P`` block of the layer ODE system, the partner of
+    :func:`_layer_Q_matrix` (the layer's modal operator is
+    ``Omega^2 = P @ Q``), with ``E_z`` eliminated through ``Ez_inv``.
+
+    ``Ez_inv`` is ``inv([[eps]])`` for the isotropic layer (the DIRECT rule,
+    Li 1997 Eq. 27) and ``inv(EZZ)`` for the in-plane tensor layer -- the one
+    definition of the block: both eigensolvers, :func:`_scalar_PQ` and
+    :func:`_tensor_PQ` build it here.
+    """
+    xp = array_namespace(Kx, Ky, Ez_inv)
+    N = Kx.shape[0]
+    I = xp.eye(N, dtype=_C)
+    return _block(xp, [
+        [Kx @ Ez_inv @ Ky,        I - Kx @ Ez_inv @ Kx],
+        [Ky @ Ez_inv @ Ky - I,    -Ky @ Ez_inv @ Kx],
+    ])
+
+
 
 # ===========================================================================
 # Even-parity-sector RCWA solve (opt-in symmetry speed-up)
@@ -2542,17 +2561,16 @@ def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_normal, ez_inv,
 
 
 
-def _tensor_PQ(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ, xp):
-    """The in-plane tensor layer's first-order blocks ``(P, Q)`` -- the exact
-    construction :func:`_layer_eigenmodes_tensor` eigendecomposes, exposed so
-    the even-parity machinery can fold them (backlog A1, 2026-06-10)."""
-    N = Kx.shape[0]
-    I = xp.eye(N, dtype=_C)
-    Ez_inv = xp.linalg.inv(EZZ)
-    P = _block(xp, [
-        [Kx @ Ez_inv @ Ky,        I - Kx @ Ez_inv @ Kx],
-        [Ky @ Ez_inv @ Ky - I,    -Ky @ Ez_inv @ Kx],
-    ])
+def _tensor_PQ(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ, xp, Ez_inv=None):
+    """The in-plane tensor layer's first-order blocks ``(P, Q)`` -- the
+    construction :func:`_layer_eigenmodes_tensor` eigendecomposes (it calls
+    this), exposed so the even-parity machinery can fold them (backlog A1,
+    2026-06-10) and the JAX entries can build the operator ``P @ Q`` outside
+    the eig (:func:`_jax_eig_cluster_adjoint`).  ``Ez_inv`` is ``inv(EZZ)``
+    when the caller already holds it."""
+    if Ez_inv is None:
+        Ez_inv = xp.linalg.inv(EZZ)
+    P = _layer_P_matrix(Kx, Ky, Ez_inv)
     Q = _block(xp, [
         [Cyx + Kx @ Ky,        Cyy - Kx @ Kx],
         [Ky @ Ky - Cxx,        -(Cxy + Ky @ Kx)],
@@ -2562,14 +2580,9 @@ def _tensor_PQ(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ, xp):
 
 def _scalar_PQ(Kx, Ky, EPS, EPS_normal, ez_inv, xp):
     """The scalar layer's ``(P, Q)`` blocks (the :func:`_layer_eigenmodes`
-    structured-branch construction)."""
-    N = Kx.shape[0]
-    I = xp.eye(N, dtype=_C)
+    structured-branch construction, through the same two block builders)."""
     EPS_inv = ez_inv if ez_inv is not None else xp.linalg.inv(EPS)
-    P = _block(xp, [
-        [Kx @ EPS_inv @ Ky,        I - Kx @ EPS_inv @ Kx],
-        [Ky @ EPS_inv @ Ky - I,    -Ky @ EPS_inv @ Kx],
-    ])
+    P = _layer_P_matrix(Kx, Ky, EPS_inv)
     Q = _layer_Q_matrix(Kx, Ky, EPS, EPS_normal)
     return P, Q
 
@@ -2673,7 +2686,7 @@ def _symmetric_cascade_rt(Vref, Vtrn, Kx, Ky, layer_specs, depths, k0,
 
 
 def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None, *,
-                      grazing_floor=None):
+                      grazing_floor=None, eig_pair=None):
     """Eigenmodes of a single layer (structured or uniform).
 
     Dimension-agnostic: the harmonic count ``N`` is inferred from ``Kx`` so
@@ -2713,6 +2726,12 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None, *,
     indices in its ``eps_reals`` list), and that degeneracy reaches the
     interface match through ``b = solve(Vl, Vref)``.  See
     :func:`_traced_grazing_floor`.
+
+    ``eig_pair`` (default ``None`` = take the eig here) is the ``(lam2, W)``
+    eigenpairs of ``P @ Q`` (:func:`_scalar_PQ`), already taken by the caller --
+    the JAX entries that wrap the eig and the rest of their solve in
+    :func:`_jax_eig_cluster_adjoint` pass them in; every other line is the
+    same.
     """
     xp = array_namespace(Kx, Ky, EPS, EPS_normal)
 
@@ -2725,7 +2744,6 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None, *,
     Kx = xp.asarray(Kx).astype(_C)
     Ky = xp.asarray(Ky).astype(_C)
     N = Kx.shape[0]
-    I = xp.eye(N, dtype=_C)
     Q = _layer_Q_matrix(Kx, Ky, EPS, EPS_normal)
     is_jax = backend_name(xp) == "jax"
 
@@ -2748,13 +2766,13 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None, *,
         # "dual-Laurent" rule); NO caller passes it since v5.14.1 audit F1
         # measured that as the wrong factorization (+0.35 metal absorptance),
         # and it is kept only as the factorization-study hook (audit M10).
-        EPS_inv = (ez_laurent_inv if ez_laurent_inv is not None
-                   else xp.linalg.inv(EPS))
-        P = _block(xp, [
-            [Kx @ EPS_inv @ Ky,        I - Kx @ EPS_inv @ Kx],
-            [Ky @ EPS_inv @ Ky - I,    -Ky @ EPS_inv @ Kx],
-        ])
-        lam2, W = _eig_for(xp)(P @ Q)            # Omega^2 = P @ Q
+        if eig_pair is None:
+            EPS_inv = (ez_laurent_inv if ez_laurent_inv is not None
+                       else xp.linalg.inv(EPS))
+            P = _layer_P_matrix(Kx, Ky, EPS_inv)
+            lam2, W = _eig_for(xp)(P @ Q)        # Omega^2 = P @ Q
+        else:
+            lam2, W = eig_pair
         lam = _sqrt_decay(lam2)                  # = i kz (prop.) / |gamma| (evan.)
         return W, Q @ W @ xp.diag(_inv_lam(_floor_lam(lam))), lam
 
@@ -4133,7 +4151,8 @@ def _generator_modes(G, Kx, xp, sym_gauge=None):
 
 def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
                              EZX=None, EZY=None, EXZ=None, EYZ=None,
-                             slant=None, sym_gauge=None):
+                             slant=None, sym_gauge=None,
+                             eig_pair=None):
     """Eigenmodes of a full-in-plane-tensor layer (dimension-agnostic).
 
     The anisotropic ``Q`` block (rigorously derived and locked to the
@@ -4163,6 +4182,10 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
     ``4N`` ``zgeev``) when the assembled generator actually carries the
     structure.  Omitting it, or handing one whose structure does not verify,
     runs the dense generator path unchanged.
+
+    ``eig_pair`` (in-plane path only) is the ``(lam2, W)`` eigenpairs of
+    ``P @ Q`` (:func:`_tensor_PQ`) already taken by the caller, as in
+    :func:`_layer_eigenmodes`.
     """
     xp = array_namespace(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
     Kx = xp.asarray(Kx).astype(_C)
@@ -4170,14 +4193,7 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
     N = Kx.shape[0]
     I = xp.eye(N, dtype=_C)
     Ez_inv = xp.linalg.inv(EZZ)
-    P = _block(xp, [
-        [Kx @ Ez_inv @ Ky,        I - Kx @ Ez_inv @ Kx],
-        [Ky @ Ez_inv @ Ky - I,    -Ky @ Ez_inv @ Kx],
-    ])
-    Q = _block(xp, [
-        [Cyx + Kx @ Ky,        Cyy - Kx @ Kx],
-        [Ky @ Ky - Cxx,        -(Cxy + Ky @ Kx)],
-    ])
+    P, Q = _tensor_PQ(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ, xp, Ez_inv=Ez_inv)
     # An IN-PLANE cell passed through an off-plane-capable assembly (e.g. the
     # fff_nv tensor factorization) hands EXACTLY-ZERO cross-blocks instead of
     # None.  Route those to the symmetric path below: A = B = 0 makes the
@@ -4223,6 +4239,10 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
             "docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md B6).  "
             "Otherwise use an in-plane tensor, or model the slant as a "
             "z-staircase of vertical out-of-plane layers.")
+    if eig_pair is not None and (
+            _slanted or any(t is not None for t in (EZX, EZY, EXZ, EYZ))):
+        raise ValueError("_layer_eigenmodes_tensor: eig_pair is for the "
+                         "in-plane P @ Q path only.")
     if _slanted or any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
         # ---- full-3x3 (out-of-plane) generator path (Li 2003) ---------------
         # Also the SLANT path: a shear breaks the same [W; -V] <-> -lam
@@ -4263,7 +4283,7 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
         if _slanted:
             G = G + _slant_convection(Kx, Ky, slant, xp)
         return _generator_modes(G, Kx, xp, sym_gauge=sym_gauge)
-    lam2, W = _eig_for(xp)(P @ Q)
+    lam2, W = _eig_for(xp)(P @ Q) if eig_pair is None else eig_pair
     lam = _sqrt_decay(lam2)
     V = Q @ W @ xp.diag(_inv_lam(lam))
     if backend_name(xp) != "jax":
@@ -4500,17 +4520,27 @@ def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
 #     absolute  1.7e+5  5.7e+4  4.1e+3  2.3e+1  1.3e-2  7.3e-6
 #     relative  1.0e+3  4.3e-1  1.7e-3  2.5e-6  2.6e-6  0.0
 # i.e. the smallest USABLE off-normal angle drops from ~1e-4 rad to ~1e-6 rad.
-# Exactly 0.0 stays unrecoverable, but it now has a trivial workaround (offset
-# the angle by 1e-6 rad) that did NOT exist before -- the whole near-normal
-# region used to be contaminated.  ``tau_rel`` is a per-call argument if a
+# Exactly 0.0 stays unrecoverable BY THIS VJP ALONE (no rule at the eig
+# boundary can see the in-cluster block -- see the next section).
+# ``tau_rel`` is a per-call argument if a
 # consumer must resolve finer splittings; lowering it trades noise immunity at
 # an exact degeneracy for reach (measured: 1e-13 takes theta=1e-8 from 43% to
 # ~5%, while removing the floor entirely makes the exactly degenerate point
 # 7.7x WORSE -- 1.71e-02 against 2.22e-03).
-# The resolution, where the CONSUMER of the eigenpairs is available as a
-# function, is :func:`_jax_eig_cluster_adjoint` below (the pure staggered
-# 2-D PMM twin uses it; the other twins do not yet -- a maintainer item of
-# docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md, "Round 2").
+# WHAT REPLACED THE LIMIT (2026-10-03): a twin whose eig CONSUMER is available
+# as a function wraps eig + consumer in :func:`_jax_eig_cluster_adjoint`
+# below, and is then exact at and near the degenerate point.  Users: the pure
+# staggered 2-D PMM twin (E3 round 2), ``rcwa_efficiency_2d`` on JAX input
+# and the 1-D PMM twin ``pmm_efficiency_1d`` (both
+# docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md: the table
+# above is the 1-D twin BEFORE that fix; after it, d R / d theta at exactly
+# 0.0 is exact to 1.2e-11 (TE) / 3.1e-10 (TM) relative and every theta of
+# the ladder to <= 2.6e-9).  The other users of this eig (BOR, BOR-SEM, EME,
+# Berreman, the PMM stack and Jones twins) are listed with their measured
+# symmetric-point readings in that record; four are still wrong AT their
+# symmetric points (Berreman with a traced tensor, ``pmm_jones_1d`` and the
+# 1-D ``PMMStack`` d / d(angle) at 0, the hybrid 2-D stack with a traced
+# region layout) and need the same restructure.
 
 # Fraction of ``max|lam|`` below which an eigenvalue splitting is treated as
 # unresolved by the eigenvector VJP (see the block comment above).
@@ -4641,6 +4671,26 @@ def _jax_eig_stable():
 # 1e-4), so a pair closer than it is treated as a cluster; ``split_rel`` is
 # the lift, below gap_rel so a lifted member never approaches an eigenvalue
 # outside its cluster, and large enough that eps_mach / split_rel is small.
+#
+# USERS (and how to hand the rule a problem).  ``problems`` are the eig
+# ARGUMENTS built outside the eig and ``consumer`` is everything downstream
+# of the eigenpairs, so the reverse pass can re-run both at lifted points:
+#   * the pure staggered 2-D PMM twin (``_jax_twod_staggered``): its
+#     generalized pencils (L, G);
+#   * ``rcwa_efficiency_2d`` on JAX input (``rcwa/twod.py``): the layer
+#     operator ``P @ Q`` (``_scalar_PQ`` / ``_tensor_PQ``, the same blocks
+#     ``_layer_eigenmodes`` builds), G = None, anchor lam^2 = 0;
+#   * the 1-D PMM twin (``pmm/_core._jpmm_solve``): its three pencils
+#     (A, B) -- layer, superstrate, substrate -- anchor q^2 = 0.
+# A twin whose eig is of a FOLD ``B^-1 A`` with ``B`` Hermitian positive
+# definite (a mass matrix) must hand the PENCIL (A, B), not the fold with
+# G = None: the fold's eigenvectors are B-orthogonal, so the Euclidean-Gram
+# lift of a cluster that merges DISTINCT eigenvalues (near, not at, the
+# symmetric point) is complex, and a forward-branch selector downstream reads
+# it as a branch change -- measured on the 1-D twin at 1e-5 rad off normal
+# (pairs split by 4.8e-8 of the spectrum): 4.7e3 (TE) / 7.0e4 (TM) relative
+# error with the fold, 1.0e-10 / 2.4e-10 with the pencil
+# (validation/probe_jax_symgrad/c1_gram.py).
 _EIG_CLUSTER_GAP_REL = 1e-6
 _EIG_CLUSTER_SPLIT_REL = 1e-7
 
@@ -4830,7 +4880,16 @@ def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
     gap = _EIG_CLUSTER_GAP_REL if gap_rel is None else float(gap_rel)
     split = _EIG_CLUSTER_SPLIT_REL if split_rel is None else float(split_rel)
     problems = tuple(problems)
-    if not problems or gap <= 0.0:
+    # The rule changes only the cotangent of the eig ARGUMENTS: when none of
+    # them is traced (an eager forward, or a derivative with respect to a
+    # value that enters the consumer only, e.g. a thickness) there is nothing
+    # for it to do, and the plain composition runs as written -- no closure
+    # conversion (which would trace the consumer into a jaxpr on every eager
+    # call and hand its intermediates to the caller's instrumentation as
+    # tracers) and no lift.  Same values either way.
+    if (not problems or gap <= 0.0 or not any(
+            isinstance(x, jax.core.Tracer)
+            for x in jax.tree_util.tree_leaves(problems))):
         return consumer(tuple(eig_fn(L, G) for L, G in problems))
     Ls = tuple(L for L, _G in problems)
     Gs = tuple(G for _L, G in problems)
@@ -4997,6 +5056,7 @@ __all__ = [
     "_tensor_PQ",
     "_scalar_PQ",
     "_layer_eigenmodes",
+    "_layer_P_matrix",
     "_homogeneous_eigenmodes",
     "_redheffer_star",
     "_redheffer_star_rt",

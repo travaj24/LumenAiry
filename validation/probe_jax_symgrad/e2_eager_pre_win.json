@@ -1,0 +1,26 @@
+{
+ "fwd_eager_s": 0.10571469999922556,
+ "grad_eager_s": 0.2809019000014814,
+ "grad": -1865837.9763349001,
+ "hessian": {
+  "ok": true,
+  "value": 40365737700999.75,
+  "s": 22.33292910000091
+ },
+ "vmap_grad": {
+  "ok": true,
+  "value": [
+   -1865837.9763349015,
+   -1437467.6142025539
+  ],
+  "s": 16.228912599999603
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\pre_tree\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}
