@@ -557,10 +557,12 @@ def test_v18_bare_return_flagged_as_trivial():
 # passes.
 
 _REANCHOR = _REPO_ROOT / 'scripts' / 'reanchor_citations.py'
-#: The commit the 5.47.0 block's citations were written against -- the base of
-#: the Wave 5 hygiene-2 work.  Not a moving target: a block's citations are
-#: anchored once, against the tree whose line numbers they quoted.
-_V547_BASE = 'f4f18851'
+#: The commit the 5.47.0 block's citations are checked against.  It was
+#: ``f4f18851`` (the base of the Wave 5 hygiene-2 work, the tree whose line
+#: numbers the block first quoted) and moved ONCE, at the 5.50.0 fold, to
+#: ``b80b354c`` (the 5.49.0 release commit, tag ``v5.49.0``).  Not a moving
+#: target otherwise: a base moves only when the overrides answering it expire.
+_V547_BASE = 'b80b354c'
 _V547_BLOCK = '[5.47.0]'
 
 
@@ -664,6 +666,22 @@ def test_v18_5_the_5_47_0_block_citations_name_the_right_lines():
 
     PREMISE first, so a tool that silently stopped looking cannot pass: the
     block must still contain owned citations to check.
+
+    WHY THE BASE IS ``b80b354c`` AND NOT ``f4f18851`` (moved 2026-10-04, at the
+    5.50.0 fold).  Against ``f4f18851`` four of the block's citations
+    (``raytrace/trace.py`` 60 / 61, ``world_trace.py`` 82 / 83) named
+    declarations whose DEFAULT 5.49.0 flipped in place (WP-C2:
+    ``renormalize='exit'``, ``sphere_normal='analytic'``), and they anchored
+    only through four ``EDITED_IN_PLACE`` entries recorded for 5.49.0.  By the
+    map's own policy those entries refuse once the package goes past the
+    release they record, so at 5.50.0 they expired by design and the check
+    reported four "NEEDS A HUMAN" notes.  The human answer is to move the base
+    forward rather than re-point the entries: at ``b80b354c`` the block's
+    citations were last known correct (CI-green with those overrides), the
+    flipped defaults ARE the base content, so those four citations anchor by
+    content with no override at all; the 5.50.0 entries for
+    ``rcwa/twod.py`` 2035 / 1977 are keyed by their ``b80b354c`` coordinates
+    and still fire.  The retired entries are tombstoned in the map.
     """
     if not _REANCHOR.is_file():
         pytest.fail('scripts/reanchor_citations.py is missing; see '
@@ -678,7 +696,7 @@ def test_v18_5_the_5_47_0_block_citations_name_the_right_lines():
     assert len(owned_cites) >= 10, (
         f'PREMISE FAILED: only {len(owned_cites)} owned source-line citations '
         f'found in the {_V547_BLOCK} block at {_V547_BASE}.  MEASURED '
-        f'2026-09-19: 19.  A collapse toward zero means the tool stopped '
+        f'2026-10-04 at b80b354c: 164 (145 at the former base f4f18851).  A collapse toward zero means the tool stopped '
         f'recognising the citation spelling, and the assertion below would be '
         f'vacuously green.')
 

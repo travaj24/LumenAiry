@@ -747,6 +747,15 @@ def _load_reanchor():
     return mod
 
 
+#: The retired WP-C2 entry for ``trace.py:61``, as a SYNTHETIC entry.  The
+#: real one was recorded for 5.49.0 and expired by design at the 5.50.0 fold
+#: (the 5.47.0 citation base moved to ``b80b354c``); the guard it exercised
+#: is unchanged, so the arm below injects this five-field entry, recorded for
+#: the CURRENT source version so it is live, for its own duration only.
+_VC2_SYNTHETIC_DIGEST = (
+    '5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0')
+
+
 def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
     """``scripts/reanchor_citations.py``'s ``EDITED_IN_PLACE`` map answers
     a citation whose CONTENT changed, and its guard was "the current line
@@ -776,19 +785,32 @@ def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
     Both the BASE and the CURRENT file contents are supplied here, so the
     arm is a pure unit test of the guard and needs neither a git checkout
     nor the base commit to be present.
+
+    The MAP ENTRY is supplied too since the 5.50.0 fold: the real
+    ``trace.py:61`` entry was retired (recorded for 5.49.0, expired by
+    design), so a synthetic entry of the same five-field shape, recorded
+    for the current source version, is injected into ``EDITED_IN_PLACE``
+    for this arm and removed afterwards.  The entry SHAPE is asserted on
+    every live entry of the real map instead.
     """
     ra = _load_reanchor()
     tgt = 'lumenairy/raytrace/trace.py'
     base = 'SYNTHETIC-BASE'
-    assert (tgt, 61) in ra.EDITED_IN_PLACE, (
-        'the EDITED_IN_PLACE map no longer carries trace.py:61; if the '
-        'map has been retired, delete this arm.')
-    entry = ra.EDITED_IN_PLACE[(tgt, 61)]
+    for key, live in ra.EDITED_IN_PLACE.items():
+        assert len(live) == 5, (
+            f'D7 asks for (new_num, reason, content digest, recorded_for) '
+            f'and VR2-D7 for the enclosing definition; {key} carries '
+            f'{len(live)} fields: {live}')
+    assert ra.content_digest("sphere_normal: str = 'analytic',") \
+        == _VC2_SYNTHETIC_DIGEST, (
+        'PREMISE: content_digest no longer reproduces the digest the '
+        'retired entry carried, so the shipped case below would not be '
+        'decided on the content.')
+    entry = (61,
+             "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic' "
+             "(SYNTHETIC test entry)",
+             _VC2_SYNTHETIC_DIGEST, ra._source_version(), 'def trace(')
     assert entry[0] == 61, entry
-    assert len(entry) == 5, (
-        f'D7 asks for (new_num, reason, content digest, recorded_for) and '
-        f'VR2-D7 for the enclosing definition; this entry carries '
-        f'{len(entry)} fields: {entry}')
     assert entry[4] == 'def trace(', entry
 
     base_lines = ['# pad'] * 60
@@ -802,6 +824,9 @@ def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
             if path != tgt:
                 return real_lines(path, rev)
             return base_lines if rev == base else current
+        key = (tgt, 61)
+        had, prior = key in ra.EDITED_IN_PLACE, ra.EDITED_IN_PLACE.get(key)
+        ra.EDITED_IN_PLACE[key] = entry
         ra.lines = patched
         ra.EDITED_IN_PLACE_REFUSALS.clear()
         try:
@@ -810,6 +835,10 @@ def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
         finally:
             ra.lines = real_lines
             ra.EDITED_IN_PLACE_REFUSALS.clear()
+            if had:
+                ra.EDITED_IN_PLACE[key] = prior
+            else:
+                del ra.EDITED_IN_PLACE[key]
 
     shipped = list(base_lines)
     shipped[60] = "    sphere_normal: str = 'analytic',"

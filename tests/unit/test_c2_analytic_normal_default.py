@@ -1986,6 +1986,29 @@ def _c2_load_reanchor():
 _C2_REANCHOR_TARGET = 'lumenairy/raytrace/trace.py'
 _C2_REANCHOR_BASE = 'SYNTHETIC-BASE'
 
+#: SHA-256 (``content_digest``, whitespace-stripped) of
+#: ``sphere_normal: str = 'analytic',`` -- the digest the real WP-C2 entry for
+#: ``trace.py:61`` carried.  That entry was RETIRED at the 5.50.0 fold (it was
+#: recorded for 5.49.0 and expired by design when the package went past it;
+#: the 5.47.0 citation base moved to ``b80b354c`` instead).  The D7 guard it
+#: exercised is unchanged, so these arms now inject a SYNTHETIC entry of the
+#: same five-field shape, recorded for the CURRENT source version so it is
+#: live, for the duration of each arm only.
+_C2_SYNTHETIC_DIGEST = (
+    '5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0')
+
+
+def _c2_synthetic_entry(ra, recorded_for=None):
+    """The retired ``trace.py:61`` entry, recorded for ``recorded_for``
+    (default: the running source version, so the entry is live)."""
+    return (61,
+            "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic' "
+            "(SYNTHETIC test entry)",
+            _C2_SYNTHETIC_DIGEST,
+            recorded_for if recorded_for is not None
+            else ra._source_version(),
+            'def trace(')
+
 
 #: The synthetic file both EDITED_IN_PLACE arms run against: 60 lines of
 #: padding with a module-level ``def trace(`` at line 55, so line 61 has the
@@ -2002,12 +2025,20 @@ def _c2_synthetic_lines(current, owner='def trace('):
     return lines, base
 
 
-def _c2_try_override(ra, current_lines, base_lines):
+def _c2_try_override(ra, current_lines, base_lines, entry=None):
     """Run ``_edited_in_place`` against a synthetic base and current file.
 
     Both sides are supplied, so the arm is a pure unit test of the guard and
-    needs neither a git checkout nor the base commit to be present.
+    needs neither a git checkout nor the base commit to be present.  The map
+    entry is supplied too (``entry``, default ``_c2_synthetic_entry(ra)``)
+    and injected into ``ra.EDITED_IN_PLACE`` for this call only, then the map
+    is restored -- so no arm depends on a live release's entry.
     """
+    if entry is None:
+        entry = _c2_synthetic_entry(ra)
+    key = (_C2_REANCHOR_TARGET, 61)
+    had, prior = key in ra.EDITED_IN_PLACE, ra.EDITED_IN_PLACE.get(key)
+    ra.EDITED_IN_PLACE[key] = entry
     real_lines = ra.lines
 
     def patched(path, rev=None):
@@ -2024,6 +2055,10 @@ def _c2_try_override(ra, current_lines, base_lines):
     finally:
         ra.lines = real_lines
         ra.EDITED_IN_PLACE_REFUSALS.clear()
+        if had:
+            ra.EDITED_IN_PLACE[key] = prior
+        else:
+            del ra.EDITED_IN_PLACE[key]
 
 
 @pytest.mark.parametrize('abuse,current,fires,owner', [
@@ -2067,19 +2102,33 @@ def test_c2_the_edited_in_place_override_pins_the_content(abuse, current,
 
     This is parametrized over all five cases so the fix cannot be a guard
     that refuses everything: the shipped state must still FIRE.
+
+    The real ``trace.py:61`` entry was retired at the 5.50.0 fold; the arm
+    runs against a SYNTHETIC entry of the same shape (``_c2_synthetic_entry``)
+    and asserts the entry SHAPE on every live entry of the real map instead.
     """
     ra = _c2_load_reanchor()
-    assert (_C2_REANCHOR_TARGET, 61) in ra.EDITED_IN_PLACE, (
-        'the EDITED_IN_PLACE map no longer carries trace.py:61; if it has '
-        'been retired, delete this arm.')
-    entry = ra.EDITED_IN_PLACE[(_C2_REANCHOR_TARGET, 61)]
-    assert len(entry) == 5, (
-        f'an EDITED_IN_PLACE entry must carry (new_num, reason, digest, '
-        f'recorded_for, enclosing_def); this one carries {len(entry)} '
-        f'fields: {entry}')
-    assert entry[4] == 'def trace(', (
-        f'the entry for trace.py:61 records {entry[4]!r} as its enclosing '
-        f'definition; the line is a parameter of ``def trace(``.')
+    assert ra.EDITED_IN_PLACE, (
+        'PREMISE: the EDITED_IN_PLACE map is empty, so the shape check below '
+        'would be vacuous.  MEASURED 2026-10-04: two live 5.50.0 entries '
+        '(rcwa/twod.py 2035 / 1977).  If the map has legitimately emptied, '
+        'drop this premise with that note.')
+    for key, live in ra.EDITED_IN_PLACE.items():
+        assert len(live) == 5, (
+            f'an EDITED_IN_PLACE entry must carry (new_num, reason, digest, '
+            f'recorded_for, enclosing_def); {key} carries {len(live)} '
+            f'fields: {live}')
+        assert live[4].startswith(('def ', 'class ')), (
+            f'{key} records {live[4]!r} as its enclosing definition; it must '
+            f'name a module-level ``def`` / ``class`` (VR2-D7).')
+    # PREMISE: the synthetic entry's digest IS the shipped line's digest, so
+    # the 'shipped state' case below fires on the content check and not by
+    # accident.
+    assert ra.content_digest("    sphere_normal: str = 'analytic',") \
+        == _C2_SYNTHETIC_DIGEST, (
+        'content_digest no longer reproduces the digest the retired entry '
+        'carried; the digest rule changed and every live entry needs '
+        're-recording.')
 
     current_lines, base_lines = _c2_synthetic_lines(current, owner=owner)
 
@@ -2141,29 +2190,38 @@ def test_c2_the_edited_in_place_map_is_version_pinned():
     Two-sided: the entry fires at the version it records (and at every
     version before it, which is where the tree sits while the release is
     unreleased), and refuses at the next one.
+
+    The real ``trace.py:61`` entry this arm used was itself retired at the
+    5.50.0 fold, exactly as the stale-entry assertion below demands; the
+    two-sided arm now runs on a SYNTHETIC entry recorded for the current
+    source version, and the stale-entry assertion covers EVERY live entry.
     """
     ra = _c2_load_reanchor()
-    entry = ra.EDITED_IN_PLACE[(_C2_REANCHOR_TARGET, 61)]
-    recorded_for = entry[3]
-    assert ra._version_tuple(recorded_for) >= ra._version_tuple(
-        ra._source_version()), (
-        f'the map records {recorded_for} and the package is already at '
+    stale = {key: live[3] for key, live in ra.EDITED_IN_PLACE.items()
+             if ra._version_tuple(live[3])
+             < ra._version_tuple(ra._source_version())}
+    assert not stale, (
+        f'the map records {stale} and the package is already at '
         f'{ra._source_version()}; the entries are stale and should be '
         f'retired rather than re-pointed.')
 
+    recorded_for = ra._source_version()
+    entry = _c2_synthetic_entry(ra, recorded_for=recorded_for)
     shipped, base_lines = _c2_synthetic_lines(
         "    sphere_normal: str = 'analytic',")
 
     real_version = ra._source_version
     try:
         ra._source_version = lambda: recorded_for
-        num, _how, refusals = _c2_try_override(ra, shipped, base_lines)
+        num, _how, refusals = _c2_try_override(ra, shipped, base_lines,
+                                               entry=entry)
         assert num == 61 and not refusals, (num, refusals)
 
         bumped = list(ra._version_tuple(recorded_for))
         bumped[-1] += 1
         ra._source_version = lambda: '.'.join(str(v) for v in bumped)
-        num, _how, refusals = _c2_try_override(ra, shipped, base_lines)
+        num, _how, refusals = _c2_try_override(ra, shipped, base_lines,
+                                               entry=entry)
         assert num is None, (
             f'the override still fires with the package at '
             f'{ra._source_version()}, one patch past the {recorded_for} it '
