@@ -323,7 +323,12 @@ def _rule_state() -> Any:
             _RULE_UNSET = st.get_local()
             st.set_global(_JAX_CLUSTER_RULE)
             _RULE_STATE = st
-        except Exception:        # pragma: no cover - JAX absent or changed
+        except (ImportError, AttributeError, TypeError):  # pragma: no cover
+            # JAX absent (ImportError), the private hook gone (AttributeError:
+            # no bool_state / get_local / set_global) or its signature changed
+            # (TypeError).  A duplicate-name registration -- which jax reports
+            # as a bare Exception -- cannot happen: the state is built once per
+            # process and cached in _RULE_STATE.
             _RULE_STATE = False
     return None if _RULE_STATE is False else _RULE_STATE
 
