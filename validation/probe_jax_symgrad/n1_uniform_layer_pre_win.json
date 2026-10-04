@@ -1,0 +1,26 @@
+{
+ "normal": {
+  "AD0_vs_FD": 4.663429007614416,
+  "AD0_vs_near": 4.663429013474399,
+  "near_vs_FD": 1.0347060627682444e-09,
+  "sha_jit": "016ac38dbe4a1f1cd8d9d91842ff984ca49576582ddce63493bc637c8ec3add8",
+  "sha_eager": "4f6299c72b6812bbfb6a1ac85f50b4a1b6fbf04b9943083bf2734b5afb9e4d5e",
+  "jit_vs_numpy": 3.608224830031759e-15
+ },
+ "conical": {
+  "AD0_vs_FD": 1.3575372220026647,
+  "AD0_vs_near": 1.3575372181537075,
+  "near_vs_FD": 6.086579945708034e-09,
+  "sha_jit": "44d595137c7724c8ede0cdcff6b8d62fe65ab2e5ba0b2a32dfed921cb745a6ea",
+  "sha_eager": "96d8cb3bbb13b59cfd9788cb2ef0f0a28924c211f4fd41a680ebf71d924b02ae",
+  "jit_vs_numpy": 1.6653345369377348e-15
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\pre_tree\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}
