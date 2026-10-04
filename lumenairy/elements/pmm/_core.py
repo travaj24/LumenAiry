@@ -3762,6 +3762,27 @@ def _jpmm_sem_modes(M, jnp, eig, k0, polarization, kx0=0.0):
     python ``0.0`` (normal incidence) skips the convection so the path stays
     byte-equal to the prior normal-incidence twin; a traced kx0 (even one whose
     concrete value is 0) flows the ``d/d(angle)`` derivative through."""
+    A, B, invop = _jpmm_sem_problem(M, jnp, k0, polarization, kx0)
+    q2, Acoef = eig(jnp.linalg.solve(B, A))
+    return _jpmm_sem_modes_from_eig(q2, Acoef, jnp, invop)
+
+
+def _jpmm_sem_problem(M, jnp, k0, polarization, kx0=0.0):
+    """The modal pencil ``(A, B)`` of :func:`_jpmm_sem_modes` (whose eig it
+    takes of the fold ``B^-1 A``) and its TM ``invop``, built OUTSIDE the eig
+    so a solve can hand the eig and everything downstream of it to
+    :func:`lumenairy.elements.rcwa._core._jax_eig_cluster_adjoint`
+    (:func:`_jpmm_solve`).  Same expressions, same order of operations.
+
+    The PENCIL, not the fold, is what the rule gets: ``B`` (a mass matrix,
+    Hermitian positive definite) is the Gram of the cluster lift, so for a
+    lossless medium (``A`` Hermitian) the lift of a cluster that merges
+    several DISTINCT eigenvalues keeps them real -- with the Euclidean Gram
+    the fold's ``B``-orthogonal eigenvectors gave complex shifts that the
+    forward-branch selector read as a branch change (measured: d / d(angle)
+    at 1e-5 rad, where the half-space pairs are split by 4.8e-8 of the
+    spectrum, wrong by 4.7e3 relative with the fold, 1e-10 with the
+    pencil)."""
     k02 = k0 * k0
     # Skip the convection ONLY for the python literal 0.0 (normal incidence,
     # byte-equal to the prior twin); a TRACED jnp scalar -- even one valued 0 --
@@ -3781,7 +3802,12 @@ def _jpmm_sem_modes(M, jnp, eig, k0, polarization, kx0=0.0):
             Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * M["Pinv"]
         A, B = M["S0"] - Lop / k02, M["Pinv"]
         invop = jnp.linalg.solve(M["S0"], M["Pinv"])
-    q2, Acoef = eig(jnp.linalg.solve(B, A))
+    return A, B, invop
+
+
+def _jpmm_sem_modes_from_eig(q2, Acoef, jnp, invop):
+    """``(Acoef, lam, q, invop)`` of :func:`_jpmm_sem_modes` from the
+    eigenpairs ``(q2, Acoef)`` of :func:`_jpmm_sem_problem`."""
     q = jnp.sqrt(q2)
     # Noise-robust forward branch (the _sem_modes robust=True rule): flip only
     # when CLEARLY backward -- a degenerate half-space q^2 carries ~1e-15 imag
@@ -3901,19 +3927,43 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
     Msup = _jpmm_assemble(static, jnp, eps_sup, eps_sup, dyn=dyn)
     Msub = _jpmm_assemble(static, jnp, eps_sub, eps_sub, dyn=dyn)
 
-    Acoef, lam_l, q_l, invop = _jpmm_sem_modes(M, jnp, eig, k0, polarization,
-                                               kx0)
-    Wl = Acoef
-    Vl = (Acoef if polarization == "te" else invop @ Acoef) @ jnp.diag(q_l)
-    Wsup, _ls, q_sup, invsup = _jpmm_sem_modes(Msup, jnp, eig, k0, polarization,
-                                               kx0)
-    Wsub, _lb, q_sub, invsub = _jpmm_sem_modes(Msub, jnp, eig, k0, polarization,
-                                               kx0)
-    if polarization == "te":
-        Vsup, Vsub = Wsup @ jnp.diag(q_sup), Wsub @ jnp.diag(q_sub)
-    else:
-        Vsup = (invsup @ Wsup) @ jnp.diag(q_sup)
-        Vsub = (invsub @ Wsub) @ jnp.diag(q_sub)
+    # The three eigs (layer, superstrate, substrate) and EVERYTHING downstream
+    # of them go through the degenerate-cluster adjoint
+    # (rcwa._core._jax_eig_cluster_adjoint): at exactly normal incidence the
+    # half-spaces' +-m orders are degenerate pairs and d / d(angle) splits
+    # them, which no reverse rule at the eig boundary can follow (the W9 note
+    # there).  Forward values are those of the plain composition; the anchor
+    # is the branch point q^2 = 0 of the modal sqrt.
+    probs = [_jpmm_sem_problem(Mx, jnp, k0, polarization, kx0)
+             for Mx in (M, Msup, Msub)]
+    invop, invsup, invsub = (iv for _A, _B, iv in probs)
+
+    def _amplitudes(eigs):
+        (Acoef, lam_l, q_l, _i), (Wsup, _ls, q_sup, _s), (
+            Wsub, _lb, q_sub, _b) = [_jpmm_sem_modes_from_eig(q2, V, jnp, iv)
+                                     for (q2, V), (_A, _B, iv)
+                                     in zip(eigs, probs)]
+        Wl = Acoef
+        Vl = (Acoef if polarization == "te" else invop @ Acoef) @ jnp.diag(q_l)
+        if polarization == "te":
+            Vsup, Vsub = Wsup @ jnp.diag(q_sup), Wsub @ jnp.diag(q_sub)
+        else:
+            Vsup = (invsup @ Wsup) @ jnp.diag(q_sup)
+            Vsub = (invsub @ Wsub) @ jnp.diag(q_sub)
+        S = _ismat(Wsup, Vsup, Wl, Vl)
+        S = _star(S, _psmat(lam_l, k0 * depth))
+        S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
+        S11, _S12, S21, _S22 = S
+
+        Hsup = Tp @ Wsup
+        Hsub = Tp @ Wsub
+        delta0 = jnp.asarray((orders == 0).astype(_C))
+        # ``jnp.linalg.lstsq``'s SVD gradient is unusable on the STRUCTURALLY
+        # degenerate Hsup (repeated singular value 1/sqrt(n_glob)) -- see
+        # :func:`_jpmm_min_norm_projection`, and the same replacement in the
+        # Jones twin below and in ``_jax_stack``.
+        cinc = _jpmm_min_norm_projection(Hsup, delta0, jnp)
+        return Hsup @ (S11 @ cinc), Hsub @ (S21 @ cinc)
 
     def _ismat(Wa, Va, Wb, Vb):
         a = jnp.linalg.solve(Wb, Wa)
@@ -3939,21 +3989,11 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
         return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
                 B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
 
-    S = _ismat(Wsup, Vsup, Wl, Vl)
-    S = _star(S, _psmat(lam_l, k0 * depth))
-    S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
-    S11, _S12, S21, _S22 = S
-
-    Hsup = Tp @ Wsup
-    Hsub = Tp @ Wsub
-    delta0 = jnp.asarray((orders == 0).astype(_C))
-    # ``jnp.linalg.lstsq``'s SVD gradient is unusable on the STRUCTURALLY
-    # degenerate Hsup (repeated singular value 1/sqrt(n_glob)) -- see
-    # :func:`_jpmm_min_norm_projection`, and the same replacement in the Jones
-    # twin below and in ``_jax_stack``.
-    cinc = _jpmm_min_norm_projection(Hsup, delta0, jnp)
-    r_ord = Hsup @ (S11 @ cinc)
-    t_ord = Hsub @ (S21 @ cinc)
+    from ..rcwa._core import _jax_eig_cluster_adjoint
+    r_ord, t_ord = _jax_eig_cluster_adjoint(
+        lambda A, B: eig(jnp.linalg.solve(B, A)),
+        tuple((A, B) for A, B, _iv in probs), _amplitudes,
+        anchors=((0.0,),) * 3)
 
     def _kzf(eps, kxv):
         val = jnp.sqrt(jnp.asarray(eps - kxv ** 2, dtype=cj))
@@ -7619,6 +7659,8 @@ __all__ = [
     "_jpmm_fourier_projection_jax",
     "_jpmm_assemble",
     "_jpmm_sem_modes",
+    "_jpmm_sem_modes_from_eig",
+    "_jpmm_sem_problem",
     "_jpmm_solve",
     "_pmm_efficiency_1d_jax",
     "_jpmm_assemble_tensor",

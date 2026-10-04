@@ -1016,20 +1016,43 @@ def test_e3r2_the_rule_leaves_every_forward_value_byte_identical():
         assert np.array_equal(a, b)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "MAINTAINER ITEM (round 2 of the E3 build, pre-existing, not E3): the "
-    "RCWA JAX path's gradient is wrong for a SYMMETRY-BREAKING parameter at "
-    "a four-fold symmetric cell -- the V-E3-1 class (the shared "
-    "_jax_eig_stable VJP at a degenerate pair): 23 % (TE) / 39 % (TM) "
-    "relative on Windows, 28 % / 47 % on WSL (build-dependent); the "
-    "symmetry-KEEPING control is exact (<= 6.9e-10) "
-    "(r4_other_twins_rcwa2d_{win,wsl}.json).  Fix: route its eigs through "
-    "rcwa._jax_eig_cluster_adjoint; remove the marker with the fix."))
-def test_e3r2_rcwa_jax_symmetry_breaking_gradient_at_a_symmetric_cell():
+def _fd_premised(fj, x0):
+    """Richardson FD (h = 3e-4, 1e-4) of a vector function, with its h^2
+    PREMISE asserted before it is used as the oracle: on a three-rung ladder
+    (1e-3, 3e-4, 1e-4) the ratio of successive rung changes must be the
+    h^2 value 11.375 (bar [10, 13]; measured 11.2 .. 11.6 on every entry of
+    these fixtures, both builds, 2026-10-03,
+    ``validation/probe_jax_symgrad/a1_rcwa_*``, ``a2_pmm1d_*``)."""
+    rows = [(np.asarray(fj(x0 + h)) - np.asarray(fj(x0 - h))) / (2 * h)
+            for h in (1e-3, 3e-4, 1e-4)]
+    c1, c2 = np.abs(rows[0] - rows[1]), np.abs(rows[1] - rows[2])
+    ratio = c1 / np.maximum(c2, 1e-300)
+    assert np.all((ratio > 10.0) & (ratio < 13.0)), ratio
+    return (9.0 * rows[2] - rows[1]) / 8.0
+
+
+# The two gradients below were the round-2 MAINTAINER ITEMS (strict xfails,
+# section 9.3 of the E3 build record): the degenerate-cluster class of V-E3-1
+# in the RCWA JAX path and in the 1-D PMM twin, fixed by routing their eigs
+# through rcwa._core._jax_eig_cluster_adjoint
+# (docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md).
+#
+# BAR 1e-7, both: the measured envelope after the fix is <= 1.4e-9 (RCWA)
+# and <= 3.1e-10 (1-D PMM) relative, both builds (Windows py3.14 / jax
+# 0.11, WSL py3.12 / jax 0.10.2, 2026-10-03; the rule's own round-off
+# estimate is eps_mach / split_rel ~ 2e-9), and the defect was 0.23 .. 0.47
+# (RCWA) and 0.28 .. 5.9 (1-D PMM) -- >= 70x below the bar, >= 6 decades
+# above it.
+
+
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_e3r2_rcwa_jax_symmetry_breaking_gradient_at_a_symmetric_cell(pol):
     """``rcwa_efficiency_2d`` (JAX eps_cell), a 15 x 15 pixel cell (centre
-    block eps 4, side blocks 1.5, corners 1), t added to the two x-side
-    blocks only, d R / d t and d T / d t of the (0, 0), (+-1, 0) orders, TE,
-    vs the NumPy Richardson FD.  Bar 1e-6."""
+    block eps 4, side blocks 1.5, corners 1: four-fold symmetric, every
+    eigenvalue of the layer operator P @ Q doubly degenerate), t added to
+    the two x-side blocks only, d R / d t and d T / d t of the (0, 0),
+    (+-1, 0) orders vs the NumPy Richardson FD.  Before the fix: 23 % (TE) /
+    39 % (TM) on Windows, 28 % / 47 % on WSL; after: <= 1.4e-9."""
     import jax
     import jax.numpy as jnp
 
@@ -1047,26 +1070,24 @@ def test_e3r2_rcwa_jax_symmetry_breaking_gradient_at_a_symmetric_cell():
     def f(t, xp):
         eps = (xp.asarray(base) + t * xp.asarray(dirn)).astype(complex)
         _o, R, T = rcwa_efficiency_2d(_P, _P, eps, 1.45, 1.0, 0.45, _WL,
-                                      n_orders_x=3, n_orders_y=3)
+                                      polarization=pol, n_orders_x=3,
+                                      n_orders_y=3)
         return xp.concatenate([xp.stack([R[i] for i in idx]),
                                xp.stack([T[i] for i in idx])])
     g = np.asarray(jax.jit(jax.jacrev(lambda t: f(t, jnp)))(0.0))
-    fd = _fdv(lambda t: f(t, np), 0.0, scale=1.0)
-    assert np.max(np.abs(g - fd)) / np.max(np.abs(fd)) < 1e-6
+    fd = _fd_premised(lambda t: f(t, np), 0.0)
+    assert np.max(np.abs(g - fd)) / np.max(np.abs(fd)) < 1e-7
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "MAINTAINER ITEM (pre-existing, documented in the W9 note of "
-    "rcwa._core as 'exactly 0.0 stays unrecoverable'): the 1-D PMM twin's "
-    "d / d(angle) AT EXACTLY normal incidence on a symmetric grating -- the "
-    "angle splits the half-spaces' +-m pairs -- is wrong: 28 % (TE) / 590 % "
-    "(TM) relative on the +-1 orders, both builds "
-    "(r4_other_twins_pmm1d_{win,wsl}.json).  Fix: "
-    "the cluster rule; remove the marker with the fix."))
-def test_e3r2_pmm1d_jax_angle_gradient_at_normal_incidence():
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_e3r2_pmm1d_jax_angle_gradient_at_normal_incidence(pol):
     """``pmm_efficiency_1d`` (JAX), period 1.2, ridge n 2 / groove 1, duty
-    0.5, depth 0.45, degree 12, TE: d R_{+-1} / d angle and d T_{+-1} /
-    d angle at angle 0 vs the NumPy Richardson FD.  Bar 1e-6."""
+    0.5, depth 0.45, degree 12: d R_{+-1} / d angle and d T_{+-1} / d angle
+    at EXACTLY normal incidence (the half-spaces' +-m modes are degenerate
+    pairs there, and the angle splits them) vs the NumPy Richardson FD.
+    Before the fix: 28 % (TE) / 590 % (TM) on both builds -- the same
+    absolute error, 0.24 / 0.44, on a TM gradient 12x smaller; after:
+    <= 3.1e-10."""
     import jax
     import jax.numpy as jnp
 
@@ -1079,12 +1100,13 @@ def test_e3r2_pmm1d_jax_angle_gradient_at_normal_incidence():
     def f(t, xp):
         _o, R, T = pmm_efficiency_1d(_P, xp.asarray(2.0 + 0j), 1.0, 1.45,
                                      1.0, 0.45, 0.5, _WL, angle=t,
-                                     degree=12, stabilize=False)
+                                     polarization=pol, degree=12,
+                                     stabilize=False)
         return xp.concatenate([xp.stack([R[i] for i in idx]),
                                xp.stack([T[i] for i in idx])])
     g = np.asarray(jax.jit(jax.jacrev(lambda t: f(t, jnp)))(0.0))
-    fd = _fdv(lambda t: f(t, np), 0.0, scale=1.0)
-    assert np.max(np.abs(g - fd)) / np.max(np.abs(fd)) < 1e-6
+    fd = _fd_premised(lambda t: f(t, np), 0.0)
+    assert np.max(np.abs(g - fd)) / np.max(np.abs(fd)) < 1e-7
 
 
 def test_e3r2_an_ellipse_inside_the_sliver_margin_is_poisoned_when_traced():

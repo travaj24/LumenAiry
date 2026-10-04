@@ -26,6 +26,15 @@ in-subspace rotation).  It bites only where the perturbation's intra-cluster
 block is non-diagonal -- for the PMM 1-D fold ``A = eps I - Lop/k0^2`` that is
 ``d/d(angle)`` at EXACTLY normal incidence and nothing else.
 
+CLOSED for ``pmm_efficiency_1d`` (2026-10-03,
+``docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md``): the twin now
+differentiates its eigen-solves TOGETHER with the rest of the solve through
+``rcwa._core._jax_eig_cluster_adjoint``, which is not limited by the argument
+above (it sees the consumer).  The limit still holds for ``_jax_eig_stable``
+ALONE, which is what the floor-mechanism test below measures (with the rule
+switched off); the theta = 0 pin is now a CORRECTNESS pin with a fail-before
+arm (the rule off) and a control (the analytic-half-space ``rcwa1d``).
+
 CI note: these are gradient / eigensolver outputs, so every bound is a
 calibrated inequality with >= 10x headroom over the measured value -- never an
 equality.  The only ``==`` here is the primal-vs-``jnp.linalg.eig`` bit-identity
@@ -644,10 +653,12 @@ def _theta0_scores(f):
     return ad0, fd0, clean, sweep, _zero_derivative_resolution(f, 1e-6)
 
 
-def _score_theta0_defect(f, name):
-    """Score the OPEN eig-VJP degeneracy defect at exactly normal incidence.
-    Returns the measurements.  Split out so the fail-before below can run the
-    identical claims against a solver that does NOT carry the defect."""
+def _score_theta0(f, name):
+    """Score ``d(sum R)/d(theta)`` at EXACTLY normal incidence against the
+    symmetry-forced truth (zero), at the resolution at which that truth can
+    be asserted (the FD's own float64 cancellation floor).  Returns the
+    measurements.  Split out so the fail-before below can run the identical
+    claims against a solver that DOES carry the defect."""
     ad0, fd0, clean, sweep, res = _theta0_scores(f)
     # (0) the SYMMETRY oracle: the true derivative is zero, and the FD says so
     # to within its own derived cancellation floor.
@@ -658,19 +669,15 @@ def _score_theta0_defect(f, name):
         f"({res:.3e}).  The fixture is not symmetric and nothing below means "
         f"what it says")
     assert np.isfinite(ad0), (
-        f"{name}: AD at exactly normal incidence returned {ad0!r}.  The "
-        f"spectrum-relative floor exists to keep this FINITE")
-    # (1) THE DEFECT, still present: AD disagrees with the truth by decades
-    # more than the truth's own resolution.  A future fix must make this fail.
+        f"{name}: AD at exactly normal incidence returned {ad0!r}")
+    # (1) AD agrees with the truth to within decades of its resolution.
     scale = max(res, abs(fd0))
-    assert abs(ad0 - fd0) > _THETA0_WRONGNESS_FACTOR * scale, (
-        f"{name}: AD at exactly normal incidence is {ad0:.4e}, which agrees "
-        f"with the symmetry-forced truth (FD {fd0:.4e}) to within "
+    assert abs(ad0 - fd0) < _THETA0_WRONGNESS_FACTOR * scale, (
+        f"{name}: AD at exactly normal incidence is {ad0:.4e}, which "
+        f"DISAGREES with the symmetry-forced truth (FD {fd0:.4e}) by "
         f"{abs(ad0 - fd0) / scale:.4g}x the resolution at which that truth "
-        f"can be asserted ({scale:.3e}) -- the eigenvector-VJP degeneracy no "
-        f"longer corrupts it.  That is the KNOWN LIMIT being CLOSED: re-pin "
-        f"this test against the fix and drop the theta >= 1e-8 advice from "
-        f"the module docstring.  Do NOT loosen the factor.  "
+        f"can be asserted ({scale:.3e}) -- the eigenvector-VJP degeneracy "
+        f"corrupts it (the defect the degenerate-cluster rule closed).  "
         f"[adjudication: |AD(0)| is {abs(ad0) / max(clean, 1e-300):.4g}x the "
         f"clean AD at 1e-6 rad ({clean:.4e}) and {abs(ad0) / sweep:.4g}x the "
         f"largest gradient on a physical sweep ({sweep:.4e})]")
@@ -678,79 +685,55 @@ def _score_theta0_defect(f, name):
 
 
 @pytest.mark.parametrize("pol", ["te", "tm"])
-def test_pmm1d_angle_gradient_at_exactly_zero_is_an_OPEN_defect(pol):
-    """The KNOWN LIMIT (see the module docstring), pinned as a DEFECT.
-    A future fix should make this test fail.
+def test_pmm1d_angle_gradient_at_exactly_zero_is_exact(pol):
+    """The former KNOWN LIMIT, now CLOSED (2026-10-03): mirror symmetry forces
+    ``d(sum R)/d(theta) = 0`` at exactly normal incidence, and the twin's AD
+    now returns it to the FD's own resolution.
 
-    Mirror symmetry forces ``d(sum R)/d(theta) = 0`` at exactly normal
-    incidence, but the exactly degenerate +/-m pair makes the eig
-    non-differentiable there, so AD returns a finite WRONG value.  This has
-    never been a correctness pin; it fences the value.
-
-    2026-08-12 (``docs/audits/FIX_RUNNER_PINS_2026_08_12.md`` S7) fenced it
-    with an ABSOLUTE bar -- 1e-2 (TE) -- and the ubuntu py3.12 JAX job read
-    0.026644.  That bar could not have held, because the fenced quantity is
-    pure round-off garbage whose MAGNITUDE is a per-build fact.  ADJUDICATED
-    with the floor's own knob: the floored value is INSENSITIVE to the
-    degenerate pair's numerical splitting (shrinking it by 1e-8 in a live copy
-    of the VJP moves AD(0) from 7.792836e-03 to 7.793047e-03), so it is not a
-    ``1/D`` reading at all -- it is the eigenvector JUMP, and which direction
-    ``V`` jumps is exactly what a LAPACK build is entitled to choose.
-
-    2026-08-15 (``docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md`` S2).  The
-    2026-08-12 fix restated both halves as RATIOS against arms measured in the
-    same process -- but both ratios still had ``|AD(0)|`` in the numerator, so
-    both still asserted a magnitude the runners disagree about, and a numpy
-    2.5-era ubuntu wheel duly read 16.6x against the bar of 100.  The defect
-    arm is now a discriminator with no magnitude in it at all: AD must
-    DISAGREE with the symmetry-forced truth (exactly 0) by decades more than
-    the resolution at which that truth can be asserted, which is derived from
-    the finite difference's own float64 cancellation floor.  See
-    ``_THETA0_WRONGNESS_FACTOR`` for the two-sided regime separation.
-
-    The boundedness half moved out to
-    :func:`test_the_theta0_floor_bounds_the_wrong_value_but_the_unfloored_vjp_does_not`,
-    where it is stated as the MECHANISM it actually is (the floored value does
-    not move when the degenerate pair's splitting is shrunk; the unfloored one
-    scales as 1/splitting) rather than as a ratio against a physical sweep.
-
-    (Correction to the pre-2026-08-12 docstring, which recorded the unfloored
-    value as 7.7x WORSE: on this build it is 2.28x BETTER -- floored
-    +7.793e-03 against unfloored -3.411e-03.  Which of the two is larger at an
-    exact degeneracy is not a property the floor controls; the boundedness
-    under a shrinking splitting is.)
-
-    Use ``theta >= 1e-8`` rad if the angle derivative itself is the objective.
-    """
-    _score_theta0_defect(lambda a: _pmm1(a, pol=pol), f"pmm1d {pol}")
+    History.  Until 2026-10-03 this was ``..._is_an_OPEN_defect``, a pin that
+    AD DISAGREED with the truth by more than ``_THETA0_WRONGNESS_FACTOR``
+    resolutions (measured 1.9e6 .. 2.0e10 over five builds; 3.7e8 TE /
+    2.9e9 TM on Windows 2026-10-03), whose message asked to be re-pinned
+    against the fix.  The fix (the degenerate-cluster rule wrapping the
+    twin's three eigen-solves and the rest of the solve) reads
+    ``|AD(0) - FD(0)| / resolution`` = 0.99 (TE) / 1.00 (TM) on Windows --
+    AD(0) is 1.4e-13 / -5.6e-14, below the FD's own floor -- against the
+    same bar of 1e3: three decades of room on this side, three to seven on
+    the other.  The fail-before is
+    :func:`test_the_theta0_pin_fires_with_the_cluster_rule_off`."""
+    _score_theta0(lambda a: _pmm1(a, pol=pol), f"pmm1d {pol}")
 
 
-def test_the_theta0_defect_pin_fires_when_the_defect_is_absent():
-    """THE FAIL-BEFORE for the defect pin above.
-
-    ``FIX_RUNNER_PINS_2026_08_12`` S7; discriminator restated
-    ``FIX_RUNNER_PINS_2_2026_08_15`` S2.
-
-    The same claims are scored against ``rcwa1d``, which solves the identical
-    grating with ANALYTIC homogeneous half-space modes and therefore has no
-    degeneracy at normal incidence (its theta = 0 gradient is machine-zero,
-    8.9e-14 [W] / 6.5e-14 [M], pinned by the control test below).  That is
-    what "the eig-VJP degeneracy was fixed" looks like from outside, and the
-    pin must FAIL on it, telling the reader to re-pin rather than passing
-    quietly.
-
-    This arm is what makes the new discriminator two-sided, and it is
-    MEASURED, not assumed: scored against its own resolution, ``rcwa1d``
-    reads ``|AD(0) - FD(0)| / resolution`` = 1.0 [W] / 1.0 [M] against a bar
-    of 1e3, i.e. it fails by three decades.  The defective ``pmm1d`` arm
-    passes the same bar by three to seven decades in the other direction.
-    """
-    with pytest.raises(AssertionError, match="re-pin this test"):
-        _score_theta0_defect(lambda a: _rcwa1(a, pol="te"), "rcwa1d te")
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_the_theta0_pin_fires_with_the_cluster_rule_off(pol, monkeypatch):
+    """THE FAIL-BEFORE for the pin above, engineered through the library's
+    own switch: with ``_EIG_CLUSTER_GAP_REL = 0`` the twin's reverse pass is
+    the plain composition (the gradient before 2026-10-03), and the pin must
+    FAIL on it.  Measured ``|AD(0) - FD(0)| / resolution`` = 3.7e8 (TE) /
+    2.9e9 (TM) on Windows against the bar of 1e3 (the pre-fix readings over
+    five builds were 1.9e6 .. 2.0e10)."""
+    monkeypatch.setattr(_rc, "_EIG_CLUSTER_GAP_REL", 0.0)
+    with pytest.raises(AssertionError, match="DISAGREES"):
+        _score_theta0(lambda a: _pmm1(a, pol=pol), f"pmm1d {pol}")
 
 
-def test_the_theta0_floor_bounds_the_wrong_value_but_the_unfloored_vjp_does_not():
-    """The BOUNDEDNESS half of the known limit, stated as the mechanism it is.
+def test_the_theta0_pin_passes_on_the_analytic_half_space_solver():
+    """CONTROL: ``rcwa1d`` solves the identical grating with ANALYTIC
+    homogeneous half-space modes, so it never had the degeneracy (its
+    theta = 0 gradient is machine-zero, 8.9e-14 [W] / 6.5e-14 [M], pinned by
+    the control test below).  Scored with the same claims it reads
+    ``|AD(0) - FD(0)| / resolution`` = 1.0 [W] / 1.0 [M] -- the reading the
+    fixed ``pmm1d`` now matches."""
+    _score_theta0(lambda a: _rcwa1(a, pol="te"), "rcwa1d te")
+
+
+def test_the_theta0_floor_bounds_the_wrong_value_but_the_unfloored_vjp_does_not(
+        monkeypatch):
+    """The BOUNDEDNESS half of the known limit OF ``_jax_eig_stable`` ALONE,
+    stated as the mechanism it is -- measured with the degenerate-cluster rule
+    switched OFF (``_EIG_CLUSTER_GAP_REL = 0``), since the rule (2026-10-03)
+    evaluates the eig VJP only at LIFTED points, where no pair is degenerate
+    and the splitting knob below cannot reach.
 
     ``FIX_RUNNER_PINS_2_2026_08_15`` S2.  Until 2026-08-15 this was a ratio
     of ``|AD(0)|`` to the observable's largest physical gradient, with a bar
@@ -782,6 +765,7 @@ def test_the_theta0_floor_bounds_the_wrong_value_but_the_unfloored_vjp_does_not(
     Neither arm contains an absolute bar or a cross-arm magnitude, so neither
     can move with the runner.
     """
+    monkeypatch.setattr(_rc, "_EIG_CLUSTER_GAP_REL", 0.0)
     orig = _rc._JAX_EIG_STABLE
     try:
         # FLOORED: insensitive to the splitting -> bounded.
