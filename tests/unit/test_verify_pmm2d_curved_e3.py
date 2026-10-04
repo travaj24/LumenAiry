@@ -192,24 +192,46 @@ def test_ve3_the_eig_regularisation_is_load_bearing():
     lifted, resolved point, so the broadening is no longer what carries them
     -- the rule is.  Mutant = the rule off AND tau 0: must be off by > 1e-3
     (the 0.117 above); the rule on with tau 0: within 1e-7 (measured 3.0e-11,
-    the FD's floor), the default within 1e-7."""
+    the FD's floor), the default within 1e-7.
+
+    RESTATED 2026-10-04 (CI run 37199167691, shard 3, jax 0.11.2 on the Linux
+    runner): the mutant arm on the NON-SQUARE pillar read 3.8e-7 there, i.e.
+    whether a ROUND-OFF-split pair carries ``1 / dlam`` garbage with tau 0
+    depends on the LAPACK basis of that build -- a reading, not a property
+    (0.157 on Windows and WSL, both jax 0.11.0).  The mutant arm now runs on
+    the EXACTLY symmetric square pillar, whose degenerate pairs are structural
+    (the symmetry), so with the rule off and tau 0 the plain VJP divides a
+    non-zero cotangent by a rounding-level splitting on EVERY build:
+    measured 0.187 on both local builds; a non-finite result counts as off.
+    The two positive arms keep the non-square fixture."""
     import jax
 
     import lumenairy.elements.pmm._jax_twod_staggered as JT
-    x0, fj, gj, fn, f = _twin_fns("rect_w")
-    fd = _rich(fn, x0)
-    sc = np.max(np.abs(fd))
-    out = {}
-    for name, gap in (("mutant", 0.0), ("rule_tau0", None)):
-        JT._E3_EIG_TAU_REL = 0.0
+
+    def _with(fixture, tau, gap):
+        x0, _fj, _gj, _fn, f = _twin_fns(fixture)
+        JT._E3_EIG_TAU_REL = tau
         JT._E3_EIG_CLUSTER_GAP_REL = gap
         try:
-            out[name] = np.asarray(jax.jit(jax.jacrev(lambda x: f(x)))(x0))
+            return x0, np.asarray(jax.jit(jax.jacrev(lambda x: f(x)))(x0))
         finally:
             JT._E3_EIG_TAU_REL = None
             JT._E3_EIG_CLUSTER_GAP_REL = None
-    assert np.max(np.abs(out["mutant"] - fd)) / sc > 1e-3
-    assert np.max(np.abs(out["rule_tau0"] - fd)) / sc < 1e-7
+
+    # the mutant: rule off AND tau 0, at the exactly symmetric cell
+    x0s, _fjs, _gjs, fns, _fs = _twin_fns("square_w")
+    fds = _rich(fns, x0s)
+    _x, mutant = _with("square_w", 0.0, 0.0)
+    err_mutant = np.max(np.abs(mutant - fds)) / np.max(np.abs(fds))
+    assert (not np.isfinite(err_mutant)) or err_mutant > 1e-3, err_mutant
+
+    # the positive arms: the rule with tau 0, and the default, on the
+    # non-square pillar
+    x0, _fj, gj, fn, _f = _twin_fns("rect_w")
+    fd = _rich(fn, x0)
+    sc = np.max(np.abs(fd))
+    _x, rule_tau0 = _with("rect_w", 0.0, None)
+    assert np.max(np.abs(rule_tau0 - fd)) / sc < 1e-7
     assert np.max(np.abs(np.asarray(gj(x0)) - fd)) / sc < 1e-7
 
 

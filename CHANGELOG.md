@@ -62,6 +62,21 @@ results on two fixtures, and `re_reference`, `aggregate`, `full_field`,
 byte-identical envelopes.  Record:
 `docs/audits/BUILD_REMOVALS_5_50_0_2026_10_03.md`.
 
+### Fixed -- raytrace: a jit-first `trace_jax` no longer poisons the JAX prescription cache
+
+`trace_jax` keeps a small process-wide cache of each prescription's JAX leaves so
+repeated eager calls skip the conversion.  The leaves were built with array
+conversions inside whatever trace the caller was in; on jax 0.11 and later a
+conversion made inside a `jax.jit` or `jax.grad` trace yields a tracer, so a
+differentiable call made FIRST on a fresh prescription cached tracers, and the
+next eager `trace_jax` on that prescription raised `UnexpectedTracerError` from
+the cache hit.  Every eager-first caller was blind to it; this release's sharded
+CI lane, which orders tests by duration, ran a jitted test first and seven
+ray-trace tests failed (run 37199167691), and the sequence reproduced locally on
+jax 0.11.0.  The leaves are now evaluated at compile time
+(`jax.ensure_compile_time_eval`) and a non-concrete result is never cached; pinned
+two-sidedly in `tests/unit/test_audit_raytrace.py` (the eager call succeeds and the
+cache holds concrete leaves only).
 ### Changed -- CI: the JAX lane is sharded three ways
 
 The dedicated CI job that installs JAX and runs the jax-guarded unit files ran on

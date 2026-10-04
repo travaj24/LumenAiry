@@ -284,7 +284,18 @@ def test_r2v_a_symmetry_keeping_parameter_is_exact_with_the_rule_on_and_off():
     """t on ALL four arms of the cross (C4v kept: the clusters stay
     degenerate and the parameter does not split them).  ON and OFF agree
     (2.3e-14 relative on Windows, the lifted average of a non-splitting
-    direction) and both match the FD (2.5e-10).  Bars 1e-9 / 1e-7."""
+    direction) and both match the FD (2.5e-10).  Bars 1e-9 / 1e-7.
+
+    RESTATED 2026-10-04 (CI run 37199167691, shard 1, jax 0.11.2 on the
+    Linux runner): the FD PREMISE failed there, not the claim -- on the
+    default rungs (1e-3, 3e-4, 1e-4) the Richardson ratio of the components
+    above 1 percent of the largest read 11.0 .. 13.4 against the expected
+    11.375 (up to 17.6 percent off), i.e. the NumPy forward's round-off near
+    the split clusters exceeded the smallest rung's signal on that build.
+    This is the RCWA-cell case the module already documents (``_HS_RCWA``
+    and the stack test above): the rungs are now (1e-2, 3e-3, 1e-3), where
+    the premise holds on every build and the h^4 truncation (~1e-8) stays
+    under the 1e-7 bar."""
     from lumenairy.elements.rcwa import RCWAStack
 
     def f(t, xp):
@@ -295,7 +306,7 @@ def test_r2v_a_symmetry_keeping_parameter_is_exact_with_the_rule_on_and_off():
         st.set_source(1.0, theta=0.0, phi=0.0)
         _o, R, T = st.solve().efficiencies()
         return xp.concatenate([xp.ravel(R), xp.ravel(T)])
-    fd = _fd(lambda t: f(t, np), 0.0)
+    fd = _fd(lambda t: f(t, np), 0.0, hs=(1e-2, 3e-3, 1e-3))
     g_on, g_off = _ad(f, 0.0, True), _ad(f, 0.0, False)
     assert _rel(g_on, g_off) < 1e-9
     assert _rel(g_on, fd) < 1e-7
