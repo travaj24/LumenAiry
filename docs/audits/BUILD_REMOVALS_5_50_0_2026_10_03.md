@@ -191,3 +191,57 @@ passed, 44 skipped, 1 failed** on Windows.  The failure is the same metadata
 test, now reading installed 5.49.0 against the patched 5.50.0 -- the mismatch
 the fold itself removes when the maintainer bumps `__version__` and
 reinstalls; every registry and forward-version pin passed at 5.50.0.
+
+## 7. Citation overrides retired at the fold
+
+What expired and what moved.  `scripts/reanchor_citations.py` checks that each
+source-line citation in the CHANGELOG `[5.47.0]` block still names the line
+whose content it named at a base commit (`_V547_BASE` in
+`tests/unit/test_v5_3_2_walker_source_line_citation.py`). Against the former
+base `f4f18851`, four of those citations (`lumenairy/raytrace/trace.py` 60 / 61
+and `lumenairy/raytrace/world_trace.py` 82 / 83) name declarations whose
+default 5.49.0 changed in place (WP-C2: `renormalize` `'surface'` to `'exit'`,
+`sphere_normal` `'generic'` to `'analytic'`). They anchored only through four
+`EDITED_IN_PLACE` entries recorded for 5.49.0. Each entry is honoured only until
+`lumenairy.__version__` passes the release it records, so at 5.50.0 all four
+refused, as designed, and the 5.47.0 check reported four "NEEDS A HUMAN" notes.
+The fix was to move the base forward, not to re-point the entries. The base is
+now `b80b354c`, the 5.49.0 release commit (tag `v5.49.0`). That is the last
+commit at which the block's citations were known to be correct (CI-green with
+the overrides). At that commit the new defaults are already the base content,
+so the four citations anchor by content and need no override.
+`python scripts/reanchor_citations.py --base b80b354c --block "[5.47.0]" --check`
+reports `0 re-anchored` with no notes and no refusals, and it checks 164 owned
+citations (145 at the old base). The four 5.49.0 entries are deleted from the
+map and a tombstone comment stands in their place. The two 5.50.0 entries
+(`lumenairy/elements/rcwa/twod.py` 2035 and 1977) are keyed by their `b80b354c`
+coordinates. They still fire and are kept. The version guard and the content
+digest are unchanged.
+
+Which tests changed and why. Three test files used the live `trace.py:61` entry
+as the subject of the D7 / VR2-D7 guard arms:
+`tests/unit/test_c2_analytic_normal_default.py` (section 6f),
+`tests/unit/test_verify_c2_analytic_normal.py` (section 8) and
+`tests/unit/test_verify_c2_round2.py`
+(`test_vr2_the_edited_in_place_override_refuses_the_three_round_one_abuses`).
+Once that entry was gone, `_edited_in_place` returned "no opinion" before any
+guard ran. Every refusing arm would then have passed without testing anything,
+and the arms that expect the override to fire failed. All three files now inject
+a synthetic entry into `EDITED_IN_PLACE` for each arm and restore the map
+afterwards. The synthetic entry is the retired five-field tuple (same coordinate,
+digest and enclosing `def trace(`), recorded for the running source version so
+that it is live. Every behavioural arm is unchanged: the override refuses a
+reverted default, a nonsense value, a stale copy, an unrelated line, an
+out-of-range coordinate and a wrong enclosing definition; it fires in the
+shipped shape; and it fires at the recorded version and refuses one patch past
+it. The only assertions removed were "the live map carries trace.py:61" and the
+per-entry shape checks on that entry. They are replaced by the same shape checks
+over every live entry, a premise that `content_digest` still reproduces the
+retired digest, and, in the version-pin test, a stale-entry assertion over every
+live entry. One test also changed how it skips: `test_verify_c2_round2.py`
+reads the real `trace.py` and the real `f4f18851` base
+through git. Its skip used to fire whenever the shipped case did not fire. At
+fe5be0b5 on Windows, that skip was hiding the expired entry's refusal. The skip
+now fires only when the base commit cannot be read (the WSL condition it
+documents). A readable base on which the shipped content does not fire is now a
+failure.

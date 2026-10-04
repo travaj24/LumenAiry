@@ -151,31 +151,19 @@ OWNED = {
 #:      rather than defended against -- a reviewer of a diff that touches
 #:      one of these digests is reviewing the CLAIM, not the hash.
 EDITED_IN_PLACE = {
-    # WP-C2 (5.49.0): ``trace`` / ``trace_world`` default to
-    # ``sphere_normal='analytic'``.  The declaration did not move; its default
-    # changed, which is what that release is.
-    #   expected: "sphere_normal: str = 'analytic',"  inside "def trace("
-    ('lumenairy/raytrace/trace.py', 61): (
-        61, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'",
-        '5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0',
-        '5.49.0', 'def trace('),
-    #   expected: "sphere_normal: str = 'analytic',"  inside "def trace_world("
-    ('lumenairy/raytrace/world_trace.py', 83): (
-        83, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'",
-        '5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0',
-        '5.49.0', 'def trace_world('),
-    # WP-C2 (5.49.0), second commit: the same two functions default to
-    # ``renormalize='exit'``.
-    #   expected: "renormalize: str = 'exit',"  inside "def trace("
-    ('lumenairy/raytrace/trace.py', 60): (
-        60, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'",
-        'a967d130200770f69bf7bc26d427d33cfa4f89a1da6db5cd0f15b926072475fe',
-        '5.49.0', 'def trace('),
-    #   expected: "renormalize: str = 'exit',"  inside "def trace_world("
-    ('lumenairy/raytrace/world_trace.py', 82): (
-        82, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'",
-        'a967d130200770f69bf7bc26d427d33cfa4f89a1da6db5cd0f15b926072475fe',
-        '5.49.0', 'def trace_world('),
+    # RETIRED at 5.50.0 (the fold): four WP-C2 (5.49.0) entries --
+    # ``lumenairy/raytrace/trace.py`` 60 / 61 and
+    # ``lumenairy/raytrace/world_trace.py`` 82 / 83 -- answered the in-place
+    # default flips ``renormalize: str = 'surface',`` -> ``'exit',`` and
+    # ``sphere_normal: str = 'generic',`` -> ``'analytic',`` inside
+    # ``def trace(`` / ``def trace_world(`` for the 5.47.0 block's citations
+    # read against base ``f4f18851``.  They expired by design once the
+    # package went past 5.49.0; the 5.47.0 block's base then moved to
+    # ``b80b354c`` (the 5.49.0 release commit), where the flipped defaults
+    # ARE the base content and those citations anchor by content with no
+    # override.  The record of the flips lives in the CHANGELOG ``[5.49.0]``
+    # block and the WP-C2 audit documents; the D7 guard they exercised is
+    # still tested, against a synthetic entry the tests inject.
     # Symmetric-point gradient fix (5.50.0): ``rcwa_jones_2d``'s JAX branch was
     # restructured so that every eigen-decomposition is recorded and replayed
     # through the degenerate-cluster rule, and the traced Li route was built.

@@ -755,7 +755,18 @@ def test_vr2_the_edited_in_place_override_refuses_the_three_round_one_abuses():
     condition that makes the two walker-citation ids red there), so the
     override returns "no opinion" for every case including the shipped one
     and the comparison is vacuous.  That is detected and skipped rather
-    than asserted.
+    than asserted -- and since the 5.50.0 fold ONLY that is skipped: the
+    skip now keys on the base commit being unreadable, and a readable base
+    on which the shipped content does not fire is a failure.
+
+    RETIRED ENTRY, 5.50.0 fold.  The real ``trace.py:61`` entry this arm
+    abused was recorded for 5.49.0 and expired by design once the package
+    went past it (the 5.47.0 citation base moved to ``b80b354c``).  The
+    guard is unchanged, so the arm injects a SYNTHETIC entry of the same
+    five-field shape -- same coordinate, digest and enclosing definition,
+    recorded for the CURRENT source version so it is live -- for its own
+    duration, and still reads the REAL ``trace.py`` and the REAL base
+    ``f4f18851`` (where the line was ``sphere_normal: str = 'generic',``).
     """
     spec = importlib.util.spec_from_file_location(
         'vr2_reanchor_tool', REPO / 'scripts' / 'reanchor_citations.py')
@@ -763,11 +774,24 @@ def test_vr2_the_edited_in_place_override_refuses_the_three_round_one_abuses():
     spec.loader.exec_module(T)
 
     path, base_num, base = 'lumenairy/raytrace/trace.py', 61, 'f4f18851'
-    assert (path, base_num) in T.EDITED_IN_PLACE, (
-        'the map entry this arm abuses has gone; re-derive it from the '
-        'current EDITED_IN_PLACE.')
+    entry = (61,
+             "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic' "
+             "(SYNTHETIC test entry)",
+             '5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0',
+             T._source_version(), 'def trace(')
     real_lines = list(T.lines(path))
     shipped = real_lines[base_num - 1]
+    assert T.content_digest(shipped) == entry[2], (
+        f'PREMISE: {path}:{base_num} is no longer the shipped '
+        f'``sphere_normal: str = \'analytic\',`` declaration ({shipped!r}); '
+        f're-derive this arm\'s coordinate from the current file.')
+    if not T.lines(path, base):
+        pytest.skip(
+            'the re-anchor tool cannot read the base commit from this '
+            'mount (git cannot resolve the repository), so every case '
+            'returns "no opinion" and the abuses below would pass '
+            'vacuously.  This is the WSL-against-a-Windows-worktree '
+            'condition documented on the two walker-citation ids.')
 
     def run(mutate, version=None):
         T._cache.clear()
@@ -778,20 +802,24 @@ def test_vr2_the_edited_in_place_override_refuses_the_three_round_one_abuses():
         real_ver = T._source_version
         if version is not None:
             T._source_version = lambda: version
+        key = (path, base_num)
+        had, prior = key in T.EDITED_IN_PLACE, T.EDITED_IN_PLACE.get(key)
+        T.EDITED_IN_PLACE[key] = entry
         try:
             num, _how = T._edited_in_place(path, base_num, base)
         finally:
             T._source_version = real_ver
+            if had:
+                T.EDITED_IN_PLACE[key] = prior
+            else:
+                del T.EDITED_IN_PLACE[key]
         return num, list(T.EDITED_IN_PLACE_REFUSALS)
 
-    fired, _ = run(lambda h: h)
-    if fired is None:
-        pytest.skip(
-            'the re-anchor tool cannot read the base commit from this '
-            'mount (git cannot resolve the repository), so every case '
-            'returns "no opinion" and the abuses below would pass '
-            'vacuously.  This is the WSL-against-a-Windows-worktree '
-            'condition documented on the two walker-citation ids.')
+    fired, refusals = run(lambda h: h)
+    assert fired == base_num and not refusals, (
+        f'the base commit is readable and the override does not fire on the '
+        f'SHIPPED content (fired={fired}, refusals={refusals}); every abuse '
+        f'below would pass vacuously.')
 
     def _sub(h, text):
         h = list(h)
@@ -824,8 +852,7 @@ def test_vr2_the_edited_in_place_override_refuses_the_three_round_one_abuses():
 
     # --- and the two-sided half: the shipped content fires, at the
     #     recorded release and below it, and refuses past it
-    num, refusals = run(lambda h: h,
-                        version=T.EDITED_IN_PLACE[(path, base_num)][3])
+    num, refusals = run(lambda h: h, version=entry[3])
     assert num == base_num and not refusals, (
         'the override refuses the SHIPPED content at exactly the release '
         'it was recorded for, so it can never fire and the guard is a '
