@@ -2108,12 +2108,13 @@ def test_c2_the_edited_in_place_override_pins_the_content(abuse, current,
     and asserts the entry SHAPE on every live entry of the real map instead.
     """
     ra = _c2_load_reanchor()
-    assert ra.EDITED_IN_PLACE, (
-        'PREMISE: the EDITED_IN_PLACE map is empty, so the shape check below '
-        'would be vacuous.  MEASURED 2026-10-04: two live 5.50.0 entries '
-        '(rcwa/twod.py 2035 / 1977).  If the map has legitimately emptied, '
-        'drop this premise with that note.')
-    for key, live in ra.EDITED_IN_PLACE.items():
+    # The map legitimately EMPTIED at 5.50.1: its two 5.50.0 entries
+    # (rcwa/twod.py 2035 / 1977) expired and were retired when the [5.47.0]
+    # block's base moved to the 5.50.1 release commit.  The shape check
+    # therefore also runs on the synthetic entry, so it is never vacuous.
+    entries = dict(ra.EDITED_IN_PLACE)
+    entries[('<synthetic>', 61)] = _c2_synthetic_entry(ra)
+    for key, live in entries.items():
         assert len(live) == 5, (
             f'an EDITED_IN_PLACE entry must carry (new_num, reason, digest, '
             f'recorded_for, enclosing_def); {key} carries {len(live)} '

@@ -124,6 +124,13 @@ _LOCK_WITHOUT_CACHE_EXEMPTIONS = frozenset({
     # read-only singleton, NOT a growable keyed cache -- so it legitimately
     # has no companion ``_CACHE`` (same rationale as ``_ZARR_MKDIR_LOCK``).
     '_BLAS_CONTROLLER_LOCK',
+    # v5.50.1 (audit L-2, lean cluster rule): ``_LEAN_SELFTEST_LOCK`` in
+    # ``lumenairy.elements.rcwa._core`` makes the ONE-TIME self-test of the
+    # lean closure-conversion path run once under concurrent first use; it
+    # guards a tri-state verdict flag (``_LEAN_SELFTEST``: None / True /
+    # False), NOT a keyed cache -- the same build-once rationale as
+    # ``_BLAS_CONTROLLER_LOCK``.
+    '_LEAN_SELFTEST_LOCK',
     # v5.30 (audit E-L2): ``_PERSISTENT_POOL_LOCK`` in
     # ``lumenairy.elements._lens_traced`` guards the build-once/teardown
     # of the persistent ProcessPoolExecutor singleton

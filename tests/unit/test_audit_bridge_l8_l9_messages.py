@@ -162,8 +162,14 @@ def test_l8_rt_unchanged_by_the_diagnostic():
     R, T, msgs = _solve(_cusp_shapes())
     assert any("pinches a cell" in m for m in msgs)
     assert not any(_OLD in m for m in msgs)
-    np.testing.assert_allclose(R[:, 24], _PIN["cusp"][0], rtol=0, atol=5e-9)
-    np.testing.assert_allclose(T[:, 24], _PIN["cusp"][1], rtol=0, atol=5e-9)
+    # The pins were taken on Windows.  On the CI Linux runners the cusp case
+    # reads T_y 6.0e-9 off (run 41646862421): its map quadrature is NOT
+    # integrable at the pinched cell (moment error 0.5 at every node count),
+    # which amplifies BLAS round-off far beyond the ordinary case's -- so the
+    # cross-platform pin carries 5e-8 here.  The claim of this test, that the
+    # diagnostic leaves R / T untouched, is the BITWISE in-process check below.
+    np.testing.assert_allclose(R[:, 24], _PIN["cusp"][0], rtol=0, atol=5e-8)
+    np.testing.assert_allclose(T[:, 24], _PIN["cusp"][1], rtol=0, atol=5e-8)
     # bitwise in-process: the same solve with the node count forced (no
     # diagnostic at all) gives the same bits
     orig = TS._stag_map_nodes

@@ -91,6 +91,15 @@ changed:
   `0.7097 -> 0.4817`, `PMM2DStackPure` `0.70378 -> 0.48384` (its own
   converged reference `0.483870`).
 
+  Two side effects worth knowing.  The hybrid 2-D discretisation is not
+  exactly mirror-equivariant (its element-count tie-break between equal
+  strips goes by order), so the set of truncations its slant conditioning
+  guard refuses moves with the geometry: some inputs that solved on 5.50.0
+  now raise the conditioning error, and some that raised now solve (on one
+  fixture `n_orders` 6-8 are now refused where 5.50.0 refused 8).  To
+  reproduce a 5.50.0 number for comparison, pass the point-mirrored cell
+  (and the negated slant): that is the structure 5.50.0 solved.
+
 *Evidence.* Per-order R/T against grcwa 0.1.2 to 1e-15 (`phi = 0, pi/2,
 0.7`); first-order Born on weak asymmetric gratings; translation phases
 `exp(-i (m Kx a + n Ky b))` on shifted layers; internal fields registered to

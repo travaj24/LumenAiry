@@ -389,3 +389,42 @@ def test_1d_internal_field_is_registered():
     em = ep[idx] * np.exp(1j * kx0 * (xr - xp[idx]))
     assert k0 > 0
     assert np.linalg.norm(em - er) / np.linalg.norm(er) < 1e-2
+
+
+# ---------------------------------------------------------------------------
+# the inclined-coordinate binary entry at NORMAL incidence -- the only route
+# through ``_sem_modes_slant``'s slant sign, which nothing above reaches
+# (PMM point-mirror verification 2026-11-03, finding F1: that sign reverted
+# alone passed every other check here; the specular order is mirror-blind)
+# ---------------------------------------------------------------------------
+
+def _rcwa_slanted_staircase(walk, slant, depth, duty, eps_r, nz=64, s=1024):
+    st = RCWAStack(P, n_superstrate=1.0, n_substrate=1.5, n_orders=30)
+    u = np.arange(s) / s
+    for k in range(nz):
+        shift = walk * np.tan(slant) * (k + 0.5) / nz * depth / P
+        cell = np.where(((u - shift) % 1.0) < duty, eps_r, 1.0 + 0j)
+        st.add_layer(depth / nz, eps_cell=cell[:, None], formulation="li")
+    st.set_source(WL, theta=0.0)
+    return st.solve().efficiencies()
+
+
+def test_1d_slanted_binary_entry_walks_toward_plus_x_per_order():
+    """``pmm_efficiency_1d_slanted`` at normal incidence, per order, against an
+    RCWA z-staircase walking toward +x (declared) and toward -x (mirror).
+    Measured: 3.5e-5 declared, 3.4e-2 with the slant sign reverted."""
+    slant, depth, duty, eps_r = np.deg2rad(25.0), 0.4, 0.4, 3.0 + 0.4j
+    refs = {w: _rcwa_slanted_staircase(w, slant, depth, duty, eps_r)
+            for w in (+1, -1)}
+    for pol, row in (("te", 1), ("tm", 0)):
+        o, R, T = pmm.pmm_efficiency_1d_slanted(
+            P, np.sqrt(eps_r), 1.0, 1.5, 1.0, depth, duty, WL, slant,
+            angle=0.0, polarization=pol, degree=16)
+        o, R, T = np.asarray(o), np.asarray(R), np.asarray(T)
+        assert np.sum((R + T)[o != 0] > 1e-3) >= 2     # live +-1 orders
+        err = {}
+        for w, (ro, rR, rT) in refs.items():
+            ro, rR, rT = np.asarray(ro), np.asarray(rR)[row], np.asarray(rT)[row]
+            idx = [int(np.flatnonzero(ro == m)[0]) for m in o]
+            err[w] = max(np.max(np.abs(R - rR[idx])), np.max(np.abs(T - rT[idx])))
+        assert err[+1] < 1e-3 and err[-1] > 10 * err[+1], (pol, err)

@@ -520,9 +520,12 @@ def test_slant_efficiency_unchanged_by_shared_eig():
     o, R, T = la.pmm_efficiency_1d_slanted(
         0.5e-6, np.sqrt(2.0), 1.0, 1.5, 1.0, 0.4e-6, 0.5, 0.55e-6,
         slant_angle=np.deg2rad(15.0), angle=np.deg2rad(20.0),
-        polarization="te", degree=13)
-    # lossless TE closes to the slant metric's degree-13 floor.  POINT-MIRROR
-    # FIX (v5.50.1): on the DECLARED slant it reads 1.42e-05 (1.84e-06 at degree
-    # 16, 3.2e-09 at 20 -- spectral); the 5.50 build solved the opposite slant
-    # (2.5e-06).  Bar 3e-05.
-    assert abs(float(R.sum() + T.sum()) - 1.0) < 3e-5
+        polarization="te", degree=22)
+    # lossless TE closes spectrally in the degree.  POINT-MIRROR FIX (v5.50.1):
+    # the DECLARED slant (the 5.50 build solved the opposite one) is not
+    # converged at degree 13 -- its closure there is round-off-sensitive,
+    # -1.42e-05 / -1.39e-05 on Windows (2 / default BLAS threads), -2.00e-05
+    # on WSL Linux, +3.005e-05 on the CI Linux runner -- so the gate runs at
+    # degree 22, where it has converged on every platform measured:
+    # -1.56e-08 (Windows), -1.58e-08 (WSL Linux); degree 24 reads 6e-10.
+    assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-6
