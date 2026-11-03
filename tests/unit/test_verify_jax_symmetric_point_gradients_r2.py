@@ -816,7 +816,14 @@ def test_r2v_controls_rcwa_1d_and_bor_are_exact_at_their_symmetric_points():
             r = s.solve()
         return xp.concatenate([xp.ravel(xp.asarray(r["R"])),
                                xp.ravel(xp.asarray(r["T"]))])
-    fd = _fd(lambda t: np.asarray(bor(jnp.asarray(t), jnp)), 2.2)
+    # The RCWA-cell rungs, for the same reason (see ``_HS_RCWA``): on
+    # (1e-3, 3e-4, 1e-4) one FD row of this BOR forward moves by 1.1e-10
+    # under 1e-11 shifts of n_ring (round-off) against rung differences of
+    # 7e-10, so the h^2 premise scattered 9 % (WSL) to 14 % (CI run
+    # 41646862421) of a 12 % bar.  On these rungs (measured 2026-11-03, WSL,
+    # jax 0.12.0.1): premise 2.1e-4 of 12 %, AD-vs-FD 2.5e-11 of 1e-7.
+    fd = _fd(lambda t: np.asarray(bor(jnp.asarray(t), jnp)), 2.2,
+             hs=_HS_RCWA)
     assert _rel(_ad(bor, 2.2), fd) < 1e-7
 
 

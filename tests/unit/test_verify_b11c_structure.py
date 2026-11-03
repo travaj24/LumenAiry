@@ -365,6 +365,23 @@ def test_monkeypatch_save_set_undo_leaves_no_shadow_for_every_live_name(
         f"monkeypatch's undo left a shadow {name!r} on the facade")
 
 
+@pytest.mark.parametrize("name", LIVE_FORWARD)
+def test_every_live_name_is_a_data_descriptor_on_the_facade_type(name):
+    """The save/undo cycle above runs with whatever pytest is installed, so
+    it cannot see a pytest whose save rule differs.  pytest 9.2.0 (#10644)
+    saves from ``target.__dict__`` unless ``type(target)`` has a DATA
+    descriptor for the name; against a ``__getattr__`` forward that recorded
+    "absent" and the undo DELETED the leaf's own name for the rest of the
+    process (CI run 41646862421: ``_lens_kernels`` lost ``cp`` /
+    ``_NUMBA_KERNELS`` / ...).  Pin the property both save rules agree on."""
+    descr = type(lenses).__dict__.get(name)
+    assert descr is not None, f"{name} is not defined on {type(lenses)!r}"
+    assert hasattr(type(descr), "__set__") and hasattr(type(descr),
+                                                       "__delete__"), (
+        f"{name} is not a data descriptor on the facade type, so pytest>=9.2 "
+        f"monkeypatch saves it as ABSENT and its undo deletes the leaf's name")
+
+
 def test_dir_lenses_lists_every_forwarded_name_exactly_once():
     """A module's default ``__dir__`` lists ``__dict__`` only, so the forward
     needs its own -- and it must not double-count a name that is genuinely in

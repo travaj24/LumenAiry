@@ -77,14 +77,25 @@ from ._lens_kernels import (  # noqa: F401 -- re-export, see the block below
 # for ever, and a ``lenses._NUMBA_AVAILABLE = False`` would set an attribute
 # that nothing reads -- turning every such test into a silent no-op.
 #
-# So this module forwards those names to the leaf in BOTH directions.  A module
-# ``__getattr__`` (PEP 562) covers the read; the WRITE needs the module
-# object's TYPE to define ``__setattr__``, which PEP 562 does not provide --
-# hence the ``__class__`` assignment below, the documented way to customise a
-# module's attribute protocol.  Reads and writes both land on the leaf, this
-# module keeps no copy of its own, and
+# So this module forwards those names to the leaf in BOTH directions, and
+# for delete.  PEP 562's module ``__getattr__`` covers only the read; the WRITE
+# needs the module object's TYPE to take part -- hence the ``__class__``
+# assignment below, the documented way to customise a module's attribute
+# protocol.  Each of the eight is a DATA DESCRIPTOR on that type
+# (``_LensesFacade._LiveForward``), whose get / set / delete land on the leaf:
+# this module keeps no copy of its own, and
 # ``monkeypatch.setattr(lenses, '_NUMBA_AVAILABLE', False)`` -- save, set and
 # undo alike -- reaches the code that reads it.
+#
+# WHY A DESCRIPTOR and not a ``__getattr__`` + ``__setattr__`` pair (the 5.48.0
+# spelling): pytest 9.2.0 (#10644) changed ``MonkeyPatch.setattr`` to save the
+# old value from the target's ``__dict__`` unless ``type(target)`` holds a data
+# descriptor for the name.  Against the pair, the save found nothing in
+# ``lenses.__dict__``, recorded "absent", and the undo ran ``delattr(lenses,
+# name)`` -- which the pair forwarded, DELETING the leaf's own ``cp`` /
+# ``_NUMBA_KERNELS`` / ... for the rest of the process (every later sag call
+# then raised ``NameError``).  A data descriptor is the one shape every pytest
+# version saves through ``getattr`` and restores through ``setattr``.
 if TYPE_CHECKING:  # pragma: no cover -- a static binding for mypy only;
     # at run time the name is a LIVE forward to the leaf (see below), so
     # this import must never execute, or the facade would keep a copy.
@@ -167,29 +178,54 @@ class _LensesFacade(_types.ModuleType):
             f"so read it from {_KERNELS.__name__} while a substitute is in "
             f"place.")
 
-    def __getattr__(self, name):
-        if name in _LIVE_FORWARD_NAMES:
-            return getattr(_KERNELS, name)
-        raise AttributeError(
-            f'module {self.__name__!r} has no attribute {name!r}')
+    class _LiveForward:
+        """A data descriptor forwarding get / set / delete of one name to
+        ``_lens_kernels`` (see "THE LIVE HALF" above ``_LIVE_FORWARD_NAMES``).
+        A DATA descriptor on the module's type wins over the module's dict for
+        all three operations, which is what makes the forward live -- and what
+        ``MonkeyPatch.setattr`` (pytest >= 9.2) looks for before it decides
+        whether the old value lives in ``__dict__``."""
+
+        __slots__ = ('name',)
+
+        def __set_name__(self, owner, name):
+            self.name = name
+
+        def __get__(self, module, owner=None):
+            if module is None:
+                return self
+            # AttributeError when the leaf lacks the name; the module type
+            # then reports it the ordinary way.
+            return getattr(_KERNELS, self.name)
+
+        def __set__(self, module, value):
+            setattr(_KERNELS, self.name, value)
+
+        def __delete__(self, module):
+            delattr(_KERNELS, self.name)
+
+    # The eight live forwards -- exactly ``_LIVE_FORWARD_NAMES`` (checked
+    # below the class).
+    cp = _LiveForward()
+    _ne = _LiveForward()
+    NUMEXPR_AVAILABLE = _LiveForward()
+    _NUMBA_AVAILABLE = _LiveForward()
+    _numba = _LiveForward()
+    _njit = _LiveForward()
+    _prange = _LiveForward()
+    _NUMBA_KERNELS = _LiveForward()
 
     def __setattr__(self, name, value):
-        if name in _LIVE_FORWARD_NAMES:
-            setattr(_KERNELS, name, value)
-            return
         if name in type(self)._LEAF_OWNED_NAMES:
             raise AttributeError(
                 type(self)._leaf_owned_refusal(name, 'rebinding'))
-        super().__setattr__(name, value)
+        super().__setattr__(name, value)    # a live name hits its descriptor
 
     def __delattr__(self, name):
-        if name in _LIVE_FORWARD_NAMES:
-            delattr(_KERNELS, name)
-            return
         if name in type(self)._LEAF_OWNED_NAMES:
             raise AttributeError(
                 type(self)._leaf_owned_refusal(name, 'deleting'))
-        super().__delattr__(name)
+        super().__delattr__(name)            # a live name hits its descriptor
 
     def __dir__(self):
         # A module's default ``__dir__`` lists ``__dict__`` only, so without
@@ -203,6 +239,11 @@ class _LensesFacade(_types.ModuleType):
         return sorted(set(super().__dir__()) | _LIVE_FORWARD_NAMES)
 
 
+if {n for n, v in vars(_LensesFacade).items()
+        if isinstance(v, _LensesFacade._LiveForward)} != _LIVE_FORWARD_NAMES:
+    raise RuntimeError(  # pragma: no cover -- an edit-time invariant
+        'lenses: _LensesFacade must define one _LiveForward per name in '
+        '_LIVE_FORWARD_NAMES, and no other.')
 _sys.modules[__name__].__class__ = _LensesFacade
 
 # ---------------------------------------------------------------------------

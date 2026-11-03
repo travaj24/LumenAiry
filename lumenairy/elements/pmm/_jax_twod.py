@@ -452,20 +452,28 @@ def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
     S11, _S12, S21, _S22 = S
 
     # incident (0,0) plane wave -- tracer-safe TE/TM basis (the kt -> 0 limit
-    # blends to the lab axes exactly like the concrete path's branch)
-    kt = jnp.hypot(jnp.real(kx0), jnp.real(ky0))
-    safe_kt = jnp.where(kt < 1e-12, 1.0, kt)
-    axu = jnp.where(kt < 1e-12, 0.0, jnp.real(kx0) / safe_kt)
-    ayu = jnp.where(kt < 1e-12, 0.0, jnp.real(ky0) / safe_kt)
+    # blends to the lab axes exactly like the concrete path's branch).
+    # hypot must never be DIFFERENTIATED at the origin: its derivative there
+    # is (x dx + y dy) / hypot = 0/0, and a ``where`` downstream cannot mask
+    # it (0 * NaN = NaN).  jax <= 0.11 happened to return a finite 0.5 there;
+    # jax 0.12.0 returns NaN, which made every theta = 0 angle gradient NaN.
+    # So the normal-incidence mask is decided on the primal (a comparison
+    # carries no tangent) and hypot is fed a safe point inside it.
+    kxr, kyr = jnp.real(kx0), jnp.real(ky0)
+    at_normal = kxr * kxr + kyr * kyr < 1e-24          # hypot < 1e-12
+    kt = jnp.hypot(jnp.where(at_normal, 1.0, kxr),
+                   jnp.where(at_normal, 0.0, kyr))
+    axu = jnp.where(at_normal, 0.0, kxr / kt)
+    ayu = jnp.where(at_normal, 0.0, kyr / kt)
     kz_inc = jnp.real(_kz_fwd(jnp.conj(eps_sup), kx0, ky0))
     if polarization == "te":
-        ex0 = jnp.where(kt < 1e-12, 0.0, -ayu)
-        ey0 = jnp.where(kt < 1e-12, 1.0, axu)
+        ex0 = jnp.where(at_normal, 0.0, -ayu)
+        ey0 = jnp.where(at_normal, 1.0, axu)
         einc_sq = jnp.asarray(1.0)
     else:
-        ex0 = jnp.where(kt < 1e-12, 1.0, axu)
-        ey0 = jnp.where(kt < 1e-12, 0.0, ayu)
-        einc_sq = jnp.where(kt < 1e-12, 1.0,
+        ex0 = jnp.where(at_normal, 1.0, axu)
+        ey0 = jnp.where(at_normal, 0.0, ayu)
+        einc_sq = jnp.where(at_normal, 1.0,
                             1.0 + (kt / jnp.where(kz_inc == 0, 1.0,
                                                   kz_inc)) ** 2)
     delta = ((st["order_x"] == 0) & (st["order_y"] == 0)).astype(_C)
