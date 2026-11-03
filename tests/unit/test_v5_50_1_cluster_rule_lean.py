@@ -69,6 +69,11 @@ def _jax_x64_for_this_module():
 def lean_switch():
     from lumenairy.elements.rcwa import _core
     previous = _core._CLUSTER_RULE_LEAN
+    _core._CLUSTER_RULE_LEAN = True
+    # every lean-path test must exercise the LEAN path: a failed self-test
+    # would make it the 5.50.0 path and these tests vacuous
+    assert _core._lean_impl(), "the lean path fell back (self-test failed)"
+    assert _core._LEAN_SELFTEST is True
     yield _core
     _core._CLUSTER_RULE_LEAN = previous
 
@@ -77,6 +82,9 @@ _BASE3 = np.array([[1.0, 1.5, 1.0], [1.5, 4.0, 1.5], [1.0, 1.5, 1.0]])
 _XS3 = np.zeros((3, 3))
 _XS3[0, 1] = _XS3[2, 1] = 1.0
 _BASE, _DIRN = (np.kron(a, np.ones((3, 3))) for a in (_BASE3, _XS3))
+_D3 = np.zeros((3, 3))
+_D3[0, 0] = _D3[2, 2] = 1.0
+_DIAG = np.kron(_D3, np.ones((3, 3)))   # breaks the four-fold symmetry too
 _PIL = np.zeros((9, 9))
 _PIL[2:6, 3:7] = 1.0
 
@@ -182,6 +190,10 @@ def _close(a, b):
     return bool(np.all((ulp <= 4) | (d <= 1e-14 * np.abs(b[m]))))
 
 
+_BAR_NO_CLUSTER = 1e-12
+_BAR_CLUSTER = 1e-7
+
+
 def _rel_to_max(a, b):
     """max |a - b| / max |b|."""
     a, b = np.ravel(np.asarray(a, float)), np.ravel(np.asarray(b, float))
@@ -234,13 +246,15 @@ def test_lean_path_gradients_agree_with_the_5_50_0_path(
     old, new = out[False], out[True]
     assert old[2] == new[2], "jit: the lowered program changed"
     assert np.array_equal(old[3], new[3]), ("jit", old[3], new[3])
-    # 5.50.0's OWN eager-vs-jit spread (two valid evaluation orders of the
-    # same rule) is the yardstick: at a firing cluster the lifted stencil
-    # amplifies round-off by ~1 / split_rel (measured up to 9e-9 relative on
-    # the symmetric cell), elsewhere it is ~1e-13.  The lean path's eager,
-    # vmap and eager-vs-jit deviations must stay within 4x that spread (and
-    # a 1e-14 floor); measured: at most 2.1x (two same-shape layers, eager).
-    bar = max(1e-14, 4.0 * _rel_to_max(old[0], old[3]))
+    # FIXED bars (not 5.50.0's own eager-vs-jit spread, which can be near
+    # zero on one input and platform and 8x larger on the next): without a
+    # firing cluster the two evaluation orders differ by round-off only
+    # (measured <= 9e-14 relative), so 1e-12; at a firing cluster the lifted
+    # stencil amplifies round-off by ~1 / split_rel = 1e7, i.e. ~eps_mach /
+    # split_rel ~ 2e-9 relative (measured up to 1.8e-8 between 5.50.0's own
+    # modes), so 1e-7 ~ 100 x eps_mach / split_rel.  Accuracy against the
+    # truth is gated separately (test_..._against_an_extrapolated_reference).
+    bar = _BAR_CLUSTER if fires else _BAR_NO_CLUSTER
     for what, a, b in (("eager", new[0], old[0]), ("vmap", new[1], old[1]),
                        ("lean eager vs jit", new[0], new[3])):
         assert _rel_to_max(a, b) <= bar, (what, _rel_to_max(a, b), bar)
@@ -460,3 +474,101 @@ def test_a_failing_lean_conversion_falls_back_for_that_call(lean_switch,
     monkeypatch.setattr(_core, "_closure_convert_lean", broken)
     g = np.asarray(jax.grad(_berreman_uniaxial)(jnp.asarray(1.6)))
     assert _close(g, ref)
+
+
+def _sym_rcwa_diag(t):
+    """The verifier's loss c: the symmetric cell perturbed DIAGONALLY."""
+    import jax.numpy as jnp
+
+    from lumenairy.elements.rcwa import RCWAStack
+    st = RCWAStack(1.2, period_y=1.2, n_superstrate=1.0, n_substrate=1.45,
+                   n_orders=2, n_orders_y=2)
+    st.add_layer(0.45, eps_cell=(jnp.asarray(_BASE)
+                                 + t * jnp.asarray(_DIAG)).astype(complex))
+    st.add_layer(0.1, eps=2.25)
+    st.set_source(1.0, theta=0.0, phi=0.0)
+    _o, R, T = st.solve().efficiencies()
+    w = jnp.asarray(np.cos(np.arange(R.shape[1])))
+    return jnp.sum(R[0] * w) - 0.3 * jnp.sum(T[1] * w ** 2) + jnp.sum(T[0])
+
+
+def _extrapolated_derivative(f, x0):
+    """d f / dx at x0 from central differences of the (jitted) forward at
+    h = 0.08 / 2^k, k = 0..6, Richardson-extrapolated in h^2 (Neville
+    table); the reference is the median of five well-converged entries and
+    its spread their largest distance from it.  The points x0 +- h are off
+    the symmetric point, so no degenerate cluster enters the reference."""
+    import jax
+    import jax.numpy as jnp
+    fj = jax.jit(f)
+    hs = [0.08 / 2 ** k for k in range(7)]
+    D = [(float(fj(jnp.asarray(x0 + h))) - float(fj(jnp.asarray(x0 - h))))
+         / (2 * h) for h in hs]
+    T = [D]
+    for k in range(1, len(D)):
+        r = (hs[0] / hs[1]) ** (2 * k)
+        prev = T[-1]
+        T.append([(r * prev[i + 1] - prev[i]) / (r - 1)
+                  for i in range(len(prev) - 1)])
+    cands = np.asarray([T[2][2], T[2][3], T[3][1], T[3][2], T[2][4]])
+    ref = float(np.median(cands))
+    return ref, float(np.max(np.abs(cands - ref)))
+
+
+@pytest.mark.parametrize("loss", [_sym_rcwa, _sym_rcwa_diag],
+                         ids=["xsides", "diagonal"])
+def test_firing_cluster_gradients_against_an_extrapolated_reference(
+        loss, lean_switch):
+    """ACCURACY, not only closeness to 5.50.0: at the symmetric point (the
+    cluster fires) the lean eager, eager-vmap and jit gradients and the
+    5.50.0 eager gradient all agree with a Richardson-extrapolated central
+    difference to the rule's round-off level (measured: every mode, old and
+    new, within 4.4e-9 .. 3.4e-8 of the reference; bar 1e-7)."""
+    import jax
+    import jax.numpy as jnp
+    _core = lean_switch
+    ref, spread = _extrapolated_derivative(loss, 0.0)
+    # the reference's own spread: measured 1.0e-9 (x sides) / 2.4e-9
+    # (diagonal) relative -- 10x below the bar it is used against
+    assert spread <= 1e-8 * abs(ref), (ref, spread)
+    x = jnp.asarray(0.0)
+    vals = {
+        "eager": float(jax.grad(loss)(x)),
+        "vmap": float(jax.vmap(jax.grad(loss))(jnp.asarray([0.0, 0.0]))[0]),
+        "jit": float(jax.jit(jax.grad(loss))(x)),
+    }
+    _core._CLUSTER_RULE_LEAN = False
+    vals["5.50.0 eager"] = float(jax.grad(lambda t: loss(t))(x))
+    errs = {k: abs(v - ref) / abs(ref) for k, v in vals.items()}
+    assert all(e <= _BAR_CLUSTER for e in errs.values()), (ref, errs)
+
+
+class _ConsumerBoom(Exception):
+    pass
+
+
+def test_an_exception_of_the_consumer_propagates_and_it_runs_once(
+        lean_switch):
+    """An exception raised by the converted function itself is not a
+    failure of the lean machinery: it propagates as the SAME object, and the
+    function is not re-run through the 5.50.0 conversion (a solve may count
+    its passes -- the r2v route tests do)."""
+    import jax
+    import jax.numpy as jnp
+    _core = lean_switch
+    L0 = jnp.asarray(np.array([[2.0, 0.3], [0.3, 3.0]], complex))
+    boom = _ConsumerBoom("consumer")
+    calls = [0]
+
+    def f(p):
+        L = L0 * (1.0 + p)
+
+        def consumer(eigs):
+            calls[0] += 1
+            raise boom
+        return _core._jax_eig_cluster_adjoint(_core._jax_twin_eig_plain,
+                                              [(L, None)], consumer)
+    with pytest.raises(_ConsumerBoom) as info:
+        jax.grad(f)(jnp.asarray(0.2))
+    assert info.value is boom
+    assert calls[0] == 1, calls

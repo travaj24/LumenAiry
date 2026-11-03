@@ -99,8 +99,9 @@ _OPTIONAL_PACKAGE_GUARDS = {
     # self-test and each lean conversion fall back to the public 5.50.0 path
     # (``jax.closure_convert`` under ``checking_leaks``) on ANY failure --
     # the raised type of a changed private API is not a declared set.  The
-    # self-test WARNS before falling back; the per-call fallback re-runs the
-    # public path, which re-raises a genuine error of the converted function.
+    # self-test WARNS before falling back; the per-call fallback re-raises an
+    # exception of the converted function itself directly (it is never
+    # re-run) and falls back to the public path only for the machinery.
     'elements/rcwa/_core.py': 2,      # _lean_impl self-test, _closure_convert_uncached
 }
 

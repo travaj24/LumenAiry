@@ -5027,10 +5027,17 @@ def _jax_eig_cluster_vjp():
 #   one compilation and ~19 MB of RSS per gradient; 75-80 % of the remaining
 #   eager rule-on time).  The branch taken evaluates op by op instead of as
 #   one compiled program, so eager gradients move from 5.50.0's by
-#   round-off: <= 6e-13 relative without a firing cluster, up to ~4e-9 where
-#   a firing cluster's lifted stencil amplifies round-off by ~1 / split_rel
-#   -- within 5.50.0's OWN eager-vs-jit spread (up to 9e-9 measured).  A
-#   traced predicate (``jit``) keeps the ``lax.cond``.
+#   round-off: without a firing cluster <= 9e-14 relative on the three
+#   benchmark workloads and 6e-13 on a two-layer stack whose gradient is
+#   small against its terms (measured); up to ~2e-8 where a firing
+#   cluster's lifted stencil amplifies round-off by ~1 / split_rel.  The eager vmap gradient now equals the eager one bit
+#   for bit, so that deviation IS 5.50.0's own eager-vs-vmap spread; against
+#   an extrapolated finite-difference reference every mode, old and new,
+#   lies 4e-9 .. 3.4e-8 from it at a firing cluster and the new values stay
+#   inside 5.50.0's envelope -- round-off, not an accuracy loss.  A traced
+#   predicate keeps the ``lax.cond``: under ``jit``, and in a nested eager
+#   ``vmap(vmap(grad))``, whose OR is still batched by the outer ``vmap``
+#   (that case still compiles once per gradient).
 # The lean path is self-tested once, on first use (``_lean_impl``), against
 # ``jax.closure_convert`` on a small closure; if the JAX internals are not
 # where this expects them, or the self-test disagrees or raises, or a lean
@@ -5041,6 +5048,7 @@ def _jax_eig_cluster_vjp():
 _CLUSTER_RULE_LEAN = True
 _CC_INTERNALS = None
 _LEAN_SELFTEST = None   # None: not run yet; True: passed; False: failed
+_LEAN_SELFTEST_LOCK = threading.Lock()
 
 
 def _cc_internals():
@@ -5124,25 +5132,44 @@ def _lean_impl():
     if not impl:
         return False
     if _LEAN_SELFTEST is None:
-        err = []
-
-        def run():
-            try:
-                _lean_selftest_body(impl)
-            except Exception as exc:  # untypeable: private-JAX-API probe
-                err.append(exc)
-        th = threading.Thread(target=run, name="lumenairy-lean-selftest")
-        th.start()
-        th.join()
-        _LEAN_SELFTEST = not err
-        if err:
-            warnings.warn(
-                f"lumenairy: the lean closure conversion of the JAX "
-                f"degenerate-cluster rule failed its self-test on this JAX "
-                f"({type(err[0]).__name__}: {err[0]}); using the 5.50.0 path "
-                f"(slower eager gradients, same values).", RuntimeWarning,
-                stacklevel=2)
+        with _LEAN_SELFTEST_LOCK:          # concurrent first use: run once
+            if _LEAN_SELFTEST is None:
+                _LEAN_SELFTEST = _run_lean_selftest(impl)
     return impl if _LEAN_SELFTEST else False
+
+
+def _run_lean_selftest(impl):
+    """Run :func:`_lean_selftest_body` in a fresh thread; True only when it
+    RETURNED (a thread that dies of a ``BaseException`` or cannot be started
+    counts as a failure).  A failure warns once."""
+    err, ok = [], []
+
+    def run():
+        try:
+            _lean_selftest_body(impl)
+        except Exception as exc:  # untypeable: private-JAX-API probe
+            err.append(exc)
+            return
+        ok.append(True)                    # the LAST statement of a pass
+
+    th = threading.Thread(target=run, name="lumenairy-lean-selftest",
+                          daemon=True)
+    try:
+        th.start()
+    except RuntimeError as exc:            # no thread can be started
+        err.append(exc)
+    else:
+        th.join()
+    passed = bool(ok) and not err
+    if not passed:
+        why = (f"{type(err[0]).__name__}: {err[0]}" if err
+               else "the self-test thread did not complete")
+        warnings.warn(
+            f"lumenairy: the lean closure conversion of the JAX "
+            f"degenerate-cluster rule failed its self-test on this JAX "
+            f"({why}); using the 5.50.0 path (slower eager gradients, the "
+            f"5.50.0 values).", RuntimeWarning, stacklevel=3)
+    return passed
 
 
 def _jax_eager_regime():
