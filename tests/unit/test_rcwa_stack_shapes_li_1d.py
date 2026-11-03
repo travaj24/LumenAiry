@@ -258,3 +258,121 @@ def test_ordinary_metals_pass_the_conditioning_guard(eps):
     # measured cond([[1/eps]]) <= 3.3e4 for all of these, N 8..512
     _, R, T = _shapes_solve(32, [(0.25, 0.5, eps)], "li")
     assert np.all(np.isfinite(R)) and np.all(np.isfinite(T))
+
+
+# ---------------------------------------------------------------------------
+# Lateral registration (rebased on the RCWA point-mirror fix, 555b2f75).  The
+# 'li' operators follow the shapes bridge rule: build the PUBLIC operators from
+# the PUBLIC shapes, then conjugate the OPERATORS.  Conjugating the shape eps
+# first (the v5.5.0..v5.50.0 bridge) solves the point mirror eps(-x).
+# ---------------------------------------------------------------------------
+
+_ASYM = [(0.07, 0.21, EPS_M), (0.46, 0.12, 6.0 + 0.8j)]       # off-centre
+
+
+def test_internal_li_operators_are_conjugates_of_public_operators():
+    from lumenairy.elements.rcwa.twod import (
+        _analytic_convolutions_2d, _harmonic_orders_2d,
+        _internal_analytic_convolution, _internal_analytic_li_operators)
+    M = 7
+    orders, _ = _harmonic_orders_2d(M, 0)
+    sh = _shapes(_ASYM)
+    bg = 1.2 + 0.05j
+    pub, pub_inv = _analytic_convolutions_2d(bg, sh, orders, M, 0, PER, PER)
+    EPS, Cxx = _internal_analytic_li_operators(bg, sh, orders, M, 0, PER, PER)
+    np.testing.assert_array_equal(EPS, np.conj(pub))
+    np.testing.assert_array_equal(
+        EPS, _internal_analytic_convolution(bg, sh, orders, M, 0, PER, PER))
+    np.testing.assert_array_equal(Cxx, np.conj(np.linalg.inv(pub_inv)))
+    # ... and NOT the old bridge (conj the eps, then build): its operators are
+    # the TRANSPOSES, i.e. the point mirror of the cell
+    old_eps, old_inv = _analytic_convolutions_2d(
+        np.conj(bg), [dict(s, eps=np.conj(s["eps"])) for s in sh], orders, M,
+        0, PER, PER)
+    old_Cxx = np.linalg.inv(old_inv)
+    np.testing.assert_allclose(old_Cxx, Cxx.T, atol=1e-12)
+    assert np.max(np.abs(old_Cxx - Cxx)) > 1e-2
+
+
+def test_li_shapes_order_phases_follow_a_translation():
+    """Asymmetric metal + dielectric layer shifted by a = P/4, theta = 0.3:
+    t_m -> t_m exp(-i m K a) (exp(-i w t), kx_m = kx0 + m K).  The mirrored
+    bridge gave exp(+i m K a)."""
+    a = 0.25
+    amps = []
+    for shift in (0.0, a):
+        lines = [((x0 + shift) % 1.0, w, e) for x0, w, e in _ASYM]
+        st = _stack(16)
+        st.add_layer(DEPTH, shapes=_shapes(lines), eps_background=1.0 + 0j,
+                     formulation="li")
+        r = st.set_source(LAM, theta=0.3).solve()
+        amps.append(r.per_order_amplitudes(port="transmission"))
+    o = np.asarray(amps[0]["orders"]).reshape(len(amps[0]["orders"]), -1)[:, 0]
+    ph = np.exp(-2j * np.pi * o * a)
+    for c in ("Ex", "Ey"):
+        np.testing.assert_allclose(amps[1][c], amps[0][c] * ph[None, :],
+                                   atol=1e-9)
+        # the mirrored phase would be visibly different
+        assert np.max(np.abs(amps[1][c] - amps[0][c] * np.conj(ph)[None, :])) \
+            > 1e-3
+
+
+def test_li_shapes_match_born_on_a_weak_asymmetric_grating():
+    """First-order Born (the oracle of test_rcwa_point_mirror_fix): weak thin
+    lossy two-bar grating, theta 0 and 0.35, TE and TM.  At weak contrast the
+    factorization rules differ only at O(delta^2), so 'li' must match Born --
+    and NOT the mirrored pattern."""
+    from tests.unit.test_rcwa_point_mirror_fix import (
+        BG, WL, _max_rel_vs_born)
+    P, d, M = 2.3, 0.04, 8
+    bars = [(0.10, 0.45, 0.012 + 0.010j), (0.55, 0.70, 0.004 + 0.018j)]
+    delta = {}
+    for q in (1, 2, -1, -2):
+        c = sum(dl * (hi - lo) * np.sinc(q * (hi - lo))
+                * np.exp(-1j * np.pi * q * (lo + hi)) for lo, hi, dl in bars)
+        delta[(q, 0)] = c * np.eye(3)
+    for theta in (0.0, 0.35):
+        st = lum.RCWAStack(P, n_superstrate=1.0, n_substrate=1.0, n_orders=M)
+        st.add_layer(d, shapes=[dict(shape="rectangle", eps=BG + dl,
+                                     size=((hi - lo) * P, st.period_y),
+                                     center=(0.5 * (lo + hi) * P,
+                                             0.5 * st.period_y))
+                                for lo, hi, dl in bars],
+                     eps_background=BG, formulation="li")
+        o, R, T = st.set_source(WL, theta=theta).solve().efficiencies()
+        R, T = np.asarray(R), np.asarray(T)
+        good = _max_rel_vs_born(o, R, T, delta, P, 1.0, d, theta, 0.0, (0, 1))
+        bad = _max_rel_vs_born(o, R, T, delta, P, 1.0, d, theta, 0.0, (0, 1),
+                               flip=True)
+        assert good < 0.1, (theta, good)
+        assert bad > 0.5, (theta, bad)
+
+
+def test_asymmetric_node_raster_li_converges_to_analytic_li():
+    """Off-centre two-shape layer at theta = 0.3 with a 2 um period, so
+    orders -2..+1 propagate (a specular-only fixture is blind to the point
+    mirror: its efficiencies are mirror-invariant by reciprocity).  The
+    node-aligned raster 'li' (through _internal_cell) and the analytic 'li'
+    (conj of the public operators) are the same structure -- Romberg in S
+    closes the gap, per order."""
+    N, P2 = 12, 2.0e-6
+    lines = [(0.0625, 0.21875, EPS_M), (0.46875, 0.125, 6.0 + 0.8j)]
+
+    def run(**layer):
+        st = lum.RCWAStack(P2, n_superstrate=1.0, n_substrate=N_SUB,
+                           n_orders=N)
+        st.add_layer(DEPTH, formulation="li", **layer)
+        return _solve(st, theta=0.3)[1]
+
+    Ra = run(shapes=[{"shape": "rectangle", "eps": e, "size": (w * P2, P2),
+                      "center": ((x0 + 0.5 * w) * P2, 0.5 * P2)}
+                     for x0, w, e in lines], eps_background=1.0 + 0j)
+    assert np.sum(Ra[TM] > 1e-4) >= 3            # several live orders
+    diffs = [run(eps_cell=_node_cell(m * N, lines)) - Ra
+             for m in (16, 32, 64, 128)]
+    for row in (TM, TE):
+        raw = np.max(np.abs(diffs[-1][row]))
+        ext = np.max(np.abs(_romberg_last([d[row] for d in diffs])))
+        assert raw > 1e-9
+        assert ext <= 1e-9, (row, ext)
+        assert ext <= 1e-3 * raw
