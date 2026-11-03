@@ -1047,7 +1047,10 @@ def test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why():
 # ==========================================================================
 def _projector_fixed_nq(basis, orders, alpha0):
     """``_stag_fourier_projection``'s PRE-CHANGE arithmetic, verbatim: ONE
-    ``nq = 2 M + 8`` rule for every segment."""
+    ``nq = 2 M + 8`` rule for every segment.  (The kernel carries the
+    CONJUGATE of the public Bloch carrier, ``exp(-i (m G + alpha0) x)``, since
+    the point-mirror fix of v5.50.1 -- the sign is the shipped kernel's, so this
+    copy follows it; what is pinned here is the quadrature rule.)"""
     d, N, M = basis.d, basis.N, basis.M
     G = 2.0 * np.pi / d
     nq = 2 * M + 8
@@ -1058,7 +1061,7 @@ def _projector_fixed_nq(basis, orders, alpha0):
     for seg in range(N):
         J = basis.Jn[seg]
         xphys = 0.5 * (basis.xb[seg] + basis.xb[seg + 1]) + J * xg
-        phase = np.exp(1j * np.outer(orders * G + alpha0, xphys))
+        phase = np.exp(-1j * np.outer(orders * G + alpha0, xphys))
         T[:, seg, :] = (J / d) * (phase * wg) @ Vref.T
 
     def _asm(gs):

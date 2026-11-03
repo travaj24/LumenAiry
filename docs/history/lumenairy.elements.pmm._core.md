@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 2e2ecb7795e3fcd9a69bd782360fad2aa6842c1be48c8900a2bc07b44eca390d
-token_sha256: 86235b28c2b4f75334d50feee5bbf429a18f5944c6d638df59510b811c3e0d08
+ast_sha256: bd18ecb9586da741381ed2b24580647d627d12b814fb0ea353986dc1b5d736f2
+token_sha256: 9cc206e3f6cb0f27ad089a349e152f89baf9b5d7186e8abc5328e535fb812931
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -13,6 +13,7 @@ re_recorded: 2026-10-03 -- the curved-cell map, Phase E2: _interface_smatrix_mor
 re_recorded: 2026-10-03 -- JAX 1-D twin: _jpmm_sem_modes split into _jpmm_sem_problem / _jpmm_sem_modes_from_eig; _jpmm_solve routes its three modal pencils and the rest of the solve through rcwa._core._jax_eig_cluster_adjoint (correct d/d(angle) at exactly normal incidence); forward values byte-identical
 re_recorded: 2026-10-04 -- JAX 1-D, Jones twins routed through rcwa._core._jax_cluster_routed (round 1 explicit split removed); eig called on the pencil / with the S0 lift Gram; forward values byte-identical
 re_recorded: 2026-10-04 -- round 3: the half-space geometric eig carries its Rayleigh-anomaly anchors (eps of the half-spaces) into the cluster rule; symmetric-point docstring note with limits
+re_recorded: 2026-11-03 -- point-mirror fix (v5.50.1): PMM paths solved eps(-x,-y); registration bridges (_internal_mirror_1d full x-mirror for the covariant core, _build_axis internal frame + _internal_slant for the hybrid, _stag_bloch_tau public carrier for the staggered family), slant-convection sign and frame-anchor sign (_frame_anchor_phase) corrected
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`

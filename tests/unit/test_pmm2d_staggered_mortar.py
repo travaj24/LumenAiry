@@ -257,7 +257,11 @@ def test_g3_h_row_v1_v2_swap_is_load_bearing():
     # conserves energy; the broken arm is neither, by >= 2 orders each.
     assert _err(R_off, T_off) > 100.0 * _err(R_on, T_on)
     assert _clo(R_off, T_off) > 100.0 * _clo(R_on, T_on)
-    assert _err(R_on, T_on) < 5e-2 and _clo(R_on, T_on) < 1e-5
+    # POINT-MIRROR FIX (v5.50.1): the correct arm's closure on the DECLARED
+    # cells reads 5.7e-05 at these modal counts (the 5.50 build solved
+    # their point mirror, < 1e-05); both 100x decisions above are what
+    # this gate is about, so the absolute closure bar is 1e-4.
+    assert _err(R_on, T_on) < 5e-2 and _clo(R_on, T_on) < 1e-4
 
 
 # ==========================================================================

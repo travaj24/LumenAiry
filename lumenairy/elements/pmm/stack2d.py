@@ -44,6 +44,7 @@ from ..rcwa._core import (
 )
 from ._core import (
     PerOrderAmplitudesMixin,
+    _frame_anchor_phase,
     _freeze_cached,
     _interface_smatrix,
     _propagation_smatrix,
@@ -1904,13 +1905,15 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # (the frame is anchored on the superstrate side) and no efficiency or
         # energy check can see it missing: that is exactly why omitting it was
         # a silent-wrong for the whole life of the 2026-08-16 slant metric.
-        # This cascade runs in the INTERNAL conj gauge and ``amp`` below is
-        # its PUBLIC conjugate, so the factor applied to the public amplitudes
-        # is the conjugate one, ``exp(+i k0 (alpha_m . slant) d)`` -- the SAME
-        # public expression ``PMM2DStackPure.solve`` applies (that engine
-        # spells the same number ``exp(-i k0 (kx _shx + ky _shy))`` with
-        # ``_shx = -sum(slant_x d)``), so a layer moves between the engines
-        # unchanged -- measured below at 5.5e-02.  MEASURED per order
+        # POINT-MIRROR FIX (v5.50.1): the factor applied to the PUBLIC
+        # amplitudes is that derivation's own ``exp(-i k0 (alpha_m . slant)
+        # d)`` -- the shared kernel ``_core._frame_anchor_phase``, the SAME one
+        # ``PMM2DStackPure.solve`` and the 1-D ``PMMStack`` apply.  Up to v5.50
+        # this site applied the conjugate, ``exp(+i ...)``, explained as the
+        # internal->public conjugation; it was right only for the point-
+        # MIRRORED solid this cascade then solved (walk ``-W``), and the
+        # numbers below were measured in that mirror image against an equally
+        # mirrored staircase.  MEASURED per order
         # against this engine's OWN fine z-staircase of the same solid, at a
         # HALF-period walk (where the factor is NOT a global phase): shipped
         # 3.12e-02 / 1.64e-02 (oblique 25 / conical 25-40) against 5.91e-01 /
@@ -1931,7 +1934,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         tphase = None
         _shx, _shy = _slant_frame_walk(self._layers)
         if _shx != 0.0 or _shy != 0.0:
-            tphase = np.exp(1j * k0 * (kxv * _shx + kyv * _shy))
+            tphase = _frame_anchor_phase(k0, kxv, _shx, kyv, _shy)
 
         R_rows, T_rows, j_cols = [], [], []
         amp = {k: np.zeros((2, Nf), dtype=_C)

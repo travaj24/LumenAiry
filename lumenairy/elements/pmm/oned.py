@@ -1176,6 +1176,13 @@ def pmm_jones_1d_slanted(
         # per-order factorization defect vs two independent corrected engines
         # (convection and an RCWA tensor staircase agree at ~4e-3), while the
         # covariant GENERATOR itself is exact (uniform-slab dispersion gates).
+        # POINT-MIRROR FIX (v5.50.1): that "defect" was the covariant core's
+        # frame: it solves the coordinate MIRROR of what it is handed, tensor
+        # included, and its bridge did not transform exy/exz.  With
+        # _core._internal_mirror_1d handing it M eps M the covariant
+        # out-of-plane TM sits on the RCWA tensor staircase as closely as the
+        # convection path does (1e-3 .. 4e-3 per order).  The routing is left
+        # unchanged here; revisiting it is a separate decision.
         # See docs/history/lumenairy.elements.pmm.oned.md for what the
         # covariant-for-OOP routing was validated against.
         # Explicit 'covariant' still solves

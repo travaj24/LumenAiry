@@ -370,7 +370,9 @@ def test_e1_3_both_gauge_constants_are_pinned_under_a_map():
     >= 1e-3 on Jt, normal rot +1 <= 1e-11 (the blindness, two-sided);
     +1j: Jr >= 1e-3 while R / T <= 1e-11; +1: closure >= 1e-2."""
     cm = _shear(_SLAB["P"])
-    with _patched(TS, "_OOP_ROT_SIGN", 1.0):
+    # the FLIPPED arm: since the point-mirror fix (v5.50.1) the shipped value
+    # is +1 (no rotation), so the flip is -1 -- the readings are unchanged
+    with _patched(TS, "_OOP_ROT_SIGN", -TS._OOP_ROT_SIGN):
         rc = _slab(_NONREC, cm, 5, *_CON)
         rn = _slab(_NONREC, cm, 4)
     assert rc[2] >= 1e-3, rc
@@ -659,7 +661,15 @@ def test_e1_6_slanted_circle_lands_on_its_converged_answer():
     exactly the x-mirror image of the +0.2 rung, R(m, n; -t) = R(-m, n; +t)
     to 1.7e-13, so the slant's SIGN is a physical identity of the composite
     frame, not a convention that happens to fit)."""
-    ref = _saved_vec("e6_curved_eps4_c3_t0.0000_p0.0000_M10.json")
+    # POINT-MIRROR FIX (v5.50.1): the saved rungs were computed by v5.50, which
+    # solved the point mirror of the declared cell -- for this CENTRED disk,
+    # the slant negated.  So the saved "+0.2" rung is the answer of the -0.2
+    # pillar and the saved "-0.2" rung (M = 8; the M = 10 rung of the same
+    # device is its exact x-mirror, R(m, n; -t) = R(-m, n; +t) to 1.7e-13) is
+    # the answer of the +0.2 pillar solved here.  The roles of the two saved
+    # files swap; every number quoted above is unchanged.
+    ref = _saved_vec("e6_curved_eps4_c3_t0.0000_p0.0000_s-0.200_0.000_M8"
+                     ".json")
     _st, o, R, T = _pillar("c5", 4.0 * _EYE3, 4, slant=(0.2, 0.0))
     assert float(np.abs(_vec(o, R, T) - ref).max()) <= 2e-3
     w = np.array([0.0, 0.24, 0.96, _P])
@@ -673,8 +683,7 @@ def test_e1_6_slanted_circle_lands_on_its_converged_answer():
         warnings.simplefilter("ignore")
         o2, R2, T2, _J = st.solve(jones=True)
     assert float(np.abs(_vec(o2, R2, T2) - ref).max()) >= 2e-2
-    mirror = _saved_vec("e6_curved_eps4_c3_t0.0000_p0.0000_s-0.200_0.000_M8"
-                        ".json")
+    mirror = _saved_vec("e6_curved_eps4_c3_t0.0000_p0.0000_M10.json")
     assert float(np.abs(mirror - ref).max()) >= 1e-2
 
 

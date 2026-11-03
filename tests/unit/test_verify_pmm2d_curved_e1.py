@@ -245,11 +245,18 @@ def test_ve1_gauge_constants_are_map_independent_on_a_c2_broken_cell():
     cm = _tri_map()
     ok_n, ok_m = _tri_solve(None), _tri_solve(cm)
     assert float(np.abs(ok_m - ok_n).max()) <= 3e-3
-    with _patched(TS, "_OOP_ROT_SIGN", 1.0):
+    # the flipped arm (v5.50.1: the shipped value is +1, the flip -1)
+    with _patched(TS, "_OOP_ROT_SIGN", -TS._OOP_ROT_SIGN):
         fl_n, fl_m = _tri_solve(None), _tri_solve(cm)
     assert float(np.abs(fl_n - ok_n).max()) >= 1e-2
     assert float(np.abs(fl_m - fl_n).max()) <= 3e-3
-    with _patched(TS, "_stag_scale_weight", lambda W, s: W):
+    # the MAP-ONLY flip: the mapped weights take the OPPOSITE sign from the
+    # unmapped assembly.  Up to v5.50 the shipped sign was -1, so "withhold
+    # it from the mapped weights" (identity) WAS that flip; since the
+    # point-mirror fix (v5.50.1) the shipped sign is +1 and the identity is a
+    # no-op, so the flip is spelled explicitly.
+    _sw = TS._stag_scale_weight
+    with _patched(TS, "_stag_scale_weight", lambda W, s: _sw(W, -s)):
         mo_m = _tri_solve(cm)
     assert float(np.abs(mo_m - ok_n).max()) >= 1e-2
 

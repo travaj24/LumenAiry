@@ -1,12 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/twod.py
-ast_sha256: fa22d57c50fbf8734bc4fc6d6df79894c41148596ca12ecb8aeafb0082c8eca0
-token_sha256: 5dd19d6ee79212b3008ce28662e690d18461e47b3e989e93998a10b5f260cc14
+ast_sha256: 7ae3b785dde39f0c53e74cb11c07347c9b3726750e7025e7dff95176b5b35029
+token_sha256: 9d9072cf38084e819cb836dad7c81ce5c2048eb7f81240d58e27e7e06258944a
 pre_relocation_lines: 2029
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-11-03 -- audit L-8/L-9 (A-2): clearer hybrid DOF refusal (max_nodal_dof, PMM2DStackPure pointer) and Granet map-quadrature cusp warning -- diagnostic text only, R/T bit-identical to 5.50.0
+re_recorded: 2026-11-03 -- point-mirror fix (v5.50.1): PMM paths solved eps(-x,-y); registration bridges (_internal_mirror_1d full x-mirror for the covariant core, _build_axis internal frame + _internal_slant for the hybrid, _stag_bloch_tau public carrier for the staggered family), slant-convection sign and frame-anchor sign (_frame_anchor_phase) corrected
+re_recorded: 2026-11-03 -- release 5.50.1 merge: PMM point-mirror fix (hybrid internal frame _build_axis / _internal_slant) combined with the L-8/L-9 diagnostic text
 -->
 
 # Version history -- `lumenairy/elements/pmm/twod.py`

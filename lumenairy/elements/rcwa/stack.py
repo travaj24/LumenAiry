@@ -1399,7 +1399,7 @@ class RCWAResult:
         1-D stack) the y-average is used, the structure such a stack solves.
         Only the depth rule (``nz_per_layer``) is approximate there.
 
-        .. versionchanged:: 5.51
+        .. versionchanged:: 5.50.1
            ``shapes`` layers no longer raise (plan C2, audit L-3); new
            ``return_raw``.
 
