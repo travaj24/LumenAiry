@@ -391,7 +391,12 @@ def _build_axis(period, walls, degree, n_el=1, grade=False):
     is the element count per strip -- an int (uniform, the historical form) or a
     sequence with one entry per strip (used by the cell path's Nyquist-parity
     bump, which adds one element to the widest strip when the total node count
-    would otherwise be even)."""
+    would otherwise be even).
+
+    ``walls`` / ``strips`` / the strip index ``s`` are PUBLIC; the element
+    table (and so ``M``, ``D``, ``l2g`` and every projection built from it) is
+    laid out in the INTERNAL frame ``x' = P - x`` -- the registration bridge
+    of the hybrid family, see the comment at the mirror below."""
     ref_nodes, ref_w = _gll_nodes_weights(degree)
     Dref = _lagrange_derivative_matrix(ref_nodes)
     bnds = [0.0] + list(walls) + [period]
@@ -407,6 +412,27 @@ def _build_axis(period, walls, degree, n_el=1, grade=False):
         eb = _graded_boundaries(a, b, n_el_list[s], grade)
         for e in range(len(eb) - 1):
             elem_bnds.append((eb[e], eb[e + 1], s))
+    # REGISTRATION bridge of the whole HYBRID family (point-mirror fix, v5.51).
+    # Every hybrid solve runs in the INTERNAL exp(+i w t) gauge (conjugated
+    # tiles) but with the PUBLIC-form operators built here and in
+    # _axis_projection / _axis_ops_1d (``-i M^-1 D`` and ``exp(-i m G x)``);
+    # conjugation also flips the transverse carrier, so on the public element
+    # table those operators solve the point MIRROR of the cell (v5.8 .. v5.50:
+    # ``eps(-x, -y)``, the RCWA fault, ``rcwa._core._internal_cell``).  The
+    # cure is the coordinate half of the bridge, applied ONCE, here: the
+    # element table is laid out in the internal frame ``x' = P - x`` --
+    # element ``[xl, xr)`` of PUBLIC strip ``s`` becomes ``[P - xr, P - xl)``,
+    # still labelled ``s`` -- so every consumer that pairs ``tile[s]`` with
+    # ``Mtile[s]`` (and the projection that reads the element positions)
+    # builds ``conj(c_{m - m'})`` exactly, with no change of its own.  Tensor
+    # COMPONENTS are untouched (lattice mirror only, as in RCWA).  A wall-less
+    # axis is uniform along itself -- the mirror of its structure is itself --
+    # so it is left as is (bit-identical uniform axes).
+    # The one other lateral datum the hybrid hands its core, the slant vector,
+    # crosses into the same frame through :func:`_internal_slant`.
+    if len(strips) > 1:
+        elem_bnds = [(period - xr, period - xl, s)
+                     for (xl, xr, s) in reversed(elem_bnds)]
     n_el_tot = len(elem_bnds)
 
     l2g = np.zeros((n_el_tot, degree + 1), dtype=int)
@@ -444,6 +470,27 @@ def _build_axis(period, walls, degree, n_el=1, grade=False):
     return dict(M=M, D=D, Mtile=Mtile, n=n, strips=strips, l2g=l2g,
                 elem_bnds=elem_bnds, degree=degree, ref_nodes=ref_nodes,
                 period=period)
+
+
+def _internal_slant(slant):
+    """The slant vector in the hybrid's INTERNAL frame -- the point mirror
+    ``(x, y) -> (-x, -y)`` that :func:`_build_axis` lays its element tables in:
+    a wall ``x_top + t z`` becomes ``-x_top - t z``, so ``(t_x, t_y) ->
+    (-t_x, -t_y)``.  The second (and last) lateral datum of the hybrid's
+    registration bridge; a zero / ``None`` slant is returned unchanged
+    (bit-identical vertical layers).  Applied where the slant enters the
+    generator (``_slant_convection`` via :func:`_layer_modes_projected` and
+    :func:`~lumenairy.elements.pmm.twod_jones._tensor_layer_modes`) and
+    nowhere else: the frame-walk anchors read the PUBLIC slant.
+
+    POINT-MIRROR FIX (v5.51): v5.8 .. v5.50 handed the public slant to an
+    internal-frame generator; together with the mirrored element tables this
+    solved the point mirror of the slanted cell."""
+    from ..rcwa._core import _norm_slant_pair, _slant_is_zero
+    if _slant_is_zero(slant):
+        return slant
+    tx, ty = _norm_slant_pair(slant)
+    return (-tx, -ty)
 
 
 # =========================================================================== #
@@ -893,9 +940,12 @@ def _layer_modes_projected(GxF, GyF, EpsF, EinvF, EpnF, formulation="li",
         # 2N eig(P@Q) is invalid and the 4N first-order generator runs instead
         # (A = B = 0 here -- an in-plane cell has no out-of-plane cross blocks).
         # Returns the GENERATOR 6-tuple; the caller must use the generalized
-        # cascade.  See BUILD_PMM2D_SLANT_METRIC_2026_08_16.md S1.
+        # cascade.  See BUILD_PMM2D_SLANT_METRIC_2026_08_16.md S1.  The
+        # operators are INTERNAL-frame (_build_axis), so the slant handed to
+        # the convection is too (_internal_slant).
         Z = np.zeros_like(P)
-        G = _block(np, [[Z, P], [Q, Z]]) + _slant_convection(GxF, GyF, slant, np)
+        G = _block(np, [[Z, P], [Q, Z]]) + _slant_convection(
+            GxF, GyF, _internal_slant(slant), np)
         return _generator_modes(G, GxF, np)
     lam2, W = np.linalg.eig(P @ Q)
     lam = _sqrt_decay(lam2)

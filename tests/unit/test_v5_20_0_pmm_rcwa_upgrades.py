@@ -521,4 +521,8 @@ def test_slant_efficiency_unchanged_by_shared_eig():
         0.5e-6, np.sqrt(2.0), 1.0, 1.5, 1.0, 0.4e-6, 0.5, 0.55e-6,
         slant_angle=np.deg2rad(15.0), angle=np.deg2rad(20.0),
         polarization="te", degree=13)
-    assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-5    # lossless TE closes (BLAS-robust; slant floor ~1e-6)
+    # lossless TE closes to the slant metric's degree-13 floor.  POINT-MIRROR
+    # FIX (v5.51): on the DECLARED slant it reads 1.42e-05 (1.84e-06 at degree
+    # 16, 3.2e-09 at 20 -- spectral); the 5.50 build solved the opposite slant
+    # (2.5e-06).  Bar 3e-05.
+    assert abs(float(R.sum() + T.sum()) - 1.0) < 3e-5

@@ -32,12 +32,14 @@ from ._core import (
     _cov_layer_4n,
     _cov_split,
     _farfield_order_set,
+    _frame_anchor_phase,
     _freeze_cached,
     _guarded_lstsq,
     _half_M_sym_metric,
     _interface_smatrix,
     _interface_smatrix_general_mortar,
     _interface_smatrix_mortar,
+    _internal_mirror_1d,
     _jpmm_concrete_incidence_guard,
     _kz_forward,
     _layer_modes_metric,
@@ -478,7 +480,7 @@ def _slant_frame_walk_1d(layers):
 
 def _anchor_transmission_to_lab_1d(modal, wavelength, walk):
     """Re-reference the TRANSMITTED per-order amplitudes from the sheared FRAME
-    to the LAB basis: ``A_lab(m) = exp(+i k0 alpha_m W) A_frame(m)``.
+    to the LAB basis: ``A_lab(m) = exp(-i k0 alpha_m W) A_frame(m)``.
 
     A sheared region is solved in ``u = x - t z``, in which the structure is
     ``z``-invariant, so the state the cascade carries is the FRAME Fourier
@@ -488,7 +490,17 @@ def _anchor_transmission_to_lab_1d(modal, wavelength, walk):
     stay BIT-IDENTICAL.  At the bottom of the sheared run the same plane is
     ``u = x - W``, so against the substrate's own lab basis
     ``exp(i k0 alpha_m x)`` every transmitted amplitude carries the extra
-    ``exp(+i k0 alpha_m W)``.
+    ``exp(-i k0 alpha_m W)``.
+
+    POINT-MIRROR FIX (v5.51).  Up to v5.50 the factor was ``exp(+i ...)`` and
+    the table below was measured with it: the generator then realized the
+    slant ``-phi`` (its frame was ``u = x + t z``, a calibration against the
+    point-mirrored RCWA), and the staircase it was checked against was itself
+    point-mirrored by the old ``_segment_elem_bnds`` reversal -- one
+    consistent mirror image, in which the walk is ``-W``.  With the generator
+    and the staircase both registered, the same derivation gives the minus
+    sign; the measured numbers below are those of the mirror image and carry
+    over to it unchanged.
 
     ``alpha_m = kx_m / k0`` is REAL for every order, propagating or evanescent,
     so the factor is UNIMODULAR: no efficiency can move, which is exactly why
@@ -519,7 +531,7 @@ def _anchor_transmission_to_lab_1d(modal, wavelength, walk):
     if modal is None or walk == 0.0:
         return modal
     k0 = 2.0 * np.pi / float(wavelength)
-    ph = np.exp(1j * k0 * np.real(np.asarray(modal["kx"])) * walk)
+    ph = _frame_anchor_phase(k0, modal["kx"], walk)     # the ONE anchor kernel
     modal["tx"] = modal["tx"] * ph
     modal["ty"] = modal["ty"] * ph
     return modal
@@ -4935,9 +4947,12 @@ class PMMStack:
         homogeneous half-spaces on the shared union grid, so slanted layers
         converge SPECTRALLY (vertical-grade) instead of the convection
         generator's algebraic ~1e-4 floor.  Internally exp(+iwt): eps are
-        conjugated in and the Jones conjugated out; the union widths/tensors are
-        PRE-REVERSED to cancel the _segment_elem_bnds [::-1] (so orders land in
-        the user's input frame, matching the convection path)."""
+        conjugated in and the Jones conjugated out.  REGISTRATION: that
+        internal-gauge core solves the point MIRROR of the cell it is handed,
+        so every layer (and both half-spaces) is handed the mirror of the
+        public union grid -- regions reversed, slant negated
+        (:func:`~lumenairy.elements.pmm._core._internal_mirror_1d`, the one
+        bridge of the covariant core)."""
         period, degree, n_el, grade = self.period, self.degree, self.n_el, \
             self.grade
         kx0 = float(np.real(np.conj(self.n_sup))) * np.sin(angle) * k0
@@ -4945,20 +4960,28 @@ class PMMStack:
         eps_sub = np.conj(self.n_sub ** 2)
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers],
                                        self.min_feature / self.period)
-        uw = list(uwidths)[::-1]
         nU = len(uwidths)
 
-        def grid(eps_list):
-            seg = [_t3_slant(np.conj(np.asarray(e, _C))) for e in eps_list][::-1]
-            return _build_nodal_metric_segments(period, uw, seg, degree, n_el,
-                                                grade)
+        def grid(eps_list, slant_pub):
+            """INTERNAL-frame operators of one PUBLIC union-grid row: conj
+            (loss gauge) + the point mirror (``_internal_mirror_1d``).
+            Returns ``(mats, internal slant)``."""
+            w_i, seg, sl_i = _internal_mirror_1d(
+                uwidths, [np.conj(np.asarray(e, _C)) * np.eye(3, dtype=_C)
+                          if np.ndim(e) == 0 else np.conj(np.asarray(e, _C))
+                          for e in eps_list], slant_pub)
+            return _build_nodal_metric_segments(
+                period, w_i, [_t3_slant(t) for t in seg], degree, n_el,
+                grade), sl_i
         # the homogeneous half-spaces are solved in the SAME oblique frame as the
         # layers (uniform slant), so their modes share the layer convention; pass
         # PUBLIC eps (grid conjugates to the internal exp(+iwt) convention).
-        slant = self._layers[0][2]
-        layer_mats = [grid(layer_eps_u[i]) for i in range(len(self._layers))]
-        mats_s = grid([self.n_sup ** 2 * np.eye(3) for _ in range(nU)])
-        mats_b = grid([self.n_sub ** 2 * np.eye(3) for _ in range(nU)])
+        layer_grid = [grid(layer_eps_u[i], self._layers[i][2])
+                      for i in range(len(self._layers))]
+        mats_s, slant = grid([self.n_sup ** 2 * np.eye(3) for _ in range(nU)],
+                             self._layers[0][2])
+        mats_b, _sl = grid([self.n_sub ** 2 * np.eye(3) for _ in range(nU)],
+                           self._layers[0][2])
         n_glob = mats_s["n_glob"]
 
         # DIV-CONFORMING Ez closure if ANY layer is out-of-plane (machine-precision
@@ -4973,8 +4996,8 @@ class PMMStack:
         def _msym(W, V, f):
             return np.block([[W[:, f], W[:, f]], [V[:, f], -V[:, f]]])
         Mls, lamf_l, lamb_l = [], [], []
-        for i, (_thk, _segs, slant) in enumerate(self._layers):
-            Wl, Vl, kzl, fwl = _cov_layer_4n(layer_mats[i], k0, slant, kx0,
+        for mats_l, slant_l in layer_grid:
+            Wl, Vl, kzl, fwl = _cov_layer_4n(mats_l, k0, slant_l, kx0,
                                              divconf)
             fl, bl = _cov_split(Wl, Vl, kzl, fwl)
             Mls.append(np.block([[Wl[:, fl], Wl[:, bl]],

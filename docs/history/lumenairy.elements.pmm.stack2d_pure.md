@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: cfb574dae7b6c923aa8e9aa7b89b004611412dc046c81cc0c71563031b34bb69
-token_sha256: a8811e0ac222362629fd99c98636dad6b6d288312b434e0986b70a2dbce3ad52
+ast_sha256: 37d5de8095b7a45660904b222a69eb16607af404e40f61993deef335455d9add
+token_sha256: c6ec9aac859fbd7c6c31bdc11ca2c6cb8b6fa0cee4157bb23339a91db8c74d18
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -19,6 +19,7 @@ re_recorded: 2026-10-03 -- the curved-cell map, Phase E2 verifier fold-in: solve
 re_recorded: 2026-10-03 -- curved-cell Phase E1 (2026-10-03): out-of-plane eps and slant accepted under a map / with shapes, slant x mu and OOP eps x mu accepted (refusals lifted, docstrings updated); no line the history document quotes changed
 re_recorded: 2026-10-03 -- curved-cell integration: Phase E1 (out-of-plane tensors and slant under a map) merged with Phase E2 (per-layer maps and the curved mortar); the merged module is the union of both branches' stack2d_pure.py
 re_recorded: 2026-10-03 -- curved-cell integration: Phase E3 (the JAX twin -- backend='jax', jax_twin, jax_params, solve(params=)) merged onto Phases E1 (out-of-plane tensors and slant under a map) and E2 (per-layer maps and the curved mortar); the merged module is the union of the three, each branch's own re_recorded line above states its change
+re_recorded: 2026-11-03 -- point-mirror fix (v5.51): PMM paths solved eps(-x,-y); registration bridges (_internal_mirror_1d full x-mirror for the covariant core, _build_axis internal frame + _internal_slant for the hybrid, _stag_bloch_tau public carrier for the staggered family), slant-convection sign and frame-anchor sign (_frame_anchor_phase) corrected
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d_pure.py`

@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/twod.py
-ast_sha256: 4620d14d47bffcecfe7441dbdb41c78c427681d3b279ff9a3f6cd97515162ca8
-token_sha256: 0cdd42d52119f92f38febcf31b2b3a6d793293a6b20ce4b5e78a870f55854c4a
+ast_sha256: d0e5fbd0bb2e9454c1feb68275a3b2eefbce57edc2b1371f988d024c1e6f4ac5
+token_sha256: 909dcec23d263b1f15f4dc7de18d772921614fbf8a3ab6bbbe3f620b20cf0fc9
 pre_relocation_lines: 2029
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-11-03 -- point-mirror fix (v5.51): PMM paths solved eps(-x,-y); registration bridges (_internal_mirror_1d full x-mirror for the covariant core, _build_axis internal frame + _internal_slant for the hybrid, _stag_bloch_tau public carrier for the staggered family), slant-convection sign and frame-anchor sign (_frame_anchor_phase) corrected
 -->
 
 # Version history -- `lumenairy/elements/pmm/twod.py`

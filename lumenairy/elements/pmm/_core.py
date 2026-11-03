@@ -2980,15 +2980,15 @@ def _segment_elem_bnds(period, widths, materials, n_el_per_region, grade):
     """``elem_bnds`` list ``[(x_left, x_right, material), ...]`` for N graded
     regions (``n_el_per_region`` elements each; a wall on every region boundary).
 
-    The regions are laid out in REVERSED order: the PMM's nodal ``x`` orientation
-    is mirrored relative to the FMM (:func:`rcwa_jones_1d_segments`, which places
-    ``segments[0]`` on ``x in [0, w0)``), and at oblique incidence the handedness
-    matters -- reversing here makes the segmented PMM match the FMM order-by-order
-    (verified; for a symmetric profile or normal incidence the order is
-    immaterial, and the binary 2-region cell is always mirror-symmetric so the
-    mirror was invisible there)."""
-    widths = list(widths)[::-1]
-    materials = list(materials)[::-1]
+    The regions are laid out in the DECLARED order: ``segments[0]`` on
+    ``x in [0, w0)``, exactly as :func:`rcwa_jones_1d_segments` places it.  The
+    nodal SEM cores that read this table run in the PUBLIC ``exp(-i w t)``
+    gauge (no conjugation, carrier ``exp(+i kx x)``), so the declared layout IS
+    the solved one -- see the REGISTRATION block at :func:`_internal_mirror_1d`.
+    (v5.11.0 .. v5.50.0 reversed the list here, a calibration against the then
+    point-MIRRORED FMM; it made every segmented 1-D PMM path solve ``eps(-x)``.
+    Only the internal-gauge covariant core needs the mirror, and it applies it
+    itself, through :func:`_internal_mirror_1d`.)"""
     walls = _segment_walls(period, widths)
     elem_bnds = []
     for i in range(len(widths)):
@@ -6209,10 +6209,14 @@ def _sem_modes_slant(mats, k0, polarization, slant_angle, kx0=0.0):
 
     Returns a mode dict (``symmetric`` flag + the forward/backward field blocks
     + eigenvalues + the ``1/eps`` multiply operator ``invop`` for TM)."""
-    # Sign: u = x + tan(phi) z so the PMM shear matches the RCWA staircase's
-    # +tan(phi)*z ridge shift (else the diffraction orders come out mirrored
-    # m -> -m; identical physics, only the order labels flip).
-    t = -np.tan(slant_angle)
+    # Sign: the DOCUMENTED public frame u = x - tan(phi) z -- walls walk toward
+    # +x with depth, the convention of add_sheared_grating and of a fine RCWA
+    # z-staircase whose slice k is shifted by +tan(phi) z_k (z down from the
+    # top).  v5.12 .. v5.50 used -tan here, a calibration against the then
+    # point-MIRRORED RCWA staircase, so this solver realized slant -phi (the
+    # mirror of a binary cell); see the REGISTRATION block at
+    # _internal_mirror_1d.
+    t = np.tan(slant_angle)
     sec2 = 1.0 / np.cos(slant_angle) ** 2
     k02 = k0 * k0
     n = mats["S0"].shape[0]
@@ -6698,7 +6702,13 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
     # 45 vs a from-scratch convection form's ~210 -- are flux-null and absorbed by
     # the existing forward/backward selector).  So the eps^lm / mu^lm operators
     # below are built at slant=0 and the slant enters ONLY via the convection.
-    tan_conv = np.tan(slant_angle)           # the slant, carried as convection
+    # The slant, carried as convection.  SIGN: ``-tan`` realizes the DOCUMENTED
+    # public frame u = x - tan(phi) z (walls walk toward +x with depth; checked
+    # against a fine fixed-RCWA / grcwa z-staircase).  v5.12 .. v5.50 carried
+    # ``+tan``, calibrated against the then point-MIRRORED RCWA staircase, so
+    # the generator realized slant -phi; see the REGISTRATION block at
+    # _internal_mirror_1d.
+    tan_conv = -np.tan(slant_angle)
     # (material / mu operators are built at slant=0; the slant enters ONLY via the
     # tan_conv*Dopx convection added at the end -- NOT the archived ezz*tan^2 fold.)
 
@@ -7297,6 +7307,102 @@ def _cov_split(W, V, kz, fwd):
 
 
 
+# ===========================================================================
+# REGISTRATION -- which frame each 1-D core solves in (point-mirror fix, v5.51)
+# ===========================================================================
+#
+# The PUBLIC frame: ``segments[0]`` on ``x in [0, w0)``, side-walls at
+# ``x(z) = x_top + z tan(slant_angle)`` with ``z`` DOWN from the layer top
+# (``u = x - z tan(slant)``, the frame every docstring states), incidence
+# ``kx0 = Re(n_sup) sin(angle) k0`` and order ``m`` at ``kx0 + m G`` -- the
+# frame of ``rcwa_jones_1d_segments`` / ``RCWAStack`` and of grcwa.
+#
+# * PUBLIC-gauge cores (no conjugation; Bloch shift ``d/dx + i kx0``, far
+#   field ``exp(-i m G x)``): the binary / segmented scalar and Jones SEM
+#   (``_pmm_solve*``, ``_pmm_jones_solve*``), the convection-metric slant
+#   generator (``_build_generator_metric``), the scalar inclined-frame solver
+#   (``_sem_modes_slant``), the conical nodal cascade and every PMMStack
+#   classical cascade.  They solve the DECLARED cell as laid out: no bridge.
+#   v5.11.0 .. v5.50.0 nevertheless solved the point mirror ``eps(-x)``,
+#   because two CALIBRATIONS against the then-mirrored FMM were built in: the
+#   ``[::-1]`` in :func:`_segment_elem_bnds` and the sign of the slant
+#   convection in the two slant generators.  Both are removed.
+# * The INTERNAL-gauge covariant core (``_pmm_jones_oblique_core``; eps
+#   conjugated in, Jones conjugated out, but the same public-form derivative and
+#   far-field kernels) solves the MIRROR ``x -> -x`` of whatever it is
+#   handed -- the carrier half of the conjugation, the RCWA fault
+#   (``rcwa._core._internal_cell``) in a real-space covariant frame.  Its
+#   bridge is :func:`_internal_mirror_1d`: it is handed the mirror of the
+#   public cell, so it solves the declared one.  Unlike the Fourier cores, this
+#   frame is a genuine coordinate mirror, tensor included (MEASURED, see the
+#   helper's docstring).
+#
+# The 2-D cores have their own bridges: ``twod._build_axis`` (the hybrid
+# family, internal gauge) and the Bloch-carrier sign of the staggered family
+# (``twod_staggered._stag_bloch_tau``).
+
+
+def _internal_mirror_1d(widths, tensors, slant_angle=0.0):
+    """Point mirror ``x -> -x`` of a PUBLIC 1-D cell, for the INTERNAL-gauge
+    covariant core (see the REGISTRATION block above): region ``s`` on
+    ``[e_s, e_{s+1})`` moves to ``[1 - e_{s+1}, 1 - e_s)`` -- i.e. the width and
+    tensor lists reverse -- and a wall ``x_top + z tan(a)`` becomes
+    ``-x_top - z tan(a)``, i.e. ``slant -> -slant``.  ``tensors`` are
+    ``(3, 3)`` arrays (or scalars) and are transformed as the mirror transforms
+    a tensor, ``M eps M`` with ``M = diag(-1, 1, 1)``: ``exy, eyx, exz, ezx``
+    change sign.  Returns ``(widths, tensors, slant)``.
+
+    The component transform is NOT the Fourier cores' rule (``rcwa._core.
+    _internal_cell`` and the PMM hybrid leave components alone, because there
+    ``Kx`` is a real diagonal that conjugation does not touch); the covariant
+    generator's frame is a real-space coordinate mirror.  MEASURED against a
+    fine fixed-RCWA tensor z-staircase (exy, exz != ezx, eyz, lossy; slant
+    +30 / -20 / +25 deg at +20 / 0 / -15 deg incidence), worst per-order TM /
+    TE: components untouched 0.29 / 2.3e-02, only (xz, zx) flipped 1.7e-02 /
+    2.6e-02, the full mirror 3.9e-03 / 2.1e-04 -- the convection generator's
+    own 4.1e-03 / 2.2e-04 on the same staircase.  The "~0.1 per-order
+    out-of-plane TM floor" documented for ``factorization='covariant'`` up to
+    v5.50 was this missing transform (it read 0.16 there, 0.27 with the
+    geometry alone registered); in-plane ``exy`` hides in efficiencies (its
+    sign only flips cross-polarized amplitudes) and showed in the Jones
+    off-diagonals."""
+    m = np.diag([-1.0, 1.0, 1.0])
+
+    def _mir(t):
+        a = np.asarray(t, dtype=_C)
+        return m @ a @ m if a.shape[-2:] == (3, 3) else a
+    return ([float(w) for w in widths][::-1], [_mir(t) for t in tensors][::-1],
+            -float(slant_angle))
+
+
+def _frame_anchor_phase(k0, kx, walk_x, ky=None, walk_y=0.0):
+    """THE frame-anchor factor of every sheared PMM cascade (1-D ``PMMStack``,
+    the 2-D hybrid stack and ``pmm_jones_2d``, ``PMM2DStackPure``): the
+    per-order unimodular phase that re-references TRANSMITTED amplitudes from
+    the sheared frame to the lab,
+
+        A_lab(m) = exp(-i k0 (alpha_m . W)) A_frame(m),
+
+    with ``alpha_m = (kx_m, ky_m) / k0`` (real for every order) and ``W`` the
+    PUBLIC accumulated walk ``sum_j t_j d_j`` (metres; walls walk toward
+    ``+x`` / ``+y`` with depth for a positive tangent).  Derivation: the frame
+    ``u = x - t z`` is anchored at the stack top, so the exit plane is
+    ``u = x - W`` and ``exp(i k0 alpha u) = exp(-i k0 alpha W) exp(i k0
+    alpha x)``.
+
+    POINT-MIRROR FIX (v5.51): every copy of this factor used to carry
+    ``exp(+i ...)`` in the public walk -- correct for the point-mirrored
+    solids those cascades actually solved (whose walk is ``-W``), measured
+    against equally mirrored z-staircases.  With the solids registered the
+    derivation's own sign holds; checked per order against each engine's
+    registered vertical z-staircase (``|d| ~ 1e-3 .. 1e-2`` vs ``1.7`` for the
+    old sign at a quarter-period walk)."""
+    ph = k0 * np.real(np.asarray(kx)) * float(walk_x)
+    if ky is not None and float(walk_y) != 0.0:
+        ph = ph + k0 * np.real(np.asarray(ky)) * float(walk_y)
+    return np.exp(-1j * ph)
+
+
 def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
                            period, depth, wl, slant_angle, kx0, far_field_orders,
                            label):
@@ -7376,17 +7482,25 @@ def _pmm_jones_oblique_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup,
     eps_sub = np.conj(_C(n_sub) ** 2)
     k0 = 2.0 * np.pi / wl
     kx0 = float(np.real(np.conj(_C(n_sup)))) * np.sin(float(angle)) * k0
-    d_wall = duty * period
-    mats = _build_nodal_metric(period, d_wall, _t3_slant(er), _t3_slant(eg),
-                               degree, n_ridge_el, n_groove_el, grade)
+    # REGISTRATION bridge (_internal_mirror_1d): the internal-gauge covariant
+    # core solves the point mirror of the cell it is handed, so it is handed
+    # the mirror of the public one -- groove on [0, (1 - duty) P), ridge on
+    # [(1 - duty) P, P), the slant negated (ridge-first order and n_el swap
+    # with it).
+    (w_lo, _w_hi), (t_lo, t_hi), slant_angle = _internal_mirror_1d(
+        (duty, 1.0 - duty), (er, eg), slant_angle)
+    n_lo_el, n_hi_el = n_groove_el, n_ridge_el
+    d_wall = w_lo * period
+    mats = _build_nodal_metric(period, d_wall, _t3_slant(t_lo), _t3_slant(t_hi),
+                               degree, n_lo_el, n_hi_el, grade)
     ts = dict(exx=eps_sup, exy=0.0, eyx=0.0, eyy=eps_sup, ezz=eps_sup,
               exz=0.0, eyz=0.0, ezx=0.0, ezy=0.0)
     tb = dict(exx=eps_sub, exy=0.0, eyx=0.0, eyy=eps_sub, ezz=eps_sub,
               exz=0.0, eyz=0.0, ezx=0.0, ezy=0.0)
-    mats_s = _build_nodal_metric(period, d_wall, ts, ts, degree, n_ridge_el,
-                                 n_groove_el, grade)
-    mats_b = _build_nodal_metric(period, d_wall, tb, tb, degree, n_ridge_el,
-                                 n_groove_el, grade)
+    mats_s = _build_nodal_metric(period, d_wall, ts, ts, degree, n_lo_el,
+                                 n_hi_el, grade)
+    mats_b = _build_nodal_metric(period, d_wall, tb, tb, degree, n_lo_el,
+                                 n_hi_el, grade)
     n_max = max(np.real(n_sup), np.real(n_sub),
                 np.real(np.sqrt(er[0, 0])), np.real(np.sqrt(er[1, 1])),
                 np.real(np.sqrt(eg[0, 0])), np.real(np.sqrt(eg[1, 1])))
@@ -7408,14 +7522,12 @@ def _pmm_jones_oblique_segments_solve(period, widths, seg_tensors3, n_sub, n_sup
     segment grid).  Full ``(3, 3)`` tensors IN-PLANE OR OUT-OF-PLANE (the
     out-of-plane coupling enters the covariant generator via the Li Eq.12
     ezz-Schur composites + cos*Dop cross blocks, same as the binary path)."""
-    # `_segment_elem_bnds` lays the regions out REVERSED in x ([::-1]); the
-    # convection core un-mirrors via the lib half-space/far-field handedness, but
-    # the covariant far-field does not -- so PRE-REVERSE widths + tensors here so
-    # the internal [::-1] cancels and the covariant solves the FORWARD layout
-    # (region 0 at x=0), reporting orders in the user's input frame.  (At slant=0
-    # the mirror is an order swap m<->-m; at slant!=0 it also flips φ -> -φ.)
-    widths = list(widths)[::-1]
-    seg_tensors3 = list(seg_tensors3)[::-1]
+    # REGISTRATION bridge: the internal-gauge covariant core solves the point
+    # mirror of the cell it is handed (see the block at _internal_mirror_1d),
+    # so it is handed the mirror of the public cell -- regions reversed, slant
+    # negated.  (_segment_elem_bnds lays the handed list out as given.)
+    widths, seg_tensors3, slant_angle = _internal_mirror_1d(
+        widths, seg_tensors3, slant_angle)
     er_seg = [np.conj(np.asarray(t, dtype=_C)) for t in seg_tensors3]  # -> internal
     eps_sup = np.conj(_C(n_sup) ** 2)
     eps_sub = np.conj(_C(n_sub) ** 2)
@@ -7684,6 +7796,8 @@ __all__ = [
     "_cov_generator_4n",
     "_cov_layer_4n",
     "_cov_split",
+    "_internal_mirror_1d",
+    "_frame_anchor_phase",
     "_pmm_jones_oblique_core",
     "_pmm_jones_oblique_solve",
     "_pmm_jones_oblique_segments_solve",

@@ -154,11 +154,17 @@ def _stair(delta, *, period, wl, theta, a0, b0, e_lo, e_hi, dz, nl,
     st = PMMStack(period, n_superstrate=nsup, n_substrate=nsub,
                   degree=degree, far_field_orders=ffo,
                   min_feature=period * _NO_SNAP)
+    # POINT-MIRROR FIX (v5.51): every number in this file was MEASURED on
+    # v5.11 .. v5.50, which solved the point mirror of the declared segments
+    # (``_core._segment_elem_bnds`` reversed them).  The mounts are therefore
+    # re-stated as what was actually measured -- the mirror image, i.e. the
+    # segment list reversed -- so the directed scans and their readings stay
+    # valid as recorded.
     for k in range(nl):
         dd = delta * k / max(nl - 1, 1)
         st.add_layer(dz, segments=[(a0 - dd, e_lo),
                                    (b0 + dd - (a0 - dd), e_hi),
-                                   (1.0 - (b0 + dd), e_lo)])
+                                   (1.0 - (b0 + dd), e_lo)][::-1])
     st.set_source(wl, theta=theta)
     return st
 

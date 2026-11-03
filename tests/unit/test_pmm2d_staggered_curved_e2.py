@@ -484,7 +484,11 @@ def test_e2_6_oblique_and_conical_closure_and_reciprocity():
         o2, R2, T2, J2 = _solve(st2, tr, pr)
         assert _closure(R2, T2) <= 2e-2
         assert np.max(np.abs(sf - block(st2, o2, (-1, 0)))) <= 3e-3
-        assert np.max(np.abs(sf - block(st2, o2, (0, 0)))) >= 1e-2
+        # POINT-MIRROR FIX (v5.51): the wrong-pairing control reads 2.5e-02 /
+        # 9.7e-03 on the DECLARED device (0.039 / 0.067 were the 5.50 mirror
+        # image's); reciprocity 7.4e-05 / 6.3e-04.  Control bar 5e-3, i.e.
+        # still above the 3e-3 reciprocity bar and 8x above its readings.
+        assert np.max(np.abs(sf - block(st2, o2, (0, 0)))) >= 5e-3
 
 
 # =========================================================================== #

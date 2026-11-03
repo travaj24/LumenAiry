@@ -249,6 +249,7 @@ from ..rcwa._core import (  # shared flux projection + the generalized cascade
 )
 from ._core import (
     PerOrderAmplitudesMixin,
+    _frame_anchor_phase,
     _guarded_lstsq,
     _interface_smatrix,
     _interface_smatrix_general_mortar_2d,
@@ -273,6 +274,7 @@ from .twod_staggered import (
     _region_modes_oop,
     _require_inplane_mu,
     _require_nonmagnetic_halfspace,
+    _stag_bloch_tau,
     _stag_incident_coeffs_mapped,
     _stag_kron_apply,
     _stag_mortared_axes,
@@ -2914,20 +2916,23 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # table B3; the two builds agree there to every printed digit).
         #
         # ``t`` in that formula is the INTERNAL shear of ``x = u + t w``, which
-        # is the NEGATIVE of the public ``slant`` (the same relation
-        # ``Granet2DTransverseE`` applies to the congruence).  Written with the
-        # public vector the factor is therefore exp(+i alpha_m . slant d) --
-        # and the sign is not a matter of taste: on the uniform null it is the
+        # since the point-mirror fix (v5.51) IS the public ``slant`` (the
+        # relation ``Granet2DTransverseE`` applies to the congruence), so the
+        # factor is the shared ``_core._frame_anchor_phase`` with the PUBLIC
+        # walk ``sum(slant d)``.  Up to v5.50 the internal shear was the
+        # NEGATIVE of the public slant and the factor read exp(+i alpha_m .
+        # slant d) -- right for the point-mirrored solid then solved.  The
+        # sign is not a matter of taste: on the uniform null it is the
         # difference between 1e-07 and 1.3e+00 (table B3), with the wrong arm
         # TWICE as wrong as applying no correction at all.
         tphase = None
         if _slanted_stack:
-            _shx = -sum(L.get("slant", (0.0, 0.0))[0] * L["thickness"]
-                        for L in self._layers)
-            _shy = -sum(L.get("slant", (0.0, 0.0))[1] * L["thickness"]
-                        for L in self._layers)
+            _shx = sum(L.get("slant", (0.0, 0.0))[0] * L["thickness"]
+                       for L in self._layers)
+            _shy = sum(L.get("slant", (0.0, 0.0))[1] * L["thickness"]
+                       for L in self._layers)
             if _shx != 0.0 or _shy != 0.0:
-                tphase = np.exp(-1j * k0 * (kxv * _shx + kyv * _shy))
+                tphase = _frame_anchor_phase(k0, kxv, _shx, kyv, _shy)
 
         R_rows, T_rows, j_cols, cinc_cols = [], [], [], []
         amp = {k: np.zeros((2, Nfo), dtype=_C)
@@ -3142,8 +3147,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         px, py = self.period_x, self.period_y
         (wl, k0, kx0, ky0, a0x, a0y,
          eps_sup, eps_sub) = self._source_prep()
-        taux = np.exp(-1j * a0x * px)
-        tauy = np.exp(-1j * a0y * py)
+        taux = _stag_bloch_tau(a0x, px)         # the one carrier glue
+        tauy = _stag_bloch_tau(a0y, py)         # (twod_staggered)
         Ms = self._perlayer_modal_counts()
 
         # ---- per-layer grids, deduped on CONTENT (walls + tau + M) ----------
@@ -3453,12 +3458,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # nothing about the element grids)
         tphase = None
         if any(not _slant_is_zero(L.get("slant")) for L in self._layers):
-            _shx = -sum(L.get("slant", (0.0, 0.0))[0] * L["thickness"]
-                        for L in self._layers)
-            _shy = -sum(L.get("slant", (0.0, 0.0))[1] * L["thickness"]
-                        for L in self._layers)
+            _shx = sum(L.get("slant", (0.0, 0.0))[0] * L["thickness"]
+                       for L in self._layers)
+            _shy = sum(L.get("slant", (0.0, 0.0))[1] * L["thickness"]
+                       for L in self._layers)
             if _shx != 0.0 or _shy != 0.0:
-                tphase = np.exp(-1j * k0 * (kxv * _shx + kyv * _shy))
+                tphase = _frame_anchor_phase(k0, kxv, _shx, kyv, _shy)
 
         R_rows, T_rows, j_cols, cinc_cols = [], [], [], []
         amp = {k: np.zeros((2, Nfo), dtype=_C)

@@ -187,9 +187,15 @@ def _rephase(st, w_alt, w_shipped=WALK):
 
     ``w_alt = 0`` reconstructs the PRE-FIX library exactly (verified against a
     monkeypatched solve in ``test_c1_...`` below, and against the read-only
-    main clone in the fix doc's census)."""
+    main clone in the fix doc's census).
+
+    POINT-MIRROR FIX (v5.51): the shipped factor is ``exp(-i k0 alpha W)``
+    (``_core._frame_anchor_phase``); up to v5.50 it was ``exp(+i ...)``, right
+    for the point-mirrored solid then solved, so this helper and ``_P0``
+    follow the sign.  The readings quoted in this file are the 5.50 mirror
+    image's; the re-pinned bars carry the declared device's."""
     a = st.per_order_amplitudes("transmission")
-    P = np.exp(1j * K0 * a["kx"] * (w_alt - w_shipped))
+    P = np.exp(-1j * K0 * a["kx"] * (w_alt - w_shipped))
     return a["Ex"] * P[None, :], a["Ey"] * P[None, :], a["orders"]
 
 
@@ -215,7 +221,7 @@ def _stair_step(mount, coarse=5, fine=15, film=False):
 
 def _P0(st):
     p0 = int(st._modal["p0"])
-    return complex(np.exp(1j * K0 * st._modal["kx"][p0] * WALK))
+    return complex(np.exp(-1j * K0 * st._modal["kx"][p0] * WALK))
 
 
 # ==========================================================================
@@ -283,7 +289,13 @@ def test_a2_the_unanchored_arm_does_not_improve_when_the_oracle_refines(mount):
     s = _slanted(mount)
     ship = [_dT(s, _stair(mount, K)) for K in (3, 5, 15)]
     none = [_dT(s, _stair(mount, K), 0.0) for K in (3, 5, 15)]
-    assert ship[0] / ship[-1] > 2.0, ship
+    # POINT-MIRROR FIX (v5.51): the readings in the docstring are the 5.50
+    # mirror image's.  On the DECLARED cell the shipped arm reads
+    # 3.80e-02 / 1.90e-02 / 1.91e-02 (oblique, 1.98x: it reaches the
+    # hybrid's own n_orders = 5 truncation by K = 5) and 5.62e-02 /
+    # 2.04e-02 / 1.65e-02 (conical, 3.41x); the un-anchored arm 0.98x /
+    # 0.96x.  The bar is 1.8x; the decision is the un-anchored arm's.
+    assert ship[0] / ship[-1] > 1.8, ship
     assert ship[-1] < ship[0]
     assert 0.9 < none[0] / none[-1] < 1.1, none
 
@@ -375,7 +387,7 @@ def test_a6_the_anchor_is_unimodular_on_every_order():
     ``kx`` and the walk), so the genuine spread costs no extra solve."""
     s = _slanted("conical25_40")
     a = s.per_order_amplitudes("transmission")
-    P = np.exp(1j * K0 * (a["kx"] * WALK))
+    P = np.exp(-1j * K0 * (a["kx"] * WALK))
     assert np.max(np.abs(np.abs(P) - 1.0)) < 1e-13
     # the HALF walk is exactly two-valued -- that IS the degeneracy this
     # fixture's oracle lives with, stated rather than read as a spread
@@ -383,7 +395,7 @@ def test_a6_the_anchor_is_unimodular_on_every_order():
     assert np.ptp(np.angle(P)) == pytest.approx(np.pi, abs=1e-12)
     # ... and at a QUARTER walk the same orders take FOUR distinct phases:
     # the correction really is per-order, not a two-valued sign
-    Pq = np.exp(1j * K0 * (a["kx"] * (WALK / 2)))
+    Pq = np.exp(-1j * K0 * (a["kx"] * (WALK / 2)))
     assert len(np.unique(np.round(np.angle(Pq), 9))) == 4
     assert np.ptp(np.angle(Pq)) > 3.0
     # and some of them are EVANESCENT in the substrate (kz imaginary)
@@ -427,7 +439,13 @@ def test_b1_pure_and_hybrid_transmitted_jones_now_agree(mount):
                   float(np.max(np.abs(Ap["Ey"][:, m1] - Ah["Ey"][:, m2]))))
     pre_fix = max(float(np.max(np.abs(Ap["Ex"][:, m1] - Ex0[:, m2]))),
                   float(np.max(np.abs(Ap["Ey"][:, m1] - Ey0[:, m2]))))
-    A7 = _slanted(mount, nord=7).per_order_amplitudes("transmission")
+    # POINT-MIRROR FIX (v5.51): on the DECLARED cell the oblique mount's
+    # n_orders = 6 / 7 / 8 solves are REFUSED by the T22 conditioning guard (a
+    # generalized-cascade near-singularity of that discretisation; the 5.50
+    # build solved the mirror image, where n_orders = 7 was healthy), so the
+    # engine's own truncation step is taken against n_orders = 9: shipped /
+    # step 1.50 (oblique) / 1.44 (conical), pre-fix / shipped 51.5 / 50.6.
+    A7 = _slanted(mount, nord=9).per_order_amplitudes("transmission")
     n1, n2 = _align(Ah["orders"], A7["orders"])
     own_step = max(float(np.max(np.abs(Ah["Ex"][:, n1] - A7["Ex"][:, n2]))),
                    float(np.max(np.abs(Ah["Ey"][:, n1] - A7["Ey"][:, n2]))))

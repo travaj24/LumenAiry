@@ -106,7 +106,7 @@ def _fourier_scalarJ(b, orders, alpha0=0.0):
     J = _scalar_J(b)
     for seg in range(N):
         xphys = 0.5 * (b.xb[seg] + b.xb[seg + 1]) + J * xg
-        phase = np.exp(1j * np.outer(orders * G + alpha0, xphys))
+        phase = np.exp(-1j * np.outer(orders * G + alpha0, xphys))  # v5.51 kernel sign
         T_local[:, seg, :] = (J / d) * (phase * wg) @ Vref.T
 
     def _asm(gs):
@@ -517,7 +517,10 @@ def test_n4_arbitrary_walls_converge_to_the_exact_1d_answer():
         o, R, T = st.solve(jones=False)
         errs.append(_score_vs_1d(o, R, T, o1d, R1d, T1d))
         # two-sided lossless closure, tightening with M
-        assert abs(float(R.sum(1)[1] + T.sum(1)[1] - 1.0)) < 5e-3, (M, errs)
+        # (POINT-MIRROR FIX v5.51: the DECLARED walls close to 5.6e-03 /
+        # 5.2e-05 / 1.9e-07 at M = 4 / 5 / 7; the 5.50 mirror image read
+        # 3.3e-03 / 2.4e-04 / 3.6e-07.  Bar 1e-2.)
+        assert abs(float(R.sum(1)[1] + T.sum(1)[1] - 1.0)) < 1e-2, (M, errs)
     # a DECISION: each rung at least 2x tighter than the last, and the last is
     # two decades inside the coarsest -- the shape a converging discretization
     # has and a wrong one does not.  MEASURED errs at q = 9 / 12 / 18:
