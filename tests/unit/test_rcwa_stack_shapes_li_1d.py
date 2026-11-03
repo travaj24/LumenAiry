@@ -190,12 +190,18 @@ def test_eig_key_separates_formulations():
     assert abs(mixed - li) > 1e-4 and abs(mixed - la) > 1e-4
 
 
-def test_li_shapes_refused_on_2d_stack():
+def test_li_shapes_on_2d_stack_take_rectangles_only():
+    """Phase D lifted the C1 refusal for axis-aligned rectangles (see
+    test_rcwa_stack_shapes_li_2d.py); anything else still raises, pointing at
+    Phase F."""
     for noy in (3, 0):
         st = lum.RCWAStack(PER, period_y=PER, n_orders=3, n_orders_y=noy)
-        with pytest.raises(ValueError, match="1-D stacks only"):
-            st.add_layer(DEPTH, shapes=_shapes(GATE_B), eps_background=1.0,
-                         formulation="li")
+        st.add_layer(DEPTH, shapes=_shapes(GATE_B), eps_background=1.0,
+                     formulation="li")
+        with pytest.raises(ValueError, match="Phase F"):
+            st.add_layer(DEPTH, shapes=[{"shape": "disk", "eps": EPS_M,
+                                         "radius": 100e-9}],
+                         eps_background=1.0, formulation="li")
     # Laurent shapes on a 2-D stack are unaffected
     st = lum.RCWAStack(PER, period_y=PER, n_orders=3, n_orders_y=3)
     st.add_layer(DEPTH, shapes=_shapes(GATE_B), eps_background=1.0)

@@ -71,8 +71,10 @@ from .twod import (
     _harmonic_orders_2d,
     _internal_analytic_convolution,
     _internal_analytic_li_operators,
+    _internal_analytic_li_operators_2d,
     _li_convolutions_2d,
     _li_convolutions_2d_tensor,
+    _li_rect_shapes_problem,
 )
 
 
@@ -446,9 +448,32 @@ def _check_li_shapes(fn_name, shapes, period_y, eps_background):
             f"{float(period_y):.6g} m), but shapes[{i}] "
             f"({shapes[i].get('shape')}) varies along y.  A 1-D stack sees "
             f"only its y-average, and the sequential rule for that average is "
-            f"the 2-D construction (planned for rectangles).  Use "
+            f"the 2-D construction.  Use a 2-D stack (period_y / n_orders_y), "
+            f"where 'li' takes axis-aligned rectangles, or "
             f"formulation='laurent' (y-averaged, with RCWAYAverageWarning), or "
             f"rasterize the cell into eps_cell.")
+    if eps_background is not None and abs(_C(eps_background)) < 1e-12:
+        raise ValueError(
+            f"{fn_name}: formulation='li' needs a non-zero eps_background "
+            f"(got {complex(_C(eps_background))}); the inverse rule reads "
+            f"1/eps_background.")
+
+
+def _check_li_shapes_2d(fn_name, shapes, eps_background):
+    """Preconditions of ``formulation='li'`` on a 2-D-stack ``shapes`` layer
+    (Phase D, PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02 L-4): every shape an
+    AXIS-ALIGNED RECTANGLE (the analytic per-band inverse rule of
+    :func:`~lumenairy.elements.rcwa.twod._internal_analytic_li_operators_2d`
+    is exact for those only -- disks, ellipses and rotated rectangles are
+    Phase F), and a non-zero ``eps_background`` (``None`` skips that check: a
+    dispersive background, checked per wavelength by the caller)."""
+    problem = _li_rect_shapes_problem(shapes)
+    if problem is not None:
+        raise ValueError(
+            f"{fn_name}: formulation='li' on a 2-D-stack shapes layer: "
+            f"{problem}.  Use formulation='laurent' for this layer, or "
+            f"rasterize the cell into eps_cell, whose 'li' path takes any "
+            f"pixel pattern.")
     if eps_background is not None and abs(_C(eps_background)) < 1e-12:
         raise ValueError(
             f"{fn_name}: formulation='li' needs a non-zero eps_background "
@@ -1352,7 +1377,7 @@ class _RCWALayer:
         self.thickness = thickness if is_jax_array(thickness) else float(thickness)
         self.kind = kind          # 'uniform' | 'iso' | 'shapes' | 'tensor'
         self.data = data
-        self.formulation = formulation   # 'laurent' | 'li' (iso; 1-D shapes)
+        self.formulation = formulation   # 'laurent' | 'li' (iso; shapes)
         self.dispersive = dispersive     # data holds wl -> value callable(s)
         # (exx, eyy) INVERSE-RULE companion cells of an iso 'li' layer, or None
         # (audit W9: raster='harmonic' subpixel smoothing -- see add_layer).
@@ -1525,7 +1550,7 @@ class RCWAStack:
           ``(Sx, Sy)`` cell, the ``(eps_background, shapes)`` pair, or the
           ``(Sx, Sy, 3, 3)`` tensor cell; wl-callables when dispersive);
         * ``formulation`` -- ``'laurent' | 'li'`` (iso layers, and shapes
-          layers on a 1-D stack);
+          layers -- on a 2-D stack, rectangles only);
         * ``dispersive`` -- True when ``data`` holds ``wl ->`` callables
           (solve via :meth:`solve_vs_wavelength`).
 
@@ -1623,9 +1648,17 @@ class RCWAStack:
         quantization.  The shape list must be y-invariant (rectangles spanning
         the full ``period_y``; anything else raises, since a 1-D stack would
         see only its y-average) and ``eps_background`` must be non-zero.  On a
-        2-D stack ``shapes`` layers are still Laurent-only (Li's rule for
-        rectangles is planned); rasterize into ``eps_cell`` for ``'li'`` there.
-        Uniform and tensor layers accept only the default.
+        2-D stack ``shapes`` layers accept ``'li'`` for AXIS-ALIGNED
+        RECTANGLES (Phase D): Li's sequential rule built analytically -- the
+        cell splits into y-bands between the rectangles' y-edges, each band's
+        x-Toeplitz of ``1/eps`` is analytic and INVERTED (inverse rule along
+        x), and the band-wise constant inverse is Fourier-transformed along y
+        exactly (direct rule along y) into ``Cxx``; ``Cyy`` swaps the axes.
+        It is the ``S -> inf`` limit of the ``eps_cell`` 'li' path on a raster
+        of the same cell.  Disks, ellipses and rotated rectangles raise (Li's
+        rule for curved shapes is future work); a band whose ``[[1/eps]]`` is
+        singular raises ``LinAlgError``.  Uniform and tensor layers accept only
+        the default.
 
         ``eps_cell_normal`` (audit W9, ``formulation='li'`` only): the
         INVERSE-RULE companion pair ``(exx, eyy)``, two cells of the SAME shape
@@ -1676,19 +1709,8 @@ class RCWAStack:
             if shapes is None:
                 raise ValueError(
                     "add_layer: formulation='li' applies to isotropic "
-                    "patterned layers only (eps_cell, or shapes on a 1-D "
-                    "stack); uniform and tensor layers use their own "
-                    "factorizations.")
-            if not self.is_1d:
-                raise ValueError(
-                    "add_layer: formulation='li' on a shapes layer is "
-                    "supported on 1-D stacks only (period_y and n_orders_y "
-                    "unset).  On a 2-D (crossed) stack, shapes layers are "
-                    "Laurent-only for now: Li's sequential rule needs a "
-                    "per-band inverse along x, which for axis-aligned "
-                    "rectangles is planned but not yet implemented.  Use "
-                    "formulation='laurent', or rasterize the cell into "
-                    "eps_cell, whose 'li' path is available in 2-D.")
+                    "patterned layers only (eps_cell, or shapes); uniform "
+                    "and tensor layers use their own factorizations.")
         # INVERSE-RULE companion pair (audit W9).  Validated here, up front, so
         # a mis-shaped or mis-routed pair can never reach the solver and be read
         # as a different geometry than the cell it rides with.
@@ -1781,8 +1803,12 @@ class RCWAStack:
                 # HERE, up front, for both flavours.
                 _validate_shapes("add_layer", shapes, self.period_x,
                                  self.period_y, n_orders_y=None)
-                _check_li_shapes("add_layer", shapes, self.period_y,
-                                 None if disp else eps_background)
+                if self.is_1d:
+                    _check_li_shapes("add_layer", shapes, self.period_y,
+                                     None if disp else eps_background)
+                else:
+                    _check_li_shapes_2d("add_layer", shapes,
+                                        None if disp else eps_background)
             if not disp:
                 # n_orders_y mirrors the cell path's strict_y=not is_1d (audit
                 # W8): a 1-D stack's noy=0 sentinel WANTS the y-average, an
@@ -2471,10 +2497,12 @@ class RCWAStack:
                                            self.period_y, self.noy,
                                            strict_y=not self.is_1d,
                                            stacklevel=5)
-                if L.formulation == "li":
+                if L.formulation == "li" and self.is_1d:
                     # the per-wavelength eps values are only known now
                     _check_li_shapes("solve_vs_wavelength", sh, self.period_y,
                                      bgv)
+                elif L.formulation == "li":
+                    _check_li_shapes_2d("solve_vs_wavelength", sh, bgv)
                 out.append(_RCWALayer(L.thickness, "shapes", (bgv, sh),
                                       formulation=L.formulation))
             else:
@@ -2685,12 +2713,13 @@ class RCWAStack:
             P, Q = _scalar_PQ(Kx, Ky, EPS, EPS, None, xp)
             return ("PQ", P, Q, EPS)
         if layer.kind == "shapes":
-            EPS_np, Cxx_np = self._shapes_operators(layer, orders)
+            EPS_np, Cxx_np, Cyy_np = self._shapes_operators(layer, orders)
             EPS = xp.asarray(EPS_np)
-            if Cxx_np is not None:           # 1-D 'li' (Phase C1)
+            if Cxx_np is not None:           # 'li' (Phase C1 1-D, Phase D 2-D)
                 Cxx = xp.asarray(Cxx_np)
+                Cyy = EPS if Cyy_np is EPS_np else xp.asarray(Cyy_np)
                 Z = xp.zeros_like(Cxx)
-                P, Q = _tensor_PQ(Kx, Ky, Cxx, Z, Z, EPS, EPS, xp)
+                P, Q = _tensor_PQ(Kx, Ky, Cxx, Z, Z, Cyy, EPS, xp)
                 return ("PQ", P, Q, EPS)
             P, Q = _scalar_PQ(Kx, Ky, EPS, EPS, None, xp)
             return ("PQ", P, Q, EPS)
@@ -2708,26 +2737,36 @@ class RCWAStack:
 
     def _shapes_operators(self, layer, orders):
         """Host (NumPy) operators of a ``shapes`` layer, INTERNAL gauge:
-        ``(EPS, Cxx)``.  ``EPS`` is the analytic direct-rule ``[[eps]]``;
-        ``Cxx`` is the analytic inverse-rule ``[[1/eps]]^{-1}`` for a 1-D
-        ``'li'`` layer with contrast, else ``None`` (Laurent).  Both come from
-        the shapes forms of the lateral bridge in ``twod``
-        (:func:`_internal_analytic_convolution`,
-        :func:`_internal_analytic_li_operators`: the PUBLIC operator is built
-        and then conjugated -- never the shape permittivities, which solves the
-        point mirror of the cell).  THE single place a shapes layer is
-        factorized, shared by :meth:`_layer_modes` and
+        ``(EPS, Cxx, Cyy)``.  ``EPS`` is the analytic direct-rule ``[[eps]]``
+        (it also feeds the ``E_z`` elimination).  For an ``'li'`` layer with
+        contrast, ``(Cxx, Cyy)`` are the ``E_x`` / ``E_y`` blocks in the
+        ``eps_cell`` 'li' placement: on a stack with ``noy = 0`` (a 1-D stack,
+        Phase C1) ``Cxx = [[1/eps]]^{-1}`` and ``Cyy`` IS ``EPS`` (the same
+        object -- the C1 operators, unchanged); on a 2-D stack (Phase D,
+        axis-aligned rectangles) Li's sequential rule per axis.  Otherwise
+        ``Cxx = Cyy = None`` (Laurent).  All come from the shapes forms of the
+        lateral bridge in ``twod`` (:func:`_internal_analytic_convolution`,
+        :func:`_internal_analytic_li_operators`,
+        :func:`_internal_analytic_li_operators_2d`: the PUBLIC operator is
+        built and then conjugated -- never the shape permittivities, which
+        solves the point mirror of the cell).  THE single place a shapes layer
+        is factorized, shared by :meth:`_layer_modes` and
         :meth:`_layer_even_spec` so the ordinary and even-parity cascades can
         never disagree."""
         eps_bg, shapes = layer.data
         if getattr(layer, "formulation", "laurent") == "li":
-            return _internal_analytic_li_operators(
+            if int(self.noy) == 0:
+                EPS, Cxx = _internal_analytic_li_operators(
+                    eps_bg, shapes, orders, self.nox, self.noy,
+                    self.period_x, self.period_y)
+                return EPS, Cxx, (None if Cxx is None else EPS)
+            return _internal_analytic_li_operators_2d(
                 eps_bg, shapes, orders, self.nox, self.noy, self.period_x,
                 self.period_y)
         EPS = _internal_analytic_convolution(
             eps_bg, shapes, orders, self.nox, self.noy, self.period_x,
             self.period_y)
-        return EPS, None
+        return EPS, None, None
 
     def _li_blocks(self, layer, cell_c, orders, xp):
         """The Li wall-normal blocks ``(Cxx, Cyy)`` of an ``'li'`` iso layer --
@@ -2815,16 +2854,18 @@ class RCWAStack:
             return W, V, lam, EPS
         if layer.kind == "shapes":
             # Analytic (host) form factors -> move the convolution to backend.
-            EPS_np, Cxx_np = self._shapes_operators(layer, orders)
+            EPS_np, Cxx_np, Cyy_np = self._shapes_operators(layer, orders)
             EPS = xp.asarray(EPS_np)
             if Cxx_np is not None:
-                # 1-D 'li' (Phase C1): the eps_cell 'li' placement -- inverse
+                # 'li': the eps_cell 'li' placement.  1-D (Phase C1): inverse
                 # rule Cxx = [[1/eps]]^{-1} for the wall-normal E_x, direct
-                # rule for E_y (Cyy) and for the E_z elimination (EZZ).
+                # rule for E_y (Cyy = EPS).  2-D rectangles (Phase D): Li's
+                # sequential rule per axis.  E_z elimination: direct (EZZ).
                 Cxx = xp.asarray(Cxx_np)
+                Cyy = EPS if Cyy_np is EPS_np else xp.asarray(Cyy_np)
                 Zli = xp.zeros_like(Cxx)
                 W, V, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Zli, Zli,
-                                                     EPS, EPS)
+                                                     Cyy, EPS)
                 return W, V, lam, EPS
             # Direct-rule E_z elimination (v5.14.1 audit F1: the dual-Laurent
             # [[1/eps]] z-rule is the wrong factorization for a z-invariant
@@ -2892,7 +2933,7 @@ class RCWAStack:
             # last bits from that layer's own solve.  ``repr`` keeps the key
             # hashable (a 'size' / 'center' may be a list) and is faithful for
             # the scalar geometry / eps fields the form factors read.
-            # The formulation is part of the eigenproblem (Phase C1: a 1-D
+            # The formulation is part of the eigenproblem (Phase C1 / D: a
             # shapes layer may be 'li'), so a 'laurent' and an 'li' layer of
             # the same shapes must never share modes.
             return ("shapes", getattr(layer, "formulation", "laurent"),

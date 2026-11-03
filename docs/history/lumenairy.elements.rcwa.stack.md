@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 79b60b23c6b39a16f6fa83cfd3b07d016d003b989c4adcac9f51880ec66e981f
-token_sha256: 83ee48064fcb79436336641d3f4b82a9087df11bb09c36b68da1f907ce5dae97
+ast_sha256: 4a90bf6c5d4a37036d9e2713a9e278843624afa76b346f2f47c41cec20a3c35c
+token_sha256: d49c08500c8fd747b8eefbd4c0552c357d236435ef5ef9abcad7c372e10e8724
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -10,6 +10,7 @@ re_recorded: 2026-10-04 -- RCWAStack JAX cascade routed through _jax_cluster_rou
 re_recorded: 2026-11-03 -- RCWA point-mirror fix: every patterned-layer bridge site now reads the cell through rcwa._core._internal_cell (conj + node-lattice point mirror) and analytic shapes through twod._internal_analytic_convolution (conj of the PUBLIC operator); v5.5.0..v5.50.0 solved eps(-x,-y)
 re_recorded: 2026-11-03 -- Phase C1 (L-4), rebased on the point-mirror fix: formulation='li' on 1-D shapes layers -- _check_li_shapes, RCWAStack._shapes_operators (one site for _layer_modes and _layer_even_spec) calling twod._internal_analytic_convolution / _internal_analytic_li_operators (conj of the PUBLIC operators), formulation in the shapes eig key and carried through add_layer / _materialized_layers
 re_recorded: 2026-11-03 -- C1 follow-up: plain formatting of the zero-background 'li' refusal (the conditioning guard itself lives in twod._internal_analytic_li_operators)
+re_recorded: 2026-11-03 -- Phase D (L-4): formulation='li' on 2-D shapes layers of axis-aligned rectangles -- _check_li_shapes_2d; RCWAStack._shapes_operators now returns (EPS, Cxx, Cyy) (1-D: C1's operators, Cyy is EPS; 2-D: twod._internal_analytic_li_operators_2d, conj of the PUBLIC per-band Li operators) and both _layer_modes and _layer_even_spec place Cyy; the 2-D shapes 'li' refusal is lifted for rectangles
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`
