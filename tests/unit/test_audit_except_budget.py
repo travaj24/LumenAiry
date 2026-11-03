@@ -94,6 +94,14 @@ _OPTIONAL_PACKAGE_GUARDS = {
     # HIT -- and one RE-RAISES as ValueError, the sanctioned third tier.
     'elements/_lens_real.py': 2,      # _glass_key_value, _sag_callable_fingerprint
     'raytrace/exit_vertex.py': 1,     # resolve_exit_index -- re-raises ValueError
+    # The lean closure conversion of the JAX cluster rule (L-2, 2026-11-03)
+    # reads PRIVATE jax internals with no upper version bound: its one-time
+    # self-test and each lean conversion fall back to the public 5.50.0 path
+    # (``jax.closure_convert`` under ``checking_leaks``) on ANY failure --
+    # the raised type of a changed private API is not a declared set.  The
+    # self-test WARNS before falling back; the per-call fallback re-runs the
+    # public path, which re-raises a genuine error of the converted function.
+    'elements/rcwa/_core.py': 2,      # _lean_impl self-test, _closure_convert_uncached
 }
 
 # (3) USER-SUPPLIED CODE AND BEST-EFFORT PROBES.  The guarded call is either a

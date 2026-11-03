@@ -5,16 +5,24 @@ rule, without their per-call overhead").
 5.50.0 ran every eager gradient through the rule with ``jax.closure_convert``
 under ``jax.checking_leaks()`` (19% of the GATE D gradient) and evaluated the
 re-record jaxpr in full (a whole extra solve, eigs included), then decomposed
-every matrix a third time in the rule's forward.  The lean path takes the same
-uncached conversion without leak checking, drops dead WHOLE equations
-eagerly only, and shares the eager eigs (``_JaxEigMemo``).  It must not move
-a gradient by one bit, so the 5.50.0 path stays reachable
-(``_CLUSTER_RULE_LEAN = False``) and every case here compares the two in one
-process with ``np.array_equal``:
+every matrix a third time in the rule's forward, and its reverse pass built a
+fresh ``lax.cond`` per eager gradient (a new XLA compilation and ~19 MB of
+RSS held by JAX's primitive cache each time, on every RCWA solve).  The lean
+path takes the same uncached conversion without leak checking, drops dead
+WHOLE equations eagerly only (every closed-over constant kept), shares the
+eager eigs (``_JaxEigMemo``) and branches in Python on a concrete predicate.
+The branch evaluates op by op instead of as one compiled program, so eager
+gradients are no longer bit-identical to 5.50.0: they move by round-off,
+which a firing cluster's lifted stencil amplifies by ~1 / split_rel -- the
+same amount by which 5.50.0's OWN eager and jit gradients differ (up to
+9e-9 relative on the symmetric cell, ~1e-13 elsewhere).  The 5.50.0 path
+stays reachable (``_CLUSTER_RULE_LEAN = False``) and every case compares the
+two in one process:
 
-* eager ``jax.grad`` and eager ``jax.vmap`` of it: the values;
-* ``jax.jit``: the LOWERED PROGRAM TEXT (identical program -> identical
-  compiled code -> identical bits), plus the values.
+* ``jax.jit``: the LOWERED PROGRAM TEXT is identical (identical program ->
+  identical compiled code), and the values are bit-identical;
+* eager ``jax.grad``, eager ``jax.vmap`` of it, and the lean path's eager
+  vs jit: within 4x 5.50.0's own eager-vs-jit spread (1e-14 floor).
 
 Cases: a four-fold RCWA cell at its symmetric point (the cluster FIRES and the
 lifted branch runs), the 1-D ``PMMStack`` at normal incidence (a pencil with a
@@ -23,7 +31,9 @@ layer (the case that needs the re-record: the eager first pass takes the
 analytic branch, the replay the eig -- whose isotropic layer is a degenerate
 cluster, so the lifted branch runs), an RCWA stack whose second patterned
 layer is uniform (the analytic-shortcut select: ``has_select``; the uniform
-layer is a cluster too), and DynaMeta's GATE D slab (no cluster at all).
+layer is a cluster too), DynaMeta's GATE D slab (no cluster at all), and an
+RCWA stack with two patterned layers of the SAME cell shape (a memo keyed on
+shape and dtype alone would hand the second layer the first one's eigs).
 """
 import os
 
@@ -146,6 +156,38 @@ def _rcwa_uniform(p):
     return jnp.sum(R[0]) + 0.5 * jnp.sum(T[1]) + 0.25 * jnp.sum(R[1])
 
 
+def _rcwa_two_layers(p):
+    import jax.numpy as jnp
+
+    from lumenairy.elements.rcwa import RCWAStack
+    cell = (1.0 + (p - 1.0) * jnp.asarray(_PIL)).astype(jnp.complex128)
+    cell2 = (2.25 + (p - 2.0) * jnp.asarray(_PIL.T)).astype(jnp.complex128)
+    st = RCWAStack(1.2, period_y=1.2, n_superstrate=1.0, n_substrate=1.45,
+                   n_orders=2, n_orders_y=2)
+    st.add_layer(0.3, eps_cell=cell)
+    st.add_layer(0.2, eps_cell=cell2)
+    st.set_source(1.0, theta=0.1, phi=0.2)
+    _o, R, T = st.solve().efficiencies()
+    return jnp.sum(R[0]) + 0.5 * jnp.sum(T[1]) + 0.25 * jnp.sum(R[1])
+
+
+def _close(a, b):
+    """Every element within 4 ulp or 1e-14 relative (NaN where NaN)."""
+    a, b = np.asarray(a, float).ravel(), np.asarray(b, float).ravel()
+    if not np.array_equal(np.isnan(a), np.isnan(b)):
+        return False
+    m = ~np.isnan(a)
+    d = np.abs(a[m] - b[m])
+    ulp = d / np.spacing(np.maximum(np.abs(a[m]), np.abs(b[m])))
+    return bool(np.all((ulp <= 4) | (d <= 1e-14 * np.abs(b[m]))))
+
+
+def _rel_to_max(a, b):
+    """max |a - b| / max |b|."""
+    a, b = np.ravel(np.asarray(a, float)), np.ravel(np.asarray(b, float))
+    return float(np.max(np.abs(a - b)) / max(np.max(np.abs(b)), 1e-300))
+
+
 #: name: (loss, x0, vmap points, the cluster's lifted branch must run)
 _CASES = {
     "rcwa_symmetric_cell": (_sym_rcwa, 0.0, (0.0, 0.0), True),
@@ -155,6 +197,7 @@ _CASES = {
     "rcwa_uniform_select": (_rcwa_uniform, 4.0, (3.8, 4.2), True),
     "berreman_uniaxial_normal": (lambda ne: _berreman_uniaxial(ne), 1.6,
                                  (1.58, 1.62), False),
+    "rcwa_two_same_shape_layers": (_rcwa_two_layers, 4.0, (3.8, 4.2), False),
 }
 
 
@@ -172,7 +215,7 @@ def _run(f, x0, xs, lifts):
 
 
 @pytest.mark.parametrize("case", sorted(_CASES))
-def test_lean_path_gradients_are_bit_identical_to_the_5_50_0_path(
+def test_lean_path_gradients_agree_with_the_5_50_0_path(
         case, lean_switch, monkeypatch):
     _core = lean_switch
     f, x0, xs, fires = _CASES[case]
@@ -189,10 +232,18 @@ def test_lean_path_gradients_are_bit_identical_to_the_5_50_0_path(
         out[lean] = _run(f, x0, xs, lifts)
         assert (out[lean][4] > 0) == fires, (case, lean, out[lean][4])
     old, new = out[False], out[True]
-    assert np.array_equal(old[0], new[0]), ("eager", old[0], new[0])
-    assert np.array_equal(old[1], new[1]), ("vmap", old[1], new[1])
     assert old[2] == new[2], "jit: the lowered program changed"
     assert np.array_equal(old[3], new[3]), ("jit", old[3], new[3])
+    # 5.50.0's OWN eager-vs-jit spread (two valid evaluation orders of the
+    # same rule) is the yardstick: at a firing cluster the lifted stencil
+    # amplifies round-off by ~1 / split_rel (measured up to 9e-9 relative on
+    # the symmetric cell), elsewhere it is ~1e-13.  The lean path's eager,
+    # vmap and eager-vs-jit deviations must stay within 4x that spread (and
+    # a 1e-14 floor); measured: at most 2.1x (two same-shape layers, eager).
+    bar = max(1e-14, 4.0 * _rel_to_max(old[0], old[3]))
+    for what, a, b in (("eager", new[0], old[0]), ("vmap", new[1], old[1]),
+                       ("lean eager vs jit", new[0], new[3])):
+        assert _rel_to_max(a, b) <= bar, (what, _rel_to_max(a, b), bar)
     assert np.all(np.isfinite(new[0]))
 
 
@@ -244,6 +295,7 @@ def test_the_lean_path_never_calls_closure_convert(lean_switch, monkeypatch):
     import jax
     import jax.numpy as jnp
     lean_switch._CLUSTER_RULE_LEAN = True
+    assert lean_switch._lean_impl()     # the one-time self-test uses it
 
     def refuse(*_a, **_k):
         raise AssertionError("closure_convert called on the lean path")
@@ -272,7 +324,11 @@ def test_the_eager_regime_is_detected_and_staging_is_not(lean_switch):
     jax.jit(jax.grad(f))(x)
     jax.grad(jax.jit(f))(x)
     jax.jit(jax.vmap(jax.grad(f)))(jnp.asarray([0.1, 0.2]))
-    assert seen[2:] == [False, False, False]
+    jax.make_jaxpr(jax.grad(f))(x)
+    jax.grad(jax.checkpoint(f))(x)
+    jax.lax.scan(lambda c, t: (c + f(t), None), 0.0, jnp.asarray([0.1, 0.2]))
+    jax.grad(lambda t: jax.lax.cond(t > 0, f, f, t))(x)
+    assert len(seen) >= 9 and seen[2:] == [False] * (len(seen) - 2), seen
     assert _core._jax_eager_regime() is True
     _core._CLUSTER_RULE_LEAN = False
     assert _core._jax_eager_regime() is False
@@ -291,3 +347,116 @@ def test_the_eig_memo_matches_on_bits_not_on_equality():
     assert m.lookup(jnp.asarray(np.asarray(a).copy())) == ("A",)
     assert m.lookup(b) is None
     assert m.lookup(a.astype(jnp.complex64)) is None
+    c = jnp.asarray(np.array([[1.0, 0.5], [0.0, 2.0]], complex))
+    assert m.lookup(c) is None                 # same shape and dtype
+
+
+def test_a_dead_use_of_a_closed_over_value_gives_the_5_50_0_cotangent(
+        lean_switch):
+    """Verifier finding (2026-11-03): a consumer closing over c = sqrt(q) and
+    using it only in dead code.  5.50.0 hands c an instantiated ZERO
+    cotangent, which d sqrt / dq = inf at q = 0 turns into NaN -- eagerly and
+    under jit.  A DCE that also dropped the constant gave 0.0 eagerly (and
+    NaN under jit); every constant is now kept, so eager == jit == 5.50.0."""
+    import jax
+    import jax.numpy as jnp
+    _core = lean_switch
+    L0 = jnp.asarray(np.array([[2.0, 0.3], [0.3, 3.0]], complex))
+
+    def f(p, q):
+        c = jnp.sqrt(q)
+        L = L0 * (1.0 + p)
+
+        def consumer(eigs):
+            lam, _V = eigs[0]
+            _dead = c * lam
+            return jnp.sum(jnp.abs(lam) ** 2)
+        return _core._jax_eig_cluster_adjoint(_core._jax_twin_eig_plain,
+                                              [(L, None)], consumer)
+    for q in (0.0, 0.5):
+        args = (jnp.asarray(0.2), jnp.asarray(q))
+        vals = []
+        for lean in (False, True):
+            _core._CLUSTER_RULE_LEAN = lean
+            fe = lambda a, b: f(a, b)  # noqa: E731
+            # both arguments: p makes the eig argument traced (the rule
+            # applies), q is the closed-over value's producer
+            vals.append(float(jax.grad(fe, argnums=(0, 1))(*args)[1]))
+            vals.append(float(jax.jit(jax.grad(fe, argnums=(0, 1)))(*args)[1]))
+        if q == 0.0:
+            assert all(np.isnan(v) for v in vals), vals
+        else:
+            assert all(v == 0.0 for v in vals), vals
+
+
+def test_an_eager_gradient_compiles_nothing_new(lean_switch):
+    """The reverse pass's per-gradient ``lax.cond`` compiled a fresh XLA
+    program on every eager gradient (and kept it in JAX's strong primitive
+    cache: the 5.50.0 memory growth on every RCWA solve).  After a warm-up,
+    eager gradients through the select path, a cluster that fires, and an
+    eager vmap add no compilation and no primitive-callable entry."""
+    import jax
+    import jax.numpy as jnp
+    from jax._src import util as jutil
+    lean_switch._CLUSTER_RULE_LEAN = True
+
+    def counts():
+        out = {}
+        for c, name in list(jutil._caches.items()):
+            for key in ("_cached_compilation", "xla_primitive_callable"):
+                if key in name:
+                    out[key] = out.get(key, 0) + c.cache_info().currsize
+        return out
+    calls = [
+        lambda i: jax.grad(_rcwa_uniform)(jnp.asarray(4.0 + 1e-3 * i)),
+        lambda i: jax.grad(_sym_rcwa)(jnp.asarray(0.0)),
+        lambda i: jax.vmap(jax.grad(_rcwa_uniform))(
+            jnp.asarray([3.9, 4.1 + 1e-3 * i])),
+    ]
+    for call in calls:
+        call(0)
+        call(1)
+    before = counts()
+    assert len(before) == 2, "JAX cache names changed: update this test"
+    for i in range(2, 5):
+        for call in calls:
+            call(i)
+    assert counts() == before, (before, counts())
+
+
+def test_a_failed_self_test_falls_back_with_one_warning(lean_switch,
+                                                         monkeypatch):
+    import jax
+    import jax.numpy as jnp
+    _core = lean_switch
+    assert _core._lean_impl()                   # passes on this JAX
+    assert _core._LEAN_SELFTEST is True
+
+    def broken(_impl):
+        raise TypeError("changed private API")
+    monkeypatch.setattr(_core, "_lean_selftest_body", broken)
+    monkeypatch.setattr(_core, "_LEAN_SELFTEST", None)
+    with pytest.warns(RuntimeWarning, match="self-test"):
+        assert _core._lean_impl() is False
+    assert _core._lean_impl() is False          # no second run, no warning
+    assert _core._jax_eager_regime() is False
+    assert _core._concrete_bool(jnp.asarray(True)) is None
+    g = np.asarray(jax.grad(_berreman_uniaxial)(jnp.asarray(1.6)))
+    _core._CLUSTER_RULE_LEAN = False
+    g_old = np.asarray(jax.grad(_berreman_uniaxial)(jnp.asarray(1.6)))
+    assert np.array_equal(g, g_old)            # exactly the 5.50.0 path
+
+
+def test_a_failing_lean_conversion_falls_back_for_that_call(lean_switch,
+                                                            monkeypatch):
+    import jax
+    import jax.numpy as jnp
+    _core = lean_switch
+    _core._CLUSTER_RULE_LEAN = True
+    ref = np.asarray(jax.grad(_berreman_uniaxial)(jnp.asarray(1.6)))
+
+    def broken(*_a, **_k):
+        raise AttributeError("changed private API")
+    monkeypatch.setattr(_core, "_closure_convert_lean", broken)
+    g = np.asarray(jax.grad(_berreman_uniaxial)(jnp.asarray(1.6)))
+    assert _close(g, ref)

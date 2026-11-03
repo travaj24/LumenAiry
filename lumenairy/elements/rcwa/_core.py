@@ -4921,7 +4921,15 @@ def _jax_eig_cluster_vjp():
                 _o, v = jax.vjp(lambda e, *c: conv(e, jnp.asarray(True), *c),
                                 eo, *consts)
                 return v(ct)
-            eb, *cb = jax.lax.cond(use, at_eig, lambda _: dvjp(ct), None)
+            # concrete (eager) predicate: a Python branch -- a fresh lax.cond
+            # here compiled a new XLA program on every eager gradient
+            # (block comment above _cc_internals)
+            pick = _concrete_bool(use)
+            if pick is None:
+                eb, *cb = jax.lax.cond(use, at_eig, lambda _: dvjp(ct),
+                                       None)
+            else:
+                eb, *cb = at_eig(None) if pick else dvjp(ct)
         else:
             use = jnp.asarray(False)
             eb, *cb = dvjp(ct)
@@ -4957,7 +4965,13 @@ def _jax_eig_cluster_vjp():
             # for all of them, which is exact for the others too (their lift
             # is zero: four evaluations at the same point, weights summing
             # to one).
-            LGb = jax.lax.cond(_batch_any()(anyc), lifted, plain, None)
+            pred = _batch_any()(anyc)
+            # eager vmap: the OR is concrete -- a Python branch (as above)
+            pick = _concrete_bool(pred)
+            if pick is None:
+                LGb = jax.lax.cond(pred, lifted, plain, None)
+            else:
+                LGb = lifted(None) if pick else plain(None)
         else:
             LGb = lifted(None) if flag else plain(None)
         return (*LGb, Kb, Ab, Sb, *cb)
@@ -4989,20 +5003,44 @@ def _jax_eig_cluster_vjp():
 #   equations whose results no output uses (``_dce_whole_equations``).  Every
 #   equation that remains is the original one, evaluated as before (one
 #   primitive -- or one inner ``jit`` -- at a time, same inputs), so every
-#   value is the same bit for bit; a dropped equation contributed only zero
-#   cotangents.  Under a staging trace (``jit``, ``scan`` ...) nothing is
-#   dropped: the staged program is exactly what it was (its lowered text is
-#   pinned identical), and XLA removes the dead code itself.
+#   value is the same bit for bit.  EVERY closed-over constant stays an input
+#   (a constant only dead code read still reaches the rule as an input and
+#   gets its instantiated zero cotangent, as in 5.50.0: at a point where its
+#   producer's derivative is infinite that zero is pushed through it and
+#   gives NaN, as it does under ``jit`` -- dropping it gave 0 eagerly).
+#   Under a staging trace (``jit``, ``scan`` ...) the conversions do no DCE.
+#   An eagerly built (DCE'd) consumer can still be staged LATER -- inside the
+#   reverse pass's ``lax.cond`` when its predicate is traced, or by a
+#   ``jit`` of the returned ``vjp`` function -- and that staged program then
+#   lacks the dead equations; the values are the same, because JAX removes
+#   dead code before lowering in any case.  A function traced under ``jit``
+#   from the start lowers to exactly the 5.50.0 text (pinned).
 # * The eager first pass and the rule's forward decompose the same concrete
 #   matrices: ``_JaxEigMemo`` hands the second ``eig`` the first one's arrays
 #   when the input bytes are identical (the second LAPACK call per problem
 #   was the other half of the eager eig cost).
-# If the JAX internals are not where this expects them, both fall back to
-# the 5.50.0 path (``closure_convert`` under ``checking_leaks``), which
+# * The reverse pass branches in PYTHON on a concrete predicate (eager, and
+#   eager ``vmap`` -- ``_batch_any`` returns the unbatched OR there): the
+#   ``lax.cond`` it replaces was built from fresh closures on every eager
+#   gradient, so every gradient compiled a new XLA program and kept it in
+#   JAX's strong primitive cache (measured on the 1-D RCWA stack: one cond,
+#   one compilation and ~19 MB of RSS per gradient; 75-80 % of the remaining
+#   eager rule-on time).  The branch taken evaluates op by op instead of as
+#   one compiled program, so eager gradients move from 5.50.0's by
+#   round-off: <= 6e-13 relative without a firing cluster, up to ~4e-9 where
+#   a firing cluster's lifted stencil amplifies round-off by ~1 / split_rel
+#   -- within 5.50.0's OWN eager-vs-jit spread (up to 9e-9 measured).  A
+#   traced predicate (``jit``) keeps the ``lax.cond``.
+# The lean path is self-tested once, on first use (``_lean_impl``), against
+# ``jax.closure_convert`` on a small closure; if the JAX internals are not
+# where this expects them, or the self-test disagrees or raises, or a lean
+# conversion raises, the 5.50.0 path (``closure_convert`` under
+# ``checking_leaks``, ``lax.cond`` always) is used instead -- which
 # ``_CLUSTER_RULE_LEAN = False`` also selects (the A/B switch of the pinning
 # test and the benchmark).
 _CLUSTER_RULE_LEAN = True
 _CC_INTERNALS = None
+_LEAN_SELFTEST = None   # None: not run yet; True: passed; False: failed
 
 
 def _cc_internals():
@@ -5033,14 +5071,88 @@ def _cc_internals():
     return _CC_INTERNALS
 
 
+def _lean_selftest_body(impl):
+    """Convert one small closure (a traced closed-over value, a dead use of
+    it, a select argument) with the lean helper and with
+    ``jax.closure_convert``: the same number of hoisted constants, the same
+    staged program text (``make_jaxpr`` of the gradient, no DCE), and the
+    same eager value and gradient bit for bit (with DCE).  Raises on any
+    difference."""
+    import jax
+    import jax.numpy as jnp
+    n_consts = {}
+
+    def outer(s, lean, dce):
+        w = jnp.arange(1.0, 4.0) * s
+        k = jnp.cos(s)
+
+        def fn(e, u):
+            _dead = jnp.exp(w) * k
+            return jnp.where(u, e, jnp.sin(e) * w + jnp.sum(jnp.cos(w)))
+        ex = (jnp.zeros(3), jnp.asarray(False))
+        if lean:
+            conv, cs = _closure_convert_lean(impl, fn, *ex, dce=dce)
+        else:
+            with jax.checking_leaks():
+                conv, cs = jax.closure_convert(fn, *ex)
+        n_consts[(lean, dce)] = len(cs)
+        return jnp.sum(conv(jnp.arange(3.0), jnp.asarray(False), *cs) ** 2)
+
+    x = jnp.asarray(0.7)
+    ref = jax.value_and_grad(lambda s: outer(s, False, False))(x)
+    new = jax.value_and_grad(lambda s: outer(s, True, True))(x)
+    for a, b in zip(ref, new):
+        if not np.array_equal(np.asarray(a), np.asarray(b)):
+            raise AssertionError(f"eager value {a} != {b}")
+    t_ref = str(jax.make_jaxpr(jax.grad(lambda s: outer(s, False, False)))(x))
+    t_new = str(jax.make_jaxpr(jax.grad(lambda s: outer(s, True, False)))(x))
+    if t_ref != t_new:
+        raise AssertionError("staged program text differs")
+    if len(set(n_consts.values())) != 1:
+        raise AssertionError(f"hoisted constants differ: {n_consts}")
+
+
+def _lean_impl():
+    """The JAX internals of the lean path when it is switched on, resolved
+    and SELF-TESTED (once, in a fresh thread so no caller's trace is
+    active), else ``False`` (the 5.50.0 path).  A failed self-test warns
+    once and switches the lean path off for the process."""
+    global _LEAN_SELFTEST
+    if not _CLUSTER_RULE_LEAN:
+        return False
+    impl = _cc_internals()
+    if not impl:
+        return False
+    if _LEAN_SELFTEST is None:
+        err = []
+
+        def run():
+            try:
+                _lean_selftest_body(impl)
+            except Exception as exc:  # untypeable: private-JAX-API probe
+                err.append(exc)
+        th = threading.Thread(target=run, name="lumenairy-lean-selftest")
+        th.start()
+        th.join()
+        _LEAN_SELFTEST = not err
+        if err:
+            warnings.warn(
+                f"lumenairy: the lean closure conversion of the JAX "
+                f"degenerate-cluster rule failed its self-test on this JAX "
+                f"({type(err[0]).__name__}: {err[0]}); using the 5.50.0 path "
+                f"(slower eager gradients, same values).", RuntimeWarning,
+                stacklevel=2)
+    return impl if _LEAN_SELFTEST else False
+
+
 def _jax_eager_regime():
     """True when no STAGING trace is active: the current JAX trace is the
     eager evaluation, possibly under autodiff / vmap traces only (``jax.grad``,
     ``jax.vjp``, ``jax.vmap`` called eagerly).  False under ``jit`` (and any
-    other staging trace), for an unknown trace type, or when the internals
-    are not available -- the conservative answer, which keeps the 5.50.0
+    other staging trace), for an unknown trace type, or when the lean path is
+    off or unavailable -- the conservative answer, which keeps the 5.50.0
     staged program."""
-    impl = _cc_internals() if _CLUSTER_RULE_LEAN else False
+    impl = _lean_impl()
     if not impl:
         return False
     jcore, eager_traces = impl[0], impl[8]
@@ -5054,14 +5166,29 @@ def _jax_eager_regime():
     return False
 
 
-def _dce_whole_equations(jcore, jaxpr, consts):
-    """``(jaxpr, consts)`` without the equations no output depends on (and the
-    constants only they read).  WHOLE equations only: a kept equation is the
-    original object, never rewritten -- unlike ``pe.dce_jaxpr``, which also
-    prunes unused outputs INSIDE a kept ``jit`` / ``cond`` / ``scan`` and so
-    would change the program XLA compiles for it.  An equation with effects is
-    always kept.  On an unexpected jaxpr API the input is returned unchanged
-    (no DCE, same values)."""
+def _concrete_bool(x):
+    """``bool(x)`` when ``x`` is concrete and the lean path is on, else
+    ``None`` (a traced predicate: the caller keeps its ``lax.cond``)."""
+    if not _lean_impl():
+        return None
+    import jax
+    if isinstance(x, jax.core.Tracer):
+        return None
+    try:
+        return bool(x)
+    except jax.errors.ConcretizationTypeError:  # pragma: no cover
+        return None
+
+
+def _dce_whole_equations(jcore, jaxpr):
+    """``jaxpr`` without the equations no output depends on.  WHOLE
+    equations only: a kept equation is the original object, never rewritten
+    -- unlike ``pe.dce_jaxpr``, which also prunes unused outputs INSIDE a
+    kept ``jit`` / ``cond`` / ``scan`` and so would change the program XLA
+    compiles for it.  An equation with effects is always kept, and so is
+    every constvar and input (see the block comment above).  On an
+    unexpected jaxpr API the input is returned unchanged (no DCE, same
+    values)."""
     try:
         used = {v for v in jaxpr.outvars if isinstance(v, jcore.Var)}
         keep = []
@@ -5071,13 +5198,11 @@ def _dce_whole_equations(jcore, jaxpr, consts):
                 used.update(v for v in eqn.invars
                             if isinstance(v, jcore.Var))
         if len(keep) == len(jaxpr.eqns):
-            return jaxpr, consts
+            return jaxpr
         keep.reverse()
-        pairs = [(v, c) for v, c in zip(jaxpr.constvars, consts) if v in used]
-        new = jaxpr.replace(constvars=[v for v, _c in pairs], eqns=keep)
-        return new, [c for _v, c in pairs]
+        return jaxpr.replace(eqns=keep)
     except (AttributeError, TypeError, ValueError):  # pragma: no cover
-        return jaxpr, consts
+        return jaxpr
 
 
 def _jax_eval_trace_current():
@@ -5087,28 +5212,34 @@ def _jax_eval_trace_current():
     return bool(impl) and type(impl[0].trace_ctx.trace) is impl[0].EvalTrace
 
 
-def _closure_convert_uncached(fun, *example_args, dce=False):
-    """``jax.closure_convert(fun, *example_args)`` through its UNCACHED path
-    and without leak checking; with ``dce`` the jaxpr's dead equations (and
-    the closed-over values only they used) are dropped first (block comment
-    above).  Returns ``(converted_fun, const_args)`` like ``closure_convert``."""
+def _closure_convert_lean(impl, fun, *example_args, dce=False,
+                          fun_errors=None):
+    """The lean conversion itself (see :func:`_closure_convert_uncached`).
+    An exception raised by ``fun`` itself is appended to ``fun_errors`` (when
+    given) before it propagates."""
     import jax
-    impl = _cc_internals() if _CLUSTER_RULE_LEAN else False
-    if not impl:
-        with jax.checking_leaks():
-            return jax.closure_convert(fun, *example_args)
+    if fun_errors is not None:
+        user_fun = fun
+
+        def fun(*a):
+            try:
+                return user_fun(*a)
+            except BaseException as exc:
+                fun_errors.append(exc)
+                raise
     (jcore, lu, debug_info, flatten_fun_nokwargs, _maybe_perturbed,
      partition_list, pe, split_list, _eager) = impl
     flat_args, in_tree = jax.tree_util.tree_flatten(example_args)
     in_avals = tuple(map(jcore.typeof, flat_args))
-    dbg = debug_info("closure_convert", fun, example_args, {})
+    dbg = debug_info("closure_convert", user_fun if fun_errors is not None
+                     else fun, example_args, {})
     wrapped_fun, out_tree = flatten_fun_nokwargs(
         lu.wrap_init(fun, debug_info=dbg), in_tree)
     jaxpr, _out_avals, consts = pe.trace_to_jaxpr_dynamic(wrapped_fun,
                                                           in_avals)
     out_tree = out_tree()
     if dce:
-        jaxpr, consts = _dce_whole_equations(jcore, jaxpr, consts)
+        jaxpr = _dce_whole_equations(jcore, jaxpr)
     (closure_consts, const_args), merge = partition_list(_maybe_perturbed,
                                                          consts)
     num_consts = len(const_args)
@@ -5127,6 +5258,28 @@ def _closure_convert_uncached(fun, *example_args, dce=False):
         return jax.tree_util.tree_unflatten(out_tree, out_flat)
 
     return converted_fun, const_args
+
+
+def _closure_convert_uncached(fun, *example_args, dce=False):
+    """``jax.closure_convert(fun, *example_args)`` through its UNCACHED path
+    and without leak checking; with ``dce`` the jaxpr's dead equations are
+    dropped first (block comment above).  Returns ``(converted_fun,
+    const_args)`` like ``closure_convert``.  A failure of the lean
+    conversion MACHINERY falls back, for this call, to the 5.50.0
+    conversion; an exception raised by ``fun`` itself propagates unchanged
+    (``fun`` is not run a second time -- a solve may count its passes)."""
+    import jax
+    impl = _lean_impl()
+    if impl:
+        fun_errors = []
+        try:
+            return _closure_convert_lean(impl, fun, *example_args, dce=dce,
+                                         fun_errors=fun_errors)
+        except Exception:  # untypeable: private-JAX-API boundary, see above
+            if fun_errors:
+                raise
+    with jax.checking_leaks():
+        return jax.closure_convert(fun, *example_args)
 
 
 def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
