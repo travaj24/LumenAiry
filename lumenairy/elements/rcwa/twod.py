@@ -25,6 +25,7 @@ from ._core import (
     _homogeneous_eigenmodes,
     _interface_smatrix,
     _interface_smatrix_general,
+    _internal_cell,
     _is_traced,
     _jax_cluster_routed,
     _layer_eigenmodes,
@@ -1113,9 +1114,10 @@ def rcwa_efficiency_2d(
                 "'li' for gradient-based design, or call on NumPy/CuPy.")
 
     # Loss-convention bridge (see rcwa_efficiency_1d): conjugate the PUBLIC
-    # permittivity in the active namespace (so a JAX eps_cell stays
-    # differentiable); the region scalars stay host complex.
-    eps_cell = xp.conj(xp.asarray(eps_cell).astype(_C))
+    # permittivity AND point-mirror its node lattice (_core._internal_cell --
+    # the lateral half of the bridge) in the active namespace, so a JAX
+    # eps_cell stays differentiable; the region scalars stay host complex.
+    eps_cell = _internal_cell(xp.asarray(eps_cell).astype(_C), xp)
     eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
     eps_sub = complex(np.conj(_C(n_substrate) ** 2))
 
@@ -1475,8 +1477,8 @@ def prepare_rcwa_2d(
             "with jax.vmap over wavelength (XLA reuses the invariant "
             "convolutions); the imperative prepared cache breaks tracing.")
 
-    # Loss-convention bridge (matches rcwa_efficiency_2d).
-    eps_cell = xp.conj(xp.asarray(eps_cell).astype(_C))
+    # Loss-convention bridge (matches rcwa_efficiency_2d): conj + point mirror.
+    eps_cell = _internal_cell(xp.asarray(eps_cell).astype(_C), xp)
     eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
     eps_sub = complex(np.conj(_C(n_substrate) ** 2))
 
@@ -1852,7 +1854,9 @@ def rcwa_jones_2d(
     is_jax = backend_name(xp) == "jax"
     if is_jax:
         _require_jax_x64("rcwa_jones_2d")
-    eps_t = xp.conj(xp.asarray(eps_tensor_cell).astype(_C))
+    # Bridge: conj + node-lattice point mirror of the two lateral axes; the
+    # tensor COMPONENTS are not transformed (_core._internal_cell).
+    eps_t = _internal_cell(xp.asarray(eps_tensor_cell).astype(_C), xp)
     eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
     eps_sub = complex(np.conj(_C(n_substrate) ** 2))
 
@@ -2231,6 +2235,24 @@ def _analytic_convolutions_2d(eps_background, shapes, orders, n_orders_x,
 
 
 
+def _internal_analytic_convolution(eps_background, shapes, orders, n_orders_x,
+                                   n_orders_y, period_x, period_y):
+    """The INTERNAL-gauge ``[[eps]]`` of a PUBLIC analytic-shape cell: the
+    complex conjugate of the PUBLIC analytic convolution,
+    ``conj(c_{m-m'})`` -- the shapes form of the lateral bridge (see the bridge
+    block in ``_core``).  Conjugating the OPERATOR (rather than the shape
+    permittivities, as v5.5.0..v5.50.0 did, which yields ``conj(c_{m'-m})``:
+    the point mirror of the cell) needs no reflection rule per primitive, so
+    it is exact for every form factor ``_shape_form_factor`` knows -- or is
+    given.  Complex conjugation commutes exactly with IEEE complex
+    multiply-add, so for an origin-centred shape this is bit-identical to the
+    old build.  Host NumPy (the analytic-shape path has no traced geometry)."""
+    EPS, _ = _analytic_convolutions_2d(   # [[1/eps]] unused (M10)
+        eps_background, shapes, orders, n_orders_x, n_orders_y, period_x,
+        period_y)
+    return np.conj(EPS)
+
+
 @_with_blas_limit
 @_wood_symmetric
 def rcwa_efficiency_2d_shapes(
@@ -2408,7 +2430,10 @@ def rcwa_efficiency_2d_shapes(
             "rcwa_efficiency_2d_shapes: the analytic-shape solver has no JAX "
             "(differentiable) path; use a JAX eps_cell with rcwa_efficiency_2d "
             "for gradient-based design, or call with use_gpu for CuPy.")
-    # Loss-sign bridge: conjugate every public permittivity (host scalars).
+    # Loss-sign bridge on the host scalars (read by the grazing nudge and the
+    # energy guard below).  The CONVOLUTION is NOT built from these: it is the
+    # conjugate of the PUBLIC analytic operator (_internal_analytic_convolution
+    # -- conj-ing the shape eps instead solves the point mirror of the cell).
     eps_bg = complex(np.conj(_C(eps_background)))
     shapes_c = [dict(s, eps=complex(np.conj(_C(s["eps"])))) for s in shapes]
     eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
@@ -2443,9 +2468,9 @@ def rcwa_efficiency_2d_shapes(
 
     # Analytic (host) form factors -> move the convolution matrices to the
     # backend for the eigensolve.
-    EPS_np, _ = _analytic_convolutions_2d(     # [[1/eps]] unused (M10)
-        eps_bg, shapes_c, orders, n_orders_x, n_orders_y, period_x, period_y)
-    EPS = xp.asarray(EPS_np)
+    EPS = xp.asarray(_internal_analytic_convolution(
+        eps_background, shapes, orders, n_orders_x, n_orders_y, period_x,
+        period_y))
 
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
@@ -2523,5 +2548,6 @@ __all__ = [
     "rcwa_jones_2d",
     "_shape_form_factor",
     "_analytic_convolutions_2d",
+    "_internal_analytic_convolution",
     "rcwa_efficiency_2d_shapes",
 ]

@@ -105,17 +105,18 @@ def _ridges(*, n_x, raster, formulation="laurent", n_orders=_M):
     return st
 
 
-def _quad(st, pol, *, theta=0.25):
-    """``(R0, T0, R+1, T+1)`` for one polarization."""
+def _quad(st, pol, *, theta=0.25, order=1):
+    """``(R0, T0, R_order, T_order)`` for one polarization (``order`` = +1 by
+    default)."""
     res = st.set_source(_WL, theta=theta).solve()
     o, R, T = res.efficiencies()
     o = np.asarray(o)
     if o.ndim == 2:
         i0 = int(np.where((o[:, 0] == 0) & (o[:, 1] == 0))[0][0])
-        i1 = int(np.where((o[:, 0] == 1) & (o[:, 1] == 0))[0][0])
+        i1 = int(np.where((o[:, 0] == order) & (o[:, 1] == 0))[0][0])
     else:
         i0 = int(np.where(o == 0)[0][0])
-        i1 = int(np.where(o == 1)[0][0])
+        i1 = int(np.where(o == order)[0][0])
     r = _ROW[pol]
     return np.array([np.asarray(R)[r, i0], np.asarray(T)[r, i0],
                      np.asarray(R)[r, i1], np.asarray(T)[r, i1]])
@@ -134,22 +135,22 @@ def _quad_exact(pol, formulation, theta=0.25):
                      np.asarray(R)[i1], np.asarray(T)[i1]])
 
 
-def _err(st, pol, ref, *, theta=0.25):
-    return float(np.max(np.abs(_quad(st, pol, theta=theta) - ref)))
+def _err(st, pol, ref, *, theta=0.25, order=1):
+    return float(np.max(np.abs(_quad(st, pol, theta=theta, order=order) - ref)))
 
 
 _SHEAR_KW = dict(n_slices=16, shear=0.4, formulation="li")
 _REF_CACHE = {}
 
 
-def _shear_ref(raster, pol):
+def _shear_ref(raster, pol, theta=0.25, order=1):
     """High-``n_x`` reference for the sheared-taper study, memoised (the two
     studies below share it).  ``n_x = 4096``; the three raster modes agree there
     to 4.3e-05, which is why nothing below 1e-4 is pinned on this study."""
-    key = (raster, pol)
+    key = (raster, pol, theta, order)
     if key not in _REF_CACHE:
         _REF_CACHE[key] = _quad(_grating(n_x=4096, raster=raster, **_SHEAR_KW),
-                                pol)
+                                pol, theta=theta, order=order)
     return _REF_CACHE[key]
 
 
@@ -594,22 +595,48 @@ def test_w9_harmonic_closes_the_sheared_taper_regression():
     absolute (162x).  It still catches the failure it exists for -- a
     companion leaking into the DIRECT-rule channel would move TE by the
     same order as it moves TM, i.e. 2.3x-13x, which is O(1) relative.
+
+    WHICH PHYSICAL CONFIGURATION (re-stated with the RCWA point-mirror fix).
+    Every number above was measured by a solver that read the POINT MIRROR
+    of the cell (v5.5.0..v5.50.0), i.e. on the sheared taper MIRRORED in x at
+    ``theta = +0.25`` reading order ``+1`` -- by the x-mirror symmetry of the
+    physics, the DECLARED taper at ``theta = -0.25`` reading order ``-1``.  The
+    study below runs exactly that configuration and reproduces the table to
+    every printed digit on the fixed solver (hard / area / harmonic 1.919e-03
+    / 4.793e-03 / 8.404e-04 at ``n_x = 64``, 9.919e-04 / 2.453e-03 /
+    1.882e-04 at 128).  On the declared taper at ``theta = +0.25``, order
+    ``+1`` (what this test read before the fix) the ladder is 3.824e-04 /
+    7.304e-03 / 1.659e-03 and 1.023e-03 / 3.978e-03 / 4.279e-04: 'harmonic'
+    still beats 'area' (4.4x, 9.3x) and beats 'hard' at ``n_x = 128`` (2.4x),
+    but at ``n_x = 64`` 'hard' is accidentally better (it is not monotone in
+    ``n_x`` there: 3.8e-04 -> 1.0e-03) -- pinned as such in the second block.
     """
-    ref = _shear_ref("harmonic", "TM")
-    e64 = {m: _err(_grating(n_x=64, raster=m, **_SHEAR_KW), "TM", ref)
+    kw = dict(theta=-0.25, order=-1)       # the measured configuration
+    ref = _shear_ref("harmonic", "TM", **kw)
+    e64 = {m: _err(_grating(n_x=64, raster=m, **_SHEAR_KW), "TM", ref, **kw)
            for m in _MODES}
-    e128 = {m: _err(_grating(n_x=128, raster=m, **_SHEAR_KW), "TM", ref)
+    e128 = {m: _err(_grating(n_x=128, raster=m, **_SHEAR_KW), "TM", ref, **kw)
             for m in _MODES}
     assert e64["harmonic"] * 1.4 < e64["hard"], e64
     assert e64["harmonic"] * 2.5 < e64["area"], e64
     assert e128["harmonic"] * 3.0 < e128["hard"], e128
     assert e128["harmonic"] * 5.0 < e128["area"], e128
+    # the mirror-image configuration (theta = +0.25, order +1)
+    ref_p = _shear_ref("harmonic", "TM")
+    p64 = {m: _err(_grating(n_x=64, raster=m, **_SHEAR_KW), "TM", ref_p)
+           for m in _MODES}
+    p128 = {m: _err(_grating(n_x=128, raster=m, **_SHEAR_KW), "TM", ref_p)
+            for m in _MODES}
+    assert p64["harmonic"] * 3.0 < p64["area"], p64
+    assert p128["harmonic"] * 5.0 < p128["area"], p128
+    assert p128["harmonic"] * 1.8 < p128["hard"], p128
+    assert p64["hard"] < p64["harmonic"], p64           # the n_x = 64 exception
     # TE on the very same cells is untouched to round-off (== 'area' up to
     # the Cyy assembly order; see the docstring).
     t_a = _err(_grating(n_x=64, raster="area", **_SHEAR_KW), "TE",
-               _shear_ref("area", "TE"))
+               _shear_ref("area", "TE", **kw), **kw)
     t_h = _err(_grating(n_x=64, raster="harmonic", **_SHEAR_KW), "TE",
-               _shear_ref("area", "TE"))
+               _shear_ref("area", "TE", **kw), **kw)
     assert abs(t_a - t_h) < 1e-3 * max(t_a, t_h), (t_a, t_h)
     assert abs(t_a - t_h) < 1e-6, (t_a, t_h)
 

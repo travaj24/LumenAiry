@@ -2206,6 +2206,98 @@ def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
 
 
 # ===========================================================================
+# Public -> internal bridge for the LATERAL structure (the point mirror)
+# ===========================================================================
+#
+# THE ONE PLACE where a patterned layer's PUBLIC description becomes the cell
+# the convolution kernels read (``_eps_convolution_2d``, ``_li_convolutions_2d*``,
+# ``_nv_field_2d``, ``_analytic_convolutions_2d``, ``_toeplitz_of_profile``).
+#
+# The public gauge is ``exp(-i w t)`` with ``E = sum_m S_m exp(+i kx_m x)``;
+# the eigenmode/S-matrix core runs in ``exp(+i w t)``, reached by complex
+# conjugation.  Conjugation maps the permittivity to ``conj(eps)`` AND the
+# transverse carrier ``exp(+i kx_m x)`` to ``exp(-i kx_m x)``, so the internal
+# Toeplitz the core needs is
+#
+#     T_int[m, m'] = conj(c_{m - m'}),   c_k = < eps(x) exp(-i k K x) >_x
+#
+# (the conjugate of the public Toeplitz).  The kernels, however, implement the
+# PUBLIC rule ``[m, m'] = FT_{m - m'}[f]`` on whatever cell they are handed.
+# Fed ``f = conj(eps)`` -- as every bridge did from v5.5.0 to v5.50.0 -- they
+# return ``FT_{m-m'}[conj eps] = conj(c_{m' - m})``: the transpose, which is the
+# Toeplitz of ``conj(eps(-x, -y))``.  The solver therefore solved the POINT
+# MIRROR of the declared cell, while the incidence (``kx0``, ``ky0``) and the
+# order labels kept the public meaning (a UNIFORM layer, tensor or not, has no
+# lateral structure and was always right).
+#
+# The fix is a pure COORDINATE flip of the pattern, applied here and nowhere
+# else: ``FT_{m-m'}[conj eps(-x, -y)] = conj(c_{m - m'})`` exactly.  Tensor
+# COMPONENTS are NOT transformed -- only where each value sits; the kx-linear
+# off-plane terms (``EZX``, ``EXZ`` ...) already carry the right sign, as the
+# uniform tilted-tensor slab proves against the analytic answer at +/-theta.
+# Every downstream reader of the internal cell (the Li / FFF / normal-vector
+# blocks, the even-parity probe, the E_z recovery of the internal field) sees
+# the same flipped cell, so they stay mutually consistent by construction.
+# For analytic SHAPES the same operator is reached more directly: build the
+# PUBLIC analytic Toeplitz and conjugate it (``twod._internal_analytic_
+# convolution``) -- the identity ``T_int = conj(T_pub)`` that the pixel flip
+# realises, with no geometry rewriting at all.
+
+
+def _point_mirror_index(n):
+    """Host int index ``j -> (-j) mod n`` -- the exact point mirror ``x -> -x``
+    of the NODE lattice ``x_j = j P / n`` that defines a pixel for the whole
+    suite (see :func:`~lumenairy.elements.rcwa.twod._eps_convolution_2d`).  Its
+    DFT is ``c_k -> c_{-k}`` exactly, for any ``n`` (odd or even)."""
+    return (-np.arange(int(n))) % int(n)
+
+
+def _internal_cell(cell, xp=None):
+    """PUBLIC pixel cell (``(Sx, Sy)`` scalar or ``(Sx, Sy, 3, 3)`` tensor) ->
+    the INTERNAL-gauge cell every convolution kernel reads:
+    ``out[j, i, ...] = conj(cell[-j mod Sx, -i mod Sy, ...])``.
+
+    Conjugation is the loss-sign half of the bridge; the node-lattice point
+    mirror is the carrier half (see the block comment above).  Only the two
+    LATERAL axes are re-indexed; tensor components are untouched.  The gather
+    uses plain host int arrays, so it runs unchanged on NumPy / CuPy / JAX and
+    is differentiable (a permutation) w.r.t. every pixel value."""
+    xp = array_namespace(cell) if xp is None else xp
+    c = xp.conj(xp.asarray(cell))
+    c = c[_point_mirror_index(c.shape[0])]
+    if c.ndim >= 2 and c.shape[1] > 1:
+        c = c[:, _point_mirror_index(c.shape[1])]
+    return c
+
+
+# The ANALYTIC-SHAPE form of the bridge is
+# :func:`~lumenairy.elements.rcwa.twod._internal_analytic_convolution`: the
+# conjugate of the PUBLIC analytic ``[[eps]]`` (``conj(c_{m-m'})`` exactly, by
+# construction, for ANY form factor -- no per-primitive reflection rule).
+
+
+def _internal_profiles_1d(profiles, edges, xp):
+    """Point mirror ``x -> -x`` of INTERNAL-gauge (already conjugated) 1-D
+    per-component profiles (the carrier half of the bridge for the 1-D Jones
+    family; :func:`_jones_1d_from_profiles` is its one caller).
+
+    ``edges`` given (piecewise-constant VALUE arrays on ``[e_s, e_{s+1})``):
+    segment ``s`` moves to ``[1 - e_{s+1}, 1 - e_s)``, i.e. the edges become
+    ``1 - edges[::-1]`` and the value arrays reverse -- the exact mirror
+    (``_step_coeffs`` then returns ``c_{-k}``).  ``edges=None`` (a uniform node
+    SAMPLING): the node-lattice index mirror of :func:`_internal_cell`.
+    Returns ``(profiles, edges)``."""
+    if edges is None:
+        return ({k: xp.asarray(v)[_point_mirror_index(xp.asarray(v).shape[0])]
+                 for k, v in profiles.items()}, None)
+    e = np.asarray(edges, dtype=float)
+    rev = np.arange(e.shape[0] - 2, -1, -1)
+    mirrored = tuple(float(v) for v in (1.0 - e[::-1]))
+    return ({k: xp.asarray(v)[rev] for k, v in profiles.items()}, mirrored)
+
+
+
+# ===========================================================================
 # Fourier factorization -- convolution matrices
 # ===========================================================================
 
@@ -5344,6 +5436,9 @@ __all__ = [
     "_box_hits_unit_disk",
     "_shapes_y_varying",
     "_validate_shapes",
+    "_point_mirror_index",
+    "_internal_cell",
+    "_internal_profiles_1d",
     "_fourier_coeffs_1d",
     "_toeplitz_1d",
     "_layer_Q_matrix",

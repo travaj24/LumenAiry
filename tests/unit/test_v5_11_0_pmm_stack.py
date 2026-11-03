@@ -14,6 +14,17 @@ import pytest
 import lumenairy as la
 from lumenairy.elements.rcwa import uniaxial_tensor
 
+# RCWA point-mirror fix: PMM-vs-RCWA gates that PMM's own (pending) fix
+# must re-green; see tests/unit/test_rcwa_point_mirror_fix.py.
+_PMM_MIRROR_PENDING = (
+    "PMM still solves the point mirror eps(-x, -y) (the v5.5.0..v5.50.0 "
+    "loss-conjugation bridge, fixed in RCWA only so far); this "
+    "cross-engine gate compares PMM against the now-REGISTERED RCWA.  "
+    "Proven: with the old RCWA bridge restored on the fixed tree it "
+    "passes again.  REMOVE this mark with the PMM fix (strict: it will "
+    "XPASS-fail then).")
+
+
 _C = np.complex128
 GR = np.eye(3, dtype=_C)
 WL = 0.55e-6
@@ -56,7 +67,9 @@ def _rcwa_two_layer(theta):
     return res.efficiencies(), lcB
 
 
-@pytest.mark.parametrize("ang_deg", [0.0, 15.0])
+@pytest.mark.parametrize("ang_deg", [
+    0.0, pytest.param(15.0, marks=pytest.mark.xfail(
+        strict=True, reason=_PMM_MIRROR_PENDING))])
 def test_two_layer_stack_matches_rcwastack(ang_deg):
     theta = np.radians(ang_deg)
     (ro, rR, rT), lcB = _rcwa_two_layer(theta)

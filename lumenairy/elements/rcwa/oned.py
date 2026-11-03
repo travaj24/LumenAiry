@@ -27,6 +27,7 @@ from ._core import (
     _homogeneous_eigenmodes,
     _interface_smatrix,
     _interface_smatrix_general,
+    _internal_profiles_1d,
     _inv_lam,
     _is_traced,
     _layer_eigenmodes,
@@ -559,6 +560,14 @@ def rcwa_efficiency_1d(
     # Conjugating the indices maps a public absorber to the internal loss
     # sign.  Done in the ACTIVE namespace so the JAX path stays differentiable
     # w.r.t. the index values; lossless (real n) is bit-identical to v5.5.0.
+    # LATERAL half of the bridge (the point mirror, ``_core._internal_cell``):
+    # deliberately NOT applied here.  The kernels' public Toeplitz rule on the
+    # conjugated profile solves the mirror eps(-x), and for this TWO-segment
+    # binary cell (ridge on [0, duty)) the mirror is the SAME grating
+    # translated by -duty*period.  Every output of this entry (R_m, T_m) and
+    # of the ASR path is translation-invariant, so the answer is exact as is.
+    # An entry that returns per-order PHASES or real-space fields must bridge
+    # through _internal_cell / _internal_profiles_1d.
     n_ridge = xp.conj(xp.asarray(n_ridge).astype(_C))
     n_groove = xp.conj(xp.asarray(n_groove).astype(_C))
     n_inc = xp.conj(xp.asarray(n_superstrate).astype(_C))
@@ -1105,8 +1114,15 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
     factorization rule, see :func:`_tensor_convolutions`.  The FULL-3x3
     (``offplane``) branch is the Li-2003 successive factorization by
     construction and accepts ``'li'`` only.
+
+    ``profiles`` arrive CONJUGATED (the loss-sign half of the bridge, done by
+    each caller) but still in PUBLIC coordinates; the coordinate half -- the
+    point mirror ``x -> -x`` that makes the kernels' public Toeplitz rule the
+    internal one (see the bridge block in ``_core``) -- is applied HERE, once,
+    for both 1-D Jones entries.
     """
     N = 2 * M + 1
+    profiles, edges = _internal_profiles_1d(profiles, edges, xp)
     if offplane and formulation != "li":
         raise NotImplementedError(
             f"{fn_name}: formulation={formulation!r} is not available for an "
