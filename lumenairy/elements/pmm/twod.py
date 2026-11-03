@@ -548,7 +548,16 @@ def _validate_cell_cost(fn_name, el_x, el_y, degree, max_nodal_dof):
             f"cells are supported up to the cap (v5.14 factorized assembly); "
             f"beyond it use rcwa_efficiency_2d (Fourier sampling) or "
             f"pmm_efficiency_2d_staggered, or lower degree / "
-            f"elements_per_strip, or raise max_nodal_dof explicitly.")
+            f"elements_per_strip, or raise max_nodal_dof explicitly (this "
+            f"layout needs max_nodal_dof >= {nx * ny}).  If eps_cell is a "
+            f"RASTERED CURVED inclusion (a disk, ellipse or rounded "
+            f"rectangle), describe the outline itself instead: the pure "
+            f"staggered stack maps it exactly, with no staircase -- "
+            f"PMM2DStackPure(period_x, period_y, n_superstrate=..., "
+            f"n_substrate=..., n_modes=...).add_layer(thickness, "
+            f"background_eps=..., shapes=[Circle(cx, cy, r, eps=...)]) "
+            f"(PMM2DStackPure and the shapes Circle, Ellipse, FilletRect, "
+            f"Rect from lumenairy.elements.pmm).")
 
 
 def _axis_elem_counts(period, walls, degree, elements_per_strip, fn_name,
