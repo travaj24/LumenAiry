@@ -114,6 +114,30 @@ reproduces each old pin on the fixed tree.  One stored RCWA value moved: the W7-
 `0.16541074 -> 0.15788743` (the old pin was the mirrored field times the
 declared mask; the new value is checked against a mask-free flux oracle).
 
+### Fixed -- NaN angle gradient of the 2-D PMM at normal incidence on jax 0.12
+
+The JAX twin of the 2-D PMM built its incident TE/TM basis from
+`jnp.hypot(kx, ky)` and masked the normal-incidence case with a `where`
+afterwards.  The derivative of `hypot` at the origin is `0/0`; jax up to
+0.11 happened to return a finite value there, jax 0.12 returns NaN, and a
+`where` cannot mask a NaN tangent (`0 * NaN = NaN`), so every `theta = 0`
+angle gradient came out NaN.  The mask is now decided on the forward value
+and `hypot` is never evaluated at the origin
+(`lumenairy/elements/pmm/_jax_twod.py`).  Forward results are unchanged; the
+gradient is the masked value it was on jax 0.11.
+
+### Fixed -- `pytest` 9.2 `monkeypatch` deleted the lens kernels' backend names
+
+`lumenairy.elements.lenses` forwards eight live backend names (`cp`, `_ne`,
+`NUMEXPR_AVAILABLE`, `_NUMBA_AVAILABLE`, `_numba`, `_njit`, `_prange`,
+`_NUMBA_KERNELS`) to `lumenairy.elements._lens_kernels` through
+`__getattr__` / `__setattr__`.  pytest 9.2's `MonkeyPatch.setattr` reads a
+module's old value from its `__dict__` unless the type defines a data
+descriptor, so it recorded these names as absent and its undo DELETED them
+from `_lens_kernels` for the rest of the process.  They are now data
+descriptors on the facade's type; `dir()`, `import *` and the refusals for
+leaf-owned names are unchanged.
+
 ### Added -- `formulation='li'` on analytic `shapes=` layers (audit L-4)
 
 `RCWAStack.add_layer(..., shapes=..., formulation='li')` (alias `'fff'`) is
