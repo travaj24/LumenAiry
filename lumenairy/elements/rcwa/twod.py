@@ -2294,7 +2294,9 @@ def _internal_analytic_li_operators(eps_background, shapes, orders,
     The no-contrast case returns ``Cxx = None`` so the caller takes the scalar
     Laurent path, mirroring the ``eps_cell`` 'li' path's uniform-cell
     fall-through.  1-D only (``n_orders_y = 0``): in 2-D the inverse of the
-    global ``[[1/eps]]`` is NOT Li's sequential rule.  Host NumPy.
+    global ``[[1/eps]]`` is NOT Li's sequential rule (that needs a per-band
+    inverse -- :func:`_internal_analytic_li_operators_2d`, Phase D, for
+    axis-aligned rectangles).  Host NumPy.
 
     An ill-conditioned ``[[1/eps]]`` (``cond > _LI_SHAPES_COND_MAX``) raises
     :class:`numpy.linalg.LinAlgError` instead of returning a silently wrong
@@ -2303,8 +2305,8 @@ def _internal_analytic_li_operators(eps_background, shapes, orders,
     0.5)."""
     if int(n_orders_y) != 0:
         raise NotImplementedError(
-            "RCWAStack: formulation='li' on a shapes layer is implemented for "
-            "1-D stacks only (n_orders_y = 0).")
+            "_internal_analytic_li_operators is the 1-D (n_orders_y = 0) "
+            "operator; a 2-D cell takes _internal_analytic_li_operators_2d.")
     EPS_pub, EINV_pub = _analytic_convolutions_2d(
         eps_background, shapes, orders, n_orders_x, n_orders_y, period_x,
         period_y)
@@ -2322,6 +2324,221 @@ def _internal_analytic_li_operators(eps_background, shapes, orders,
             f"1/eps is near zero (e.g. a lossless eps = -1 line in eps = 1 at "
             f"duty 0.5).  Use formulation='laurent' for this layer.")
     return np.conj(EPS_pub), np.conj(np.linalg.inv(EINV_pub))
+
+
+# ---------------------------------------------------------------------------
+# Phase D (PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02, L-4): Li's sequential rule
+# for a 2-D cell of AXIS-ALIGNED RECTANGLES, built analytically.
+# ---------------------------------------------------------------------------
+
+# The complete key vocabulary of an axis-aligned rectangle.  The shapes
+# vocabulary has no rotation (``_shape_form_factor`` reads only ``size`` /
+# ``center``), so any other key -- ``angle``, ``rot``, ``phi``, ... -- would be
+# silently dropped and the rectangle solved UNROTATED; the 2-D 'li'
+# construction relies on axis alignment, so it refuses them.  An ALLOWLIST: a
+# denylist of rotation spellings let ``rot`` / ``angle_deg`` / ``phi`` through
+# (Phase D verification 2026-11-03).
+_LI_RECT_KEYS = frozenset({"shape", "eps", "size", "center"})
+
+
+def _li_rect_shapes_problem(shapes):
+    """``None`` when every shape is an axis-aligned rectangle (the domain of the
+    2-D analytic 'li' construction), else a sentence saying which shape is not.
+    Shared by ``RCWAStack.add_layer`` (which raises it as a ``ValueError``) and
+    :func:`_internal_analytic_li_operators_2d` (defensive re-check)."""
+    for i, sh in enumerate(shapes):
+        kind = sh.get("shape")
+        if kind != "rectangle":
+            return (f"shapes[{i}] is a {kind!r}; the 2-D analytic 'li' "
+                    f"construction (per-band inverse rule) is exact for "
+                    f"axis-aligned rectangles only.  Li's rule for curved "
+                    f"shapes is future work (Phase F of "
+                    f"PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02)")
+        rk = sorted(set(sh) - _LI_RECT_KEYS)
+        if rk:
+            return (f"shapes[{i}] (rectangle) carries {rk[0]!r}; a rectangle "
+                    f"takes only {sorted(_LI_RECT_KEYS)} and is axis-aligned "
+                    f"(the shapes vocabulary has no rotation).  Li's rule for "
+                    f"rotated shapes is future work (Phase F of "
+                    f"PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02)")
+    return None
+
+
+def _li_rect_axis_operator(eps_background, rects, m_inv, m_dir, period_inv,
+                           period_dir):
+    """PUBLIC Li sequential-rule block of ONE field component, in that
+    component's own frame: ``u`` is the axis that takes the INVERSE rule (the
+    component's own axis), ``v`` the axis that takes the DIRECT rule.
+
+    ``rects`` is a list of ``(cu, wu, cv, wv, eps)`` (centre and full width
+    along u, then along v, then the permittivity) of DISJOINT axis-aligned
+    rectangles in ``eps_background``.  Returns ``Ahat`` of shape
+    ``(4 m_dir + 1, 2 m_inv + 1, 2 m_inv + 1)`` with
+
+        ``Ahat[l + 2 m_dir] = (1/P_v) int_0^{P_v} inv(T_u[1/eps](v))
+        exp(-i l G_v v) dv``,
+
+    where ``T_u[1/eps](v)[m, m'] = c_{m - m'}`` is the ``(2 m_inv + 1)``-square
+    Toeplitz of the u-Fourier coefficients of ``1/eps(., v)``.  This is the
+    ``eps_cell`` construction of :func:`_li_convolutions_2d` (per pixel row:
+    Toeplitz of ``1/eps``, invert, then a DFT along the rows) with the pixel
+    rows replaced by their exact continuum limit:
+
+    * the cell splits into v-BANDS between consecutive rectangle v-edges
+      (wrap-aware; a rectangle spanning the whole ``P_v`` adds no edge), and in
+      each band the u-profile is a fixed piecewise-constant function;
+    * per band the Toeplitz of ``1/eps`` is analytic -- ``1/eps_bg`` plus, for
+      each rectangle present in the band, ``(1/eps_s - 1/eps_bg) (w_u/P_u)
+      sinc(k w_u/P_u) exp(-2 pi i k c_u/P_u)`` (the rectangles are disjoint,
+      so the sum is exact) -- and it is INVERTED (the inverse rule along u);
+    * the v-Fourier transform of a band-wise constant matrix function is exact:
+      ``sum_b A_b (h_b/P_v) sinc(l h_b/P_v) exp(-2 pi i l v_b/P_v)`` with
+      ``h_b`` the band height and ``v_b`` its centre (the direct rule along v).
+
+    The per-band INVERSE is what makes this Li's rule; the v-sum of sinc
+    products of ``1/eps`` (no inverse) would be a different operator.  A single
+    full-period band contributes ``A`` at ``l = 0`` only (EXACTLY -- no
+    ``sinc(integer)`` round-off), so a stack of full-height stripes reduces to
+    the 1-D inverse rule.
+
+    Each band's Toeplitz is refused with :class:`numpy.linalg.LinAlgError`
+    when its condition number exceeds ``_LI_SHAPES_COND_MAX`` (C1's guard,
+    applied per band: a band whose average ``1/eps`` is near zero makes the
+    inverse rule ill-posed).  Host NumPy."""
+    m_inv, m_dir = int(m_inv), int(m_dir)
+    P_u, P_v = float(period_inv), float(period_dir)
+    ks = np.arange(-2 * m_inv, 2 * m_inv + 1)
+    ls = np.arange(-2 * m_dir, 2 * m_dir + 1)
+    am = np.arange(-m_inv, m_inv + 1)
+    dk = am[:, None] - am[None, :] + 2 * m_inv
+    eps_bg = _C(eps_background)
+    inv_bg = 1.0 / eps_bg
+    full = [wv >= P_v * (1.0 - 1e-9) for (_cu, _wu, _cv, wv, _e) in rects]
+    # The per-rectangle u-series of its 1/eps contrast (band-independent).
+    contrib = [(1.0 / _C(e) - inv_bg) * (wu / P_u) * np.sinc(ks * wu / P_u)
+               * np.exp(-2j * np.pi * ks * cu / P_u)
+               for (cu, wu, _cv, _wv, e) in rects]
+    # v-edges (mod P_v), sorted, de-duplicated (wrap-aware).
+    tol = 1e-12 * P_v
+    raw = sorted(float((cv + s * 0.5 * wv) % P_v)
+                 for (_cu, _wu, cv, wv, _e), f in zip(rects, full) if not f
+                 for s in (-1.0, 1.0))
+    edges = []
+    for e in raw:
+        if not edges or e - edges[-1] > tol:
+            edges.append(e)
+    if len(edges) > 1 and edges[-1] - edges[0] > P_v - tol:
+        edges.pop()                       # P_v - eps and 0 are the same edge
+    if edges:
+        bands = [(edges[i], (edges[i + 1] if i + 1 < len(edges)
+                             else edges[0] + P_v))
+                 for i in range(len(edges))]
+    else:
+        bands = [(0.0, P_v)]
+    Ahat = np.zeros((ls.size, ks.size // 2 + 1, ks.size // 2 + 1), dtype=_C)
+    for lo, hi in bands:
+        mid, h = 0.5 * (lo + hi), hi - lo
+        c = np.zeros(ks.size, dtype=_C)
+        c[2 * m_inv] = inv_bg
+        for (_cu, _wu, cv, wv, _e), f, cr in zip(rects, full, contrib):
+            if f or (mid - (cv - 0.5 * wv)) % P_v < wv:
+                c = c + cr
+        T = c[dk]
+        cond = float(np.linalg.cond(T))
+        if not np.isfinite(cond) or cond > _LI_SHAPES_COND_MAX:
+            raise np.linalg.LinAlgError(
+                f"RCWAStack: formulation='li' on this 2-D shapes layer is "
+                f"ill-posed -- in the band [{lo:.6g}, {hi:.6g}) m the analytic "
+                f"[[1/eps]] Toeplitz along the inverse-rule axis has condition "
+                f"number {cond:.3e} (> {_LI_SHAPES_COND_MAX:.0e}), so its "
+                f"inverse is numerically meaningless.  This happens when that "
+                f"band's average 1/eps is near zero (e.g. a lossless eps = -1 "
+                f"bar in eps = 1 at half the period).  Use "
+                f"formulation='laurent' for this layer.")
+        A = np.linalg.inv(T)
+        if len(bands) == 1:
+            Ahat[2 * m_dir] = Ahat[2 * m_dir] + A
+        else:
+            d = ((h / P_v) * np.sinc(ls * h / P_v)
+                 * np.exp(-2j * np.pi * ls * mid / P_v))
+            Ahat = Ahat + d[:, None, None] * A[None, :, :]
+    return Ahat
+
+
+def _analytic_li_operators_2d(eps_background, shapes, orders, n_orders_x,
+                              n_orders_y, period_x, period_y):
+    """PUBLIC-gauge Li-1997 sequential-rule operators ``(Cxx, Cyy)`` of a 2-D
+    cell of disjoint AXIS-ALIGNED RECTANGLES in ``eps_background``, in the index
+    layout of :func:`_li_convolutions_2d`:
+
+    * ``Cxx[(m, n), (m', n')] = Ahat_{n - n'}[m, m']`` -- inverse rule along x
+      per y-band, direct rule along y (``E_x``);
+    * ``Cyy[(m, n), (m', n')] = Bhat_{m - m'}[n, n']`` -- the transposed
+      construction (``E_y``).
+
+    ``Ahat`` / ``Bhat`` come from :func:`_li_rect_axis_operator`.  This is the
+    continuum (``S -> inf``) limit of :func:`_li_convolutions_2d` on a raster
+    of the same cell.  Host NumPy; no shape validation (see
+    :func:`_internal_analytic_li_operators_2d`)."""
+    Mx, My = int(n_orders_x), int(n_orders_y)
+    Px, Py = float(period_x), float(period_y)
+    rx, ry = [], []
+    for sh in shapes:
+        cx, cy = (float(v) for v in sh.get("center", (0.5 * Px, 0.5 * Py)))
+        wx, wy = (float(v) for v in sh["size"])
+        e = _C(sh["eps"])
+        rx.append((cx, wx, cy, wy, e))
+        ry.append((cy, wy, cx, wx, e))
+    Ahat = _li_rect_axis_operator(eps_background, rx, Mx, My, Px, Py)
+    Bhat = _li_rect_axis_operator(eps_background, ry, My, Mx, Py, Px)
+    m = np.asarray(orders[:, 0])
+    n = np.asarray(orders[:, 1])
+    Cxx = Ahat[(n[:, None] - n[None, :]) + 2 * My,
+               (m + Mx)[:, None], (m + Mx)[None, :]]
+    Cyy = Bhat[(m[:, None] - m[None, :]) + 2 * Mx,
+               (n + My)[:, None], (n + My)[None, :]]
+    return Cxx, Cyy
+
+
+def _internal_analytic_li_operators_2d(eps_background, shapes, orders,
+                                       n_orders_x, n_orders_y, period_x,
+                                       period_y):
+    """INTERNAL-gauge operators of a 2-D ``'li'`` analytic-rectangle layer
+    (``RCWAStack`` Phase D): ``(EPS, Cxx, Cyy)``, with ``Cxx = Cyy = None``
+    when no shape differs from the background (the caller then takes the
+    scalar Laurent path, as the ``eps_cell`` 'li' path does for a uniform cell).
+
+    The bridge rule of :func:`_internal_analytic_convolution` and C1's
+    :func:`_internal_analytic_li_operators`: every operator is built from the
+    PUBLIC shapes in PUBLIC coordinates (:func:`_analytic_convolutions_2d`,
+    :func:`_analytic_li_operators_2d`) and the FINISHED operator is conjugated.
+    Conjugating the shape permittivities first and building from them would
+    give the operators of the point mirror ``eps(-x, -y)``.  Why conjugating the
+    finished Li operator is the internal operator the ``eps_cell`` path builds
+    from ``_internal_cell`` (``conj(eps(-x, -y))``): each row's Toeplitz is
+    ``conj(T_pub(-y))``, its inverse ``conj(inv T_pub(-y))``, and the y-Fourier
+    coefficient of ``conj(A(-y))`` is ``conj(Ahat_pub)``.
+
+    Placement (the ``eps_cell`` 'li' path's, consumed unchanged by
+    ``_layer_eigenmodes_tensor`` / ``_tensor_PQ`` as
+    ``(Cxx, 0, 0, Cyy, EZZ = EPS)``): ``Cxx`` for ``E_x``, ``Cyy`` for ``E_y``,
+    and the direct-rule ``EPS = [[eps]]`` for the ``E_z`` elimination (Li 1997
+    Eq. 27).  Rectangles only (anything else raises ``ValueError``)."""
+    problem = _li_rect_shapes_problem(shapes)
+    if problem is not None:
+        raise ValueError(f"RCWAStack: formulation='li' on a 2-D shapes layer: "
+                         f"{problem}.")
+    EPS_pub, _ = _analytic_convolutions_2d(   # [[1/eps]] unused (M10)
+        eps_background, shapes, orders, n_orders_x, n_orders_y, period_x,
+        period_y)
+    eps_bg = _C(eps_background)
+    scale = max(1.0, abs(eps_bg), *(abs(_C(s["eps"])) for s in shapes))
+    if all(abs(_C(s["eps"]) - eps_bg) <= 1e-12 * scale for s in shapes):
+        return np.conj(EPS_pub), None, None
+    Cxx_pub, Cyy_pub = _analytic_li_operators_2d(
+        eps_background, shapes, orders, n_orders_x, n_orders_y, period_x,
+        period_y)
+    return np.conj(EPS_pub), np.conj(Cxx_pub), np.conj(Cyy_pub)
 
 
 @_with_blas_limit
@@ -2621,5 +2838,7 @@ __all__ = [
     "_analytic_convolutions_2d",
     "_internal_analytic_convolution",
     "_internal_analytic_li_operators",
+    "_analytic_li_operators_2d",
+    "_internal_analytic_li_operators_2d",
     "rcwa_efficiency_2d_shapes",
 ]

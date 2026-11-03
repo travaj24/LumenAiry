@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 514ec71b004099f0984b0800906438f2eb033d9f2ce7020089259effdca4601f
-token_sha256: 6271f6191f7f7c8d4788755cbd2725b903cf5301bdee96f3020ccbc84f8fa217
+ast_sha256: 9ab4b2c8faae58dd3aad80a3c2feb08ed955b883bb98e06fb2ab624aa205b21e
+token_sha256: 356150e73eec1293c3147ef8070eb7d8b1b13db7dda21e70d4e85e29ef736565
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -12,6 +12,8 @@ re_recorded: 2026-11-03 -- Phase C1 (L-4), rebased on the point-mirror fix: form
 re_recorded: 2026-11-03 -- C1 follow-up: plain formatting of the zero-background 'li' refusal (the conditioning guard itself lives in twod._internal_analytic_li_operators)
 re_recorded: 2026-11-03 -- plan C2: layer_absorption on analytic shapes= layers (exact Parseval in-plane rule, return_raw)
 re_recorded: 2026-11-03 -- release 5.50.1 merge: point-mirror fix + C1 'li' shapes + C2 shapes absorption combined
+re_recorded: 2026-11-03 -- Phase D (L-4): formulation='li' on 2-D shapes layers of axis-aligned rectangles -- _check_li_shapes_2d; RCWAStack._shapes_operators now returns (EPS, Cxx, Cyy) (1-D: C1's operators, Cyy is EPS; 2-D: twod._internal_analytic_li_operators_2d, conj of the PUBLIC per-band Li operators) and both _layer_modes and _layer_even_spec place Cyy; the 2-D shapes 'li' refusal is lifted for rectangles
+re_recorded: 2026-11-03 -- release 5.50.1 merge: Phase D (2-D 'li' rectangles, _shapes_operators returns (EPS, Cxx, Cyy)) combined with C2 shapes absorption
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`
