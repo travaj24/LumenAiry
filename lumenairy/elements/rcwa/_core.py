@@ -2000,6 +2000,16 @@ def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y, *,
 # it guards.
 
 
+# The complete key vocabulary of each analytic shape kind (what
+# ``_shape_form_factor`` reads); anything else is refused by
+# ``_validate_shapes`` rather than silently ignored.
+_SHAPE_KEYS = {
+    "rectangle": frozenset({"shape", "eps", "center", "size"}),
+    "disk": frozenset({"shape", "eps", "center", "radius"}),
+    "ellipse": frozenset({"shape", "eps", "center", "semi_axes"}),
+}
+
+
 def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
     """Validate the analytic-shape list against the silent-wrong-answer traps,
     each rejected up front with a ``fn_name:`` prefix:
@@ -2008,6 +2018,9 @@ def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
       missing / non-numeric ``eps``, geometry or ``center`` entry.  These used
       to surface as a bare ``KeyError('radius')`` / ``TypeError`` from deep
       inside the form factors (audit W8 2026-07-27);
+    * an unknown key (anything outside ``_SHAPE_KEYS[kind]``) -- the form
+      factors never read it, so e.g. a rectangle's ``angle`` was silently
+      dropped and the shape solved unrotated;
     * zero or negative size -- a non-positive dimension vanishes or sign-flips
       the shape's contribution to the permittivity spectrum;
     * area fraction > 1 -- a shape whose area exceeds the cell drives the
@@ -2059,7 +2072,6 @@ def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
             raise ValueError(
                 f"{fn_name}: shapes[{i}] has unknown shape {kind!r} (expected "
                 f"'rectangle', 'disk' or 'ellipse').")
-
         def _req(key, n, what, _i=i, _sh=sh, _kind=kind):
             """The required geometry entry, as a tuple of ``n`` floats."""
             if key not in _sh:
@@ -2107,6 +2119,18 @@ def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
             raise ValueError(
                 f"{fn_name}: shapes[{i}] ({kind}) has a non-finite center "
                 f"{(cx, cy)!r}; the form factor's phase would be NaN.")
+        extra = sorted(set(sh) - _SHAPE_KEYS[kind])
+        if extra:
+            # An unread key is silently dropped by the form factors -- e.g.
+            # ``angle=0.7`` on a rectangle solved it UNROTATED (|dR| = 0.0
+            # where a genuinely rotated rectangle moves R by 2.7e-2; Phase D
+            # verification 2026-11-03).  The vocabulary has no rotation.
+            raise ValueError(
+                f"{fn_name}: shapes[{i}] ({kind}) has unknown "
+                f"key(s) {extra}; a {kind} takes only "
+                f"{sorted(_SHAPE_KEYS[kind])}.  Shapes are axis-aligned "
+                f"(there is no rotation) -- an unknown key would be silently "
+                f"ignored, so it is refused.")
         descs.append((kind, sup_x, sup_y, (cx, cy)))
         for d in dims:
             if not (np.isfinite(d) and d > 0.0):

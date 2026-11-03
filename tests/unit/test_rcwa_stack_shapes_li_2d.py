@@ -16,7 +16,8 @@ cell, placed exactly as that path places it.  Pinned here:
 * raster agreement: node-aligned ``eps_cell`` + 'li' converges TO analytic +
   'li' (Romberg in even powers of ``1/S``), per order, at conical incidence
   with live +-1 orders in x and y -- a square pillar, a rectangle pair that
-  wraps the cell edge, an L built from two rectangles;
+  wraps the cell edge, an L built from two rectangles, and a set that wraps
+  the y-axis at both ends with one centre a whole period outside [0, P);
 * rule separation: swapping which axis takes the inverse rule moves R by far
   more than the agreement tolerance;
 * registration: internal operators are the conjugates of the PUBLIC ones (the
@@ -59,6 +60,13 @@ PAIR = [(13 / 16, 5 / 16, 2 / 16, 5 / 16, EPS_M),       # wraps x
         (4 / 16, 3 / 16, 9 / 16, 9 / 16, EPS_D)]         # wraps y
 LSHAPE = [(2 / 16, 3 / 16, 2 / 16, 10 / 16, EPS_M),
           (5 / 16, 6 / 16, 2 / 16, 3 / 16, EPS_M)]       # touches the first
+# the y-axis wraps at BOTH ends: one rectangle starts below 0, the other ends
+# above P, and a third has its centre a whole period outside [0, P).  Dropping
+# the band code's ``% P_v`` wrap moves Cxx by 0.29 here while passing every
+# other geometry in this file (Phase D verification 2026-11-03).
+DOUBLE_WRAP = [(1 / 16, 3 / 16, -2 / 16, 5 / 16, EPS_M),
+               (8 / 16, 3 / 16, 13 / 16, 5 / 16, EPS_D),
+               (12 / 16, 2 / 16, 1 + 5 / 16, 4 / 16, EPS_M)]
 
 
 def _rect(x0, w, y0, h, eps, px=P, py=P):
@@ -92,8 +100,11 @@ def _solve(st, theta=TH, phi=PHI, symmetry="auto"):
 
 def _shapes_layer(n, rects, formulation="li", shift=(0.0, 0.0), **kw):
     st = _stack2d(n)
-    st.add_layer(DEPTH, shapes=[_rect((x0 + shift[0]) % 1.0, w,
-                                      (y0 + shift[1]) % 1.0, h, e)
+    # unshifted geometry is passed through as written, so a rectangle placed
+    # outside [0, P) on purpose (DOUBLE_WRAP) stays there
+    wrap = (lambda v: v % 1.0) if any(shift) else (lambda v: v)
+    st.add_layer(DEPTH, shapes=[_rect(wrap(x0 + shift[0]), w,
+                                      wrap(y0 + shift[1]), h, e)
                                 for x0, w, y0, h, e in rects],
                  eps_background=1.0 + 0j, formulation=formulation)
     return st
@@ -166,8 +177,9 @@ def test_noy0_2d_stack_matches_1d_stack():
 # raster agreement
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("rects", [SQUARE, PAIR, LSHAPE],
-                         ids=["square", "pair_wrapping", "L_shape"])
+@pytest.mark.parametrize("rects", [SQUARE, PAIR, LSHAPE, DOUBLE_WRAP],
+                         ids=["square", "pair_wrapping", "L_shape",
+                              "double_wrap"])
 def test_node_raster_li_converges_to_analytic_li(rects):
     """Per order, both incident polarizations, R and T.  The raster is the
     analytic cell translated by half a pixel (a node-lattice sample), which no
@@ -317,6 +329,13 @@ def test_m4_pillar_li_converges_faster_than_laurent():
 @pytest.mark.parametrize("rects", [SQUARE, PAIR, LSHAPE],
                          ids=["square", "pair_wrapping", "L_shape"])
 def test_lossless_rectangles_conserve_energy(rects):
+    """The 1e-12 bar holds at small truncation only.  At N >= 18 a lossless
+    METAL pillar closes to ~1-2.5e-12 under EVERY formulation -- this one,
+    Laurent, and the ``eps_cell`` 'li' raster at S = 2048 / 4096 alike --
+    while forcing the operators exactly Hermitian leaves it at 1.07e-12 and
+    1e-15 Hermitian noise on them moves it by ~1e-12: round-off amplified by
+    the plasmonic solve's conditioning, not an operator defect.  Budget ~5e-12
+    there (Phase D verification 2026-11-03)."""
     lossless = [r[:4] + (complex(r[4].real, 0.0),) for r in rects]
     _, R, T = _solve(_shapes_layer(4, lossless))
     assert np.max(np.abs(R.sum(axis=1) + T.sum(axis=1) - 1.0)) <= 1e-12
@@ -329,15 +348,34 @@ def test_lossless_rectangles_conserve_energy(rects):
 @pytest.mark.parametrize("shape", [
     {"shape": "disk", "eps": EPS_M, "radius": 0.3e-6},
     {"shape": "ellipse", "eps": EPS_M, "semi_axes": (0.3e-6, 0.2e-6)},
-    dict(_rect(*SQUARE[0]), angle=0.3),
 ])
-def test_non_rectangles_and_rotated_rectangles_are_refused(shape):
+def test_non_rectangles_are_refused(shape):
     st = _stack2d(3)
     with pytest.raises(ValueError, match="Phase F"):
         st.add_layer(DEPTH, shapes=[_rect(*PAIR[0]), shape],
                      eps_background=1.0 + 0j, formulation="li")
     # Laurent is unaffected
     _stack2d(3).add_layer(DEPTH, shapes=[shape], eps_background=1.0 + 0j)
+
+
+@pytest.mark.parametrize("key", ["angle", "angle_deg", "rotation_rad", "rot",
+                                 "phi", "tilt"])
+@pytest.mark.parametrize("formulation", ["li", "laurent"])
+def test_rotated_rectangles_are_refused(key, formulation):
+    """No shape kind reads a rotation, so ANY unknown key is refused (an
+    allowlist) -- under Laurent too, which used to drop ``angle`` silently
+    (|dR| = 0.0 at angle = 0.7; Phase D verification 2026-11-03)."""
+    with pytest.raises(ValueError, match="unknown key"):
+        _stack2d(3).add_layer(DEPTH, shapes=[dict(_rect(*SQUARE[0]),
+                                                  **{key: 0.3})],
+                              eps_background=1.0 + 0j, formulation=formulation)
+    # the 'li' builder's own defensive re-check is an allowlist as well
+    if formulation == "li":
+        orders, _ = _harmonic_orders_2d(3, 3)
+        with pytest.raises(ValueError, match="Phase F"):
+            _internal_analytic_li_operators_2d(
+                1.0, [dict(_rect(*SQUARE[0]), **{key: 0.3})], orders, 3, 3,
+                P, P)
 
 
 def test_zero_background_refused_and_singular_band_raises():

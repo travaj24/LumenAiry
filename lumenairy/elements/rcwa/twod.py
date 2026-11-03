@@ -2331,12 +2331,14 @@ def _internal_analytic_li_operators(eps_background, shapes, orders,
 # for a 2-D cell of AXIS-ALIGNED RECTANGLES, built analytically.
 # ---------------------------------------------------------------------------
 
-# Keys that would mean "this rectangle is rotated".  The shapes vocabulary has
-# no rotation (``_shape_form_factor`` reads only ``size`` / ``center``), so a
-# rectangle carrying one of these would be silently solved UNROTATED; the 2-D
-# 'li' construction relies on axis alignment, so it refuses them explicitly.
-_RECT_ROTATION_KEYS = ("angle", "rotation", "rotation_deg", "theta",
-                       "orientation", "tilt")
+# The complete key vocabulary of an axis-aligned rectangle.  The shapes
+# vocabulary has no rotation (``_shape_form_factor`` reads only ``size`` /
+# ``center``), so any other key -- ``angle``, ``rot``, ``phi``, ... -- would be
+# silently dropped and the rectangle solved UNROTATED; the 2-D 'li'
+# construction relies on axis alignment, so it refuses them.  An ALLOWLIST: a
+# denylist of rotation spellings let ``rot`` / ``angle_deg`` / ``phi`` through
+# (Phase D verification 2026-11-03).
+_LI_RECT_KEYS = frozenset({"shape", "eps", "size", "center"})
 
 
 def _li_rect_shapes_problem(shapes):
@@ -2352,12 +2354,13 @@ def _li_rect_shapes_problem(shapes):
                     f"axis-aligned rectangles only.  Li's rule for curved "
                     f"shapes is future work (Phase F of "
                     f"PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02)")
-        rk = [k for k in _RECT_ROTATION_KEYS if k in sh]
+        rk = sorted(set(sh) - _LI_RECT_KEYS)
         if rk:
-            return (f"shapes[{i}] (rectangle) carries {rk[0]!r}; rectangles "
-                    f"are axis-aligned (the shapes vocabulary has no "
-                    f"rotation), and Li's rule for rotated shapes is future "
-                    f"work (Phase F of PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02)")
+            return (f"shapes[{i}] (rectangle) carries {rk[0]!r}; a rectangle "
+                    f"takes only {sorted(_LI_RECT_KEYS)} and is axis-aligned "
+                    f"(the shapes vocabulary has no rotation).  Li's rule for "
+                    f"rotated shapes is future work (Phase F of "
+                    f"PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02)")
     return None
 
 
