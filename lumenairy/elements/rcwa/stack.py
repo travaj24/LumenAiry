@@ -73,6 +73,7 @@ from .twod import (
     _internal_analytic_li_operators,
     _li_convolutions_2d,
     _li_convolutions_2d_tensor,
+    _shape_form_factor,
 )
 
 
@@ -1270,10 +1271,32 @@ class RCWAResult:
         return ix, iy
 
     @staticmethod
-    def _layer_im_eps(layer, xg, yg, period_x, period_y):
+    def _layer_im_eps(layer, xg, yg, period_x, period_y, *, n_orders=None):
         """``Im(eps_public(x, y)) >= 0`` of a SCALAR (uniform / isotropic) layer
         on the real-space field grid (the local loss density weight for
-        :meth:`layer_absorption`)."""
+        :meth:`layer_absorption`) -- or, for an analytic-``shapes`` layer, its
+        loss weight in the EXACT-QUADRATURE form described below.
+
+        ``shapes`` (plan C2, audit L-3).  The weight is the Fourier series of
+        ``Im(eps)`` -- background plus each shape's analytic form factor
+        (:func:`~lumenairy.elements.rcwa.twod._shape_form_factor`, so the
+        same centre, periodic wrap and disjoint superposition as the solve's
+        ``[[eps]]``) -- kept to the difference-order box ``|k_x| <= 2 M_x``,
+        ``|k_y| <= 2 M_y`` (``n_orders = (M_x, M_y)``; ``M_y = 0`` keeps only
+        the y-average, the structure an ``n_orders_y = 0`` stack solves).  The
+        reconstructed ``|E|^2`` is band-limited to exactly that box, so by
+        Parseval ``mean(weight * |E|^2)`` over ``n >= 4 M + 1`` nodes per axis
+        IS the integral of the EXACT shape indicator times ``|E|^2`` -- no
+        in-plane quadrature error, whatever the shape.  Point-wise the weight
+        carries the Gibbs ringing of a truncated series (it can dip below 0
+        near an edge), so it is a quadrature weight, not a loss map to plot.
+        Sampling the indicator at the nodes instead was measured to converge
+        only like ``1/n`` for an edge off the nodes and like the Gauss
+        circle problem for a disk (1.5e-3 relative at ``n = 1024``, ``M =
+        4``); this rule closes ``sum(layers) = A`` to 1e-13 with an exact
+        z-rule.  The series is the PUBLIC ``Im(eps)`` in declared
+        coordinates (the solve's internal-gauge operator is built separately
+        by ``twod._internal_analytic_convolution``)."""
         ny, nx = len(yg), len(xg)
         if layer.kind == "uniform":
             return np.full((ny, nx), float(np.imag(complex(layer.data))))
@@ -1283,9 +1306,32 @@ class RCWAResult:
             ix, iy = RCWAResult._cell_grid_index(xg, yg, period_x, period_y,
                                                  Sx, Sy)
             return np.imag(cell[np.ix_(ix, iy)]).T          # (ny, nx)
+        if layer.kind == "shapes":
+            # concrete values only: solve() refuses dispersive layers and the
+            # wavelength sweep retains no internal data, so a retained shapes
+            # layer never holds a wl -> eps callable here
+            def _im(v):
+                return float(np.imag(_C(v)))
+            mx, my = (int(n_orders[0]), int(n_orders[1]))
+            gx = 2.0 * np.pi * np.arange(-2 * mx, 2 * mx + 1) / period_x
+            gy = 2.0 * np.pi * np.arange(-2 * my, 2 * my + 1) / period_y
+            GX, GY = np.meshgrid(gx, gy)                    # (Ky, Kx)
+            eps_bg, shapes = layer.data
+            im_bg = _im(eps_bg)
+            phi = np.zeros(GX.shape, dtype=_C)
+            phi[2 * my, 2 * mx] = im_bg                     # background DC
+            for sh in shapes:
+                phi = phi + (_im(sh["eps"]) - im_bg) * _shape_form_factor(
+                    sh, GX, GY, period_x, period_y)
+            ex = np.exp(1j * gx[:, None] * np.asarray(xg)[None, :])  # (Kx, nx)
+            ey = np.exp(1j * gy[:, None] * np.asarray(yg)[None, :])  # (Ky, ny)
+            # real up to rounding: the form factor of a real indicator is
+            # Hermitian, F(-G) = conj(F(G))
+            return np.real(ey.T @ phi @ ex)                 # (ny, nx)
         raise NotImplementedError(
             "RCWAResult.layer_absorption: _layer_im_eps handles only uniform / "
-            "isotropic-cell layers; a tensor layer uses _layer_eps_tensor_grid.")
+            "isotropic-cell / analytic-shape layers; a tensor layer uses "
+            "_layer_eps_tensor_grid.")
 
     @staticmethod
     def _layer_eps_tensor_grid(layer, xg, yg, period_x, period_y):
@@ -1300,29 +1346,73 @@ class RCWAResult:
         g = cell[np.ix_(ix, iy)]                           # (nx, ny, 3, 3)
         return np.transpose(g, (1, 0, 2, 3))               # (ny, nx, 3, 3)
 
-    def layer_absorption(self, *, nx=64, ny=None, nz_per_layer=8):
+    def layer_absorption(self, *, nx=64, ny=None, nz_per_layer=8,
+                         return_raw=False):
         """Absorbed power fraction broken down PER LAYER (audit GAP6).
 
         The total absorptance ``A = 1 - sum(R) - sum(T)`` tells you how much
         power is lost but not WHERE; this attributes it to each layer by
         integrating the local loss density over each layer, normalised so the
         layers sum to the total absorptance (energy-conserving by construction).
-        For a scalar (uniform / isotropic) layer the density is
-        ``Im(eps) |E|^2``; for an ANISOTROPIC (tensor) layer it is the full
+        For a scalar (uniform / isotropic / analytic-shape) layer the density
+        is ``Im(eps) |E|^2``; for an ANISOTROPIC (tensor) layer it is the full
         quadratic form ``Im(E* . eps . E)`` (the rigorous power-loss operator,
         which reduces to ``Im(eps) |E|^2`` for a diagonal medium) -- the
         reconstructed ``(Ex, Ey, Ez)`` is contracted against the local
         ``Im(eps_tensor)``.
 
         Requires ``RCWAStack.solve(retain_internal=True)``.  Uniform,
-        isotropic-cell, and TENSOR (in-plane) layers are supported (raises for
-        analytic-shape layers, whose local map is not reconstructed here).
+        isotropic-cell, analytic-shape (``shapes=``) and TENSOR (in-plane)
+        layers are supported.
+
+        A ``shapes`` layer is integrated EXACTLY in-plane: the integral of
+        the exact shape indicator (the solve's own form factors -- same
+        centre, periodic wrap and superposition) against the reconstructed
+        ``|E|^2``, evaluated by Parseval on the difference-order box (see
+        :meth:`_layer_im_eps`) on its own ``(4 M_x + 2) x (4 M_y + 2)`` node
+        grid, so ``nx`` / ``ny`` do not enter it.  With ``n_orders_y = 0`` (a
+        1-D stack) the y-average is used, the structure such a stack solves.
+        Only the depth rule (``nz_per_layer``) is approximate there.
+
+        .. versionchanged:: 5.51
+           ``shapes`` layers no longer raise (plan C2, audit L-3); new
+           ``return_raw``.
+
+        Parameters
+        ----------
+        nx, ny : int, optional
+            Real-space quadrature grid over one unit cell (``ny`` defaults to
+            1 on a 1-D stack, else ``nx``) for the uniform / cell / tensor
+            layers; the field is sampled at the nodes ``(j - n//2) * period /
+            n``.  Not used by ``shapes`` layers (exact rule above).
+        nz_per_layer : int, optional
+            Mid-point depth samples per layer (error ``O(nz^-2)``; a lossy
+            metal layer several skin depths thick needs tens of samples --
+            measured on a 120 nm eps = -20 + 2i line at 1.31 um: the raw sum
+            is off A by 1e-2 at 8, 6e-4 at 32, 4e-5 at 128).
+        return_raw : bool, optional
+            ``False`` (default): the per-layer integrals are rescaled so each
+            row sums to :meth:`absorptance` exactly (the split is what is
+            reported; its closure is true by construction and tests
+            nothing).  ``True``: return the UN-normalised physical integrals
+            ``k0 * integral Im(eps)|E|^2 dV / (A_cell * kz_inc * |E_inc|^2)``
+            -- each layer's absorbed fraction from its own field alone, so
+            ``row.sum() - absorptance()[row]`` measures the quadrature
+            error.  ``shapes`` and uniform layers are exact in-plane and
+            leave only the depth rule.  An ``eps_cell`` / tensor layer is
+            sampled nearest-pixel, which is exact only when the field nodes
+            land ON the cell nodes (``nx = Sx``, ``ny = Sy``); nodes in
+            between read the pixel-replicated cell, not the solved
+            band-limited one, and floor the closure (measured on a 64-pixel
+            half-metal cell: 4.7e-5 at ``nx = 64``, ``nz_per_layer = 256``;
+            1.1e-2 at ``nx = 128`` and 7.3e-3 at ``nx = 1024``).
 
         Returns
         -------
         (2, n_layers) ndarray
             Absorbed fraction in each layer; row 0 for incident ``E_x``, row 1
-            for incident ``E_y``.  ``row.sum() == absorptance()[row]``.
+            for incident ``E_y``.  ``row.sum() == absorptance()[row]`` unless
+            ``return_raw=True``.
         """
         info = self._require_modal().get("internal")
         if info is None:
@@ -1343,13 +1433,33 @@ class RCWAResult:
         # Per-layer local loss operator: a scalar Im(eps) map for uniform /
         # isotropic layers, the full (ny, nx, 3, 3) tensor for anisotropic
         # layers (the loss density is then the quadratic form Im(E* . eps . E)).
-        if any(L.kind == "shapes" for L in layers):
-            raise NotImplementedError(
-                "RCWAResult.layer_absorption: analytic-shape layers are not "
-                "supported (their local Im(eps) map is not reconstructed here); "
-                "uniform, isotropic-cell, and tensor layers are.")
+        # A shapes layer gets its own exact-quadrature grid: >= 4 M + 1 nodes
+        # per axis resolve the band-limited |E|^2 (difference orders up to
+        # 2 M) exactly, and one node along y when the stack keeps no
+        # y-harmonic (the field is then y-invariant).  EVEN counts (4 M + 2):
+        # internal_field's carrier samples (j - n/2) * d while the grid built
+        # here is (j - n//2) * d, which agree only for even n (on an odd grid
+        # the weight would sit half a node off the field it multiplies).
+        modal = self._require_modal()
+        grid = [(nx_i, ny_i, dx, dy, xg, yg)] * nlay
+        nox, noy = int(info["nox"]), int(info["noy"])
+        for i, L in enumerate(layers):
+            if L.kind == "shapes":
+                nxs, nys = 4 * nox + 2, (1 if noy == 0 else 4 * noy + 2)
+                grid[i] = (nxs, nys, px / nxs, py / nys,
+                           (np.arange(nxs) - nxs // 2) * (px / nxs),
+                           (np.arange(nys) - nys // 2) * (py / nys))
+        # Every weight is sampled at the DECLARED (x, y): since the point-
+        # mirror fix the solve and internal_field are registered to the
+        # declared structure (an off-centre shape's split is pinned against
+        # the frame-free Poynting flux difference in
+        # tests/unit/test_c2_shapes_layer_absorption.py).
         im_eps = [None if L.kind == "tensor"
-                  else self._layer_im_eps(L, xg, yg, px, py) for L in layers]
+                  else (self._layer_im_eps(L, grid[i][4], grid[i][5], px, py,
+                                           n_orders=(nox, noy))
+                        if L.kind == "shapes"
+                        else self._layer_im_eps(L, xg, yg, px, py))
+                  for i, L in enumerate(layers)]
         eps_t = [self._layer_eps_tensor_grid(L, xg, yg, px, py)
                  if L.kind == "tensor" else None for L in layers]
         out = np.zeros((2, nlay))
@@ -1357,8 +1467,9 @@ class RCWAResult:
             raw = np.zeros(nlay)
             for i in range(nlay):
                 zl = (np.arange(nz_per_layer) + 0.5) / nz_per_layer * thick[i]
-                f = self.internal_field(zl, component="E", nx=nx_i, ny=ny_i,
-                                        dx=dx, dy=dy, layer=i, incident=inc)
+                gnx, gny, gdx, gdy = grid[i][:4]
+                f = self.internal_field(zl, component="E", nx=gnx, ny=gny,
+                                        dx=gdx, dy=gdy, layer=i, incident=inc)
                 ex, ey, ez = f["Ex"], f["Ey"], f["Ez"]
                 if ex.ndim == 2:                            # 1-D: (nz, nx)
                     ex, ey, ez = ex[:, None, :], ey[:, None, :], ez[:, None, :]
@@ -1375,6 +1486,17 @@ class RCWAResult:
                     dens = im_eps[i][None] * e2
                 # thickness-weighted cell+depth average of the loss density
                 raw[i] = thick[i] * float(np.mean(dens))
+            if return_raw:
+                # absorbed / incident flux: k0 * raw over kz_inc * |E_inc|^2
+                # (unit TANGENTIAL incident E; its longitudinal E_z adds
+                # (k_t . e / kz)^2, the same einc_sq the efficiencies use).
+                kz_inc = float(modal["kz_inc"])
+                long_inc = (float(modal["kx0"]) * inc[0]
+                            + float(modal["ky0"]) * inc[1])
+                einc_sq = (1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0
+                           else 1.0)
+                out[p] = info["k0"] * raw / (kz_inc * einc_sq)
+                continue
             total = raw.sum()
             out[p] = A_tot[p] * raw / total if total > 0 else np.zeros(nlay)
         return out
