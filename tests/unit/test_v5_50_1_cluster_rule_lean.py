@@ -89,7 +89,7 @@ _PIL = np.zeros((9, 9))
 _PIL[2:6, 3:7] = 1.0
 
 
-def _sym_rcwa(t):
+def _sym_rcwa(t, terms=False):
     import jax.numpy as jnp
 
     from lumenairy.elements.rcwa import RCWAStack
@@ -101,10 +101,12 @@ def _sym_rcwa(t):
     st.set_source(1.0, theta=0.0, phi=0.0)
     _o, R, T = st.solve().efficiencies()
     w = jnp.asarray(np.linspace(0.3, 1.0, R.shape[1]))
+    if terms:
+        return jnp.concatenate([R[0] * w, R[1] * w[::-1], 0.5 * T[0] * w])
     return jnp.sum(R[0] * w) + jnp.sum(R[1] * w[::-1]) + 0.5 * jnp.sum(T[0] * w)
 
 
-def _pmm_stack(a):
+def _pmm_stack(a, terms=False):
     import jax.numpy as jnp
 
     from lumenairy.elements.pmm import PMMStack
@@ -114,10 +116,12 @@ def _pmm_stack(a):
     st.set_source(1.0e-6, angle=a)
     _o, R, T, _J = st.solve()
     w = jnp.asarray(np.linspace(0.2, 1.0, R.shape[1]))
+    if terms:
+        return jnp.concatenate([R[0] * w, T[1] * w[::-1]])
     return jnp.sum(R[0] * w) + jnp.sum(T[1] * w[::-1])
 
 
-def _berreman_mixed(re):
+def _berreman_mixed(re, terms=False):
     import jax.numpy as jnp
 
     from lumenairy import berreman_jones_1d
@@ -133,10 +137,12 @@ def _berreman_mixed(re):
                                     jnp.asarray(100e-9))],
         jnp.asarray(1.5 + 0j), jnp.asarray(1.0 + 0j), jnp.asarray(1.55e-6),
         angle=jnp.asarray(0.2))
+    if terms:
+        return jnp.stack([R[0], 0.5 * T[1]])
     return R[0] + 0.5 * T[1]
 
 
-def _berreman_uniaxial(ne):
+def _berreman_uniaxial(ne, terms=False):
     """DynaMeta's lumenairy_berreman_jax GATE D slab (no cluster)."""
     import jax.numpy as jnp
 
@@ -146,10 +152,12 @@ def _berreman_uniaxial(ne):
     R, _T, _Jr, _Jt = berreman_jones_1d([(eps, 220e-9)], 1.5 + 0j, 1.0 + 0j,
                                         jnp.asarray(1.55e-6), angle=0.0,
                                         phi=0.0)
+    if terms:
+        return jnp.reshape((jnp.real(R[0]) - 0.05) ** 2, (1,))
     return (jnp.real(R[0]) - 0.05) ** 2
 
 
-def _rcwa_uniform(p):
+def _rcwa_uniform(p, terms=False):
     import jax.numpy as jnp
 
     from lumenairy.elements.rcwa import RCWAStack
@@ -161,10 +169,12 @@ def _rcwa_uniform(p):
     st.add_layer(0.1, eps_cell=uni)
     st.set_source(1.0, theta=0.1, phi=0.2)
     _o, R, T = st.solve().efficiencies()
+    if terms:
+        return jnp.concatenate([R[0], 0.5 * T[1], 0.25 * R[1]])
     return jnp.sum(R[0]) + 0.5 * jnp.sum(T[1]) + 0.25 * jnp.sum(R[1])
 
 
-def _rcwa_two_layers(p):
+def _rcwa_two_layers(p, terms=False):
     import jax.numpy as jnp
 
     from lumenairy.elements.rcwa import RCWAStack
@@ -176,6 +186,8 @@ def _rcwa_two_layers(p):
     st.add_layer(0.2, eps_cell=cell2)
     st.set_source(1.0, theta=0.1, phi=0.2)
     _o, R, T = st.solve().efficiencies()
+    if terms:
+        return jnp.concatenate([R[0], 0.5 * T[1], 0.25 * R[1]])
     return jnp.sum(R[0]) + 0.5 * jnp.sum(T[1]) + 0.25 * jnp.sum(R[1])
 
 
@@ -194,10 +206,22 @@ _BAR_NO_CLUSTER = 1e-12
 _BAR_CLUSTER = 1e-7
 
 
-def _rel_to_max(a, b):
-    """max |a - b| / max |b|."""
+def _cancellation_scale(f, x0):
+    """sum_m |d term_m / dp| at x0: every test loss is a SUM of weighted
+    per-order efficiencies (``f(t, terms=True)`` returns the vector of its
+    terms), and round-off in the gradient scales with the size of those
+    term gradients, not with their sum -- a sum that cancels (the two
+    same-shape layers: gradient -0.003 from terms an order larger) inflates
+    an error relative to the gradient itself."""
+    import jax
+    import jax.numpy as jnp
+    J = jax.jit(jax.jacrev(lambda t: f(t, terms=True)))(jnp.asarray(x0))
+    return float(np.sum(np.abs(np.asarray(J))))
+
+
+def _abs_dev(a, b):
     a, b = np.ravel(np.asarray(a, float)), np.ravel(np.asarray(b, float))
-    return float(np.max(np.abs(a - b)) / max(np.max(np.abs(b)), 1e-300))
+    return float(np.max(np.abs(a - b)))
 
 
 #: name: (loss, x0, vmap points, the cluster's lifted branch must run)
@@ -207,7 +231,7 @@ _CASES = {
     "berreman_concrete_isotropic_layer": (_berreman_mixed, 2.6, (2.5, 2.7),
                                           True),
     "rcwa_uniform_select": (_rcwa_uniform, 4.0, (3.8, 4.2), True),
-    "berreman_uniaxial_normal": (lambda ne: _berreman_uniaxial(ne), 1.6,
+    "berreman_uniaxial_normal": (_berreman_uniaxial, 1.6,
                                  (1.58, 1.62), False),
     "rcwa_two_same_shape_layers": (_rcwa_two_layers, 4.0, (3.8, 4.2), False),
 }
@@ -246,18 +270,22 @@ def test_lean_path_gradients_agree_with_the_5_50_0_path(
     old, new = out[False], out[True]
     assert old[2] == new[2], "jit: the lowered program changed"
     assert np.array_equal(old[3], new[3]), ("jit", old[3], new[3])
-    # FIXED bars (not 5.50.0's own eager-vs-jit spread, which can be near
-    # zero on one input and platform and 8x larger on the next): without a
-    # firing cluster the two evaluation orders differ by round-off only
-    # (measured <= 9e-14 relative), so 1e-12; at a firing cluster the lifted
-    # stencil amplifies round-off by ~1 / split_rel = 1e7, i.e. ~eps_mach /
-    # split_rel ~ 2e-9 relative (measured up to 1.8e-8 between 5.50.0's own
-    # modes), so 1e-7 ~ 100 x eps_mach / split_rel.  Accuracy against the
-    # truth is gated separately (test_..._against_an_extrapolated_reference).
+    # FIXED bars on a CANCELLATION-AWARE scale (not 5.50.0's own
+    # eager-vs-jit spread, which can be near zero on one input and platform
+    # and 8x larger on the next): the deviation is divided by
+    # sum_m |d term_m / dp| (_cancellation_scale), the size of the per-order
+    # term gradients the loss sums.  Without a firing cluster the two
+    # evaluation orders differ by round-off only, so 1e-12; at a firing
+    # cluster the lifted stencil amplifies round-off by ~1 / split_rel =
+    # 1e7, i.e. ~eps_mach / split_rel ~ 2e-9, so 1e-7 ~ 100 x eps_mach /
+    # split_rel.  Accuracy against the truth is gated separately
+    # (test_..._against_an_extrapolated_reference).
     bar = _BAR_CLUSTER if fires else _BAR_NO_CLUSTER
+    scale = _cancellation_scale(f, x0)
     for what, a, b in (("eager", new[0], old[0]), ("vmap", new[1], old[1]),
                        ("lean eager vs jit", new[0], new[3])):
-        assert _rel_to_max(a, b) <= bar, (what, _rel_to_max(a, b), bar)
+        dev = _abs_dev(a, b) / scale
+        assert dev <= bar, (what, dev, bar, scale)
     assert np.all(np.isfinite(new[0]))
 
 
