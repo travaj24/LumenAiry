@@ -2257,6 +2257,21 @@ def _internal_analytic_convolution(eps_background, shapes, orders, n_orders_x,
     return np.conj(EPS)
 
 
+# Condition-number ceiling of the analytic [[1/eps]] before the 1-D inverse rule
+# of an 'li' shapes layer inverts it (_internal_analytic_li_operators).
+# MEASURED (cond at n_orders 8 / 32 / 128 / 512, line in eps = 1): physical
+# lines stay <= 3.3e4 -- eps -20 (+0 / +2i) 31..222, -50+5i 80..501, -150
+# 184..1330, -1000 4.3e3..3.3e4, dielectrics = max/min eps (4, 12), a
+# dielectric slot in -20+2i 16..198 -- while the singular case (eps = -1 in
+# eps = 1 at duty 0.5, cell-average 1/eps = 0) is 2.5e15 / 4.5e14 / 1.4e14 /
+# 4.3e13, where the inverse silently returned R_TM 0.986 / 1.0009 with an
+# energy closure of -1.35e-2.  1e12 leaves >= 7 decades of headroom on the
+# physical side and >= 1.6 decades on the singular side.  Near-singular but
+# lossy cases (eps -1 + 1e-6 i, cond 2.0e6) are still solved.  cond is
+# invariant under the gauge conjugation, so it is read on the PUBLIC matrix.
+_LI_SHAPES_COND_MAX = 1e12
+
+
 def _internal_analytic_li_operators(eps_background, shapes, orders,
                                     n_orders_x, n_orders_y, period_x,
                                     period_y):
@@ -2279,7 +2294,13 @@ def _internal_analytic_li_operators(eps_background, shapes, orders,
     The no-contrast case returns ``Cxx = None`` so the caller takes the scalar
     Laurent path, mirroring the ``eps_cell`` 'li' path's uniform-cell
     fall-through.  1-D only (``n_orders_y = 0``): in 2-D the inverse of the
-    global ``[[1/eps]]`` is NOT Li's sequential rule.  Host NumPy."""
+    global ``[[1/eps]]`` is NOT Li's sequential rule.  Host NumPy.
+
+    An ill-conditioned ``[[1/eps]]`` (``cond > _LI_SHAPES_COND_MAX``) raises
+    :class:`numpy.linalg.LinAlgError` instead of returning a silently wrong
+    inverse: the inverse rule is ill-posed when the cell average of ``1/eps``
+    is near zero (e.g. a lossless ``eps = -1`` line in ``eps = 1`` at duty
+    0.5)."""
     if int(n_orders_y) != 0:
         raise NotImplementedError(
             "RCWAStack: formulation='li' on a shapes layer is implemented for "
@@ -2291,6 +2312,15 @@ def _internal_analytic_li_operators(eps_background, shapes, orders,
     scale = max(1.0, abs(eps_bg), *(abs(_C(s["eps"])) for s in shapes))
     if all(abs(_C(s["eps"]) - eps_bg) <= 1e-12 * scale for s in shapes):
         return np.conj(EPS_pub), None
+    cond = float(np.linalg.cond(EINV_pub))
+    if not np.isfinite(cond) or cond > _LI_SHAPES_COND_MAX:
+        raise np.linalg.LinAlgError(
+            f"RCWAStack: formulation='li' on this shapes layer is ill-posed -- "
+            f"the analytic [[1/eps]] Toeplitz has condition number {cond:.3e} "
+            f"(> {_LI_SHAPES_COND_MAX:.0e}), so its inverse [[1/eps]]^-1 is "
+            f"numerically meaningless.  This happens when the cell average of "
+            f"1/eps is near zero (e.g. a lossless eps = -1 line in eps = 1 at "
+            f"duty 0.5).  Use formulation='laurent' for this layer.")
     return np.conj(EPS_pub), np.conj(np.linalg.inv(EINV_pub))
 
 

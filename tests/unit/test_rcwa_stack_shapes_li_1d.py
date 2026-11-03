@@ -206,8 +206,55 @@ def test_li_shapes_refuses_y_varying_list_and_zero_background():
         _stack(5).add_layer(DEPTH, shapes=[{"shape": "disk", "eps": EPS_M,
                                             "radius": 100e-9}],
                             eps_background=1.0, formulation="li")
-    with pytest.raises(ValueError, match="non-zero eps_background"):
+    with pytest.raises(ValueError, match="non-zero eps_background") as ei:
         _stack(5).add_layer(DEPTH, shapes=_shapes(GATE_B),
                             eps_background=0.0, formulation="li")
+    assert "(got 0j)" in str(ei.value)            # plain, not np.complex128(...)
     with pytest.raises(ValueError, match="uniform and tensor"):
         _stack(5).add_layer(DEPTH, eps=2.0, formulation="li")
+
+
+# Conical pin (independent oracle).  Centred (mirror-symmetric) dielectric line,
+# eps 4, duty 0.37, 300 nm, air / n = 1.5, lambda 1.31 um, theta 20, phi 60.
+# Reference: pmm_jones_1d_conical, degree 56 (deg 44 / 72 move it by 1.2e-8 /
+# 6.1e-9 in row 0 and 8.8e-9 / 4.3e-9 in row 1).  At n_orders = 64, 'li' is
+# off by -9.5e-8 / +6.1e-8 (rows 0 / 1) while Laurent is off by -3.6e-5 /
+# +8.2e-6 -- so a 5e-7 bar passes 'li' with 5x margin and fails Laurent by 16x.
+_CONICAL_PMM_REF = (0.0010759256291830242, 0.06429739949222246)
+
+
+@pytest.mark.parametrize("formulation, passes", [("li", True),
+                                                 ("laurent", False)])
+def test_conical_dielectric_line_matches_pmm(formulation, passes):
+    st = _stack(64)
+    st.add_layer(300e-9, shapes=[{"shape": "rectangle", "eps": 4.0 + 0j,
+                                  "size": (0.37 * PER, PER),
+                                  "center": (0.5 * PER, 0.5 * PER)}],
+                 eps_background=1.0 + 0j, formulation=formulation)
+    _, R, _ = _solve(st, theta=np.deg2rad(20.0), phi=np.deg2rad(60.0))
+    err = np.abs(R.sum(axis=1) - np.asarray(_CONICAL_PMM_REF))
+    if passes:
+        assert np.all(err <= 5e-7), err
+    else:
+        assert np.all(err > 5e-6), err        # the bar really separates them
+
+
+@pytest.mark.parametrize("n", [8, 32])
+def test_singular_inverse_rule_refuses(n):
+    """A lossless eps = -1 line in eps = 1 at duty 0.5 has cell-average
+    1/eps = 0: cond([[1/eps]]) is 2.5e15 (N 8) .. 4.3e13 (N 512).  Before the
+    guard the analytic inverse silently returned R_TM 0.986 / 1.0009 with an
+    energy closure of -1.35e-2."""
+    st = _stack(n, n_sub=1.0)
+    st.add_layer(DEPTH, shapes=_shapes([(0.25, 0.5, -1.0 + 0j)]),
+                 eps_background=1.0 + 0j, formulation="li")
+    with pytest.raises(np.linalg.LinAlgError, match="ill-posed"):
+        _solve(st)
+
+
+@pytest.mark.parametrize("eps", [complex(-20, 0), complex(-50, 5),
+                                 complex(-1000, 0)])
+def test_ordinary_metals_pass_the_conditioning_guard(eps):
+    # measured cond([[1/eps]]) <= 3.3e4 for all of these, N 8..512
+    _, R, T = _shapes_solve(32, [(0.25, 0.5, eps)], "li")
+    assert np.all(np.isfinite(R)) and np.all(np.isfinite(T))

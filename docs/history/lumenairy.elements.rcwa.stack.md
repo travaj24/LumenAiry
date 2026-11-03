@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 0c68f40f451f6b41e868a8b7016f60612c90667ace0ba6804c000b0022195f18
-token_sha256: 83aec1bff9f040d63478de5399112643a4fef7dfa51022b4af6d60330fccf58f
+ast_sha256: 79b60b23c6b39a16f6fa83cfd3b07d016d003b989c4adcac9f51880ec66e981f
+token_sha256: 83ee48064fcb79436336641d3f4b82a9087df11bb09c36b68da1f907ce5dae97
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -9,6 +9,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-10-04 -- RCWAStack JAX cascade routed through _jax_cluster_routed; half-space mode cache skipped inside a jax trace (leaked tracers); symmetric-point docstring note
 re_recorded: 2026-11-03 -- RCWA point-mirror fix: every patterned-layer bridge site now reads the cell through rcwa._core._internal_cell (conj + node-lattice point mirror) and analytic shapes through twod._internal_analytic_convolution (conj of the PUBLIC operator); v5.5.0..v5.50.0 solved eps(-x,-y)
 re_recorded: 2026-11-03 -- Phase C1 (L-4), rebased on the point-mirror fix: formulation='li' on 1-D shapes layers -- _check_li_shapes, RCWAStack._shapes_operators (one site for _layer_modes and _layer_even_spec) calling twod._internal_analytic_convolution / _internal_analytic_li_operators (conj of the PUBLIC operators), formulation in the shapes eig key and carried through add_layer / _materialized_layers
+re_recorded: 2026-11-03 -- C1 follow-up: plain formatting of the zero-background 'li' refusal (the conditioning guard itself lives in twod._internal_analytic_li_operators)
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`

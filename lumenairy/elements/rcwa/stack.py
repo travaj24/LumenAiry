@@ -452,7 +452,7 @@ def _check_li_shapes(fn_name, shapes, period_y, eps_background):
     if eps_background is not None and abs(_C(eps_background)) < 1e-12:
         raise ValueError(
             f"{fn_name}: formulation='li' needs a non-zero eps_background "
-            f"(got {eps_background!r}); the inverse rule reads "
+            f"(got {complex(_C(eps_background))}); the inverse rule reads "
             f"1/eps_background.")
 
 
@@ -1522,7 +1522,7 @@ class RCWAStack:
         * ``kind`` -- ``'uniform' | 'iso' | 'shapes' | 'tensor'``;
         * ``data`` -- the layer specification exactly as ``add_layer``
           normalized it (``kind``-dependent: the scalar eps, the
-          ``(Sx, Sy)`` cell, the ``(shapes, eps_background)`` pair, or the
+          ``(Sx, Sy)`` cell, the ``(eps_background, shapes)`` pair, or the
           ``(Sx, Sy, 3, 3)`` tensor cell; wl-callables when dispersive);
         * ``formulation`` -- ``'laurent' | 'li'`` (iso layers, and shapes
           layers on a 1-D stack);
