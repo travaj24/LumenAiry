@@ -2205,12 +2205,16 @@ def _analytic_convolutions_2d(eps_background, shapes, orders, n_orders_x,
 
     NB the second return is the DIRECT-rule Laurent transform of ``1/eps``,
     i.e. ``[[1/eps]]`` and NOT the inverse-rule operator ``[[1/eps]]^{-1}``.
-    No shipped formulation reads it any more: it fed the "dual-Laurent" ``E_z``
-    elimination that audit F1 (v5.14.1) measured as the wrong factorization, and
-    all three call sites now discard it explicitly (audit M10 2026-07-25).  It
-    is kept -- exported and test-covered -- because it is the analytic
-    counterpart of the pixel path's ``[[1/eps]]`` and is what a factorization
-    study needs; do not read it expecting an inverse-rule operator."""
+    It once fed the "dual-Laurent" ``E_z`` elimination that audit F1 (v5.14.1)
+    measured as the wrong factorization; the Laurent call sites discard it
+    (audit M10 2026-07-25).  Its one reader is the 1-D ``'li'`` shapes layer of
+    :class:`~lumenairy.elements.rcwa.RCWAStack` (Phase C1, through
+    :func:`_internal_analytic_li_operators`), which INVERTS it
+    (``Cxx = [[1/eps]]^{-1}``, the 1-D inverse rule; exact because the shapes
+    are disjoint, so the ``1/eps`` series is the additive sum of the form
+    factors).  In 2-D that inverse is NOT Li's rule (which needs a per-band
+    inverse along x), so do not read this matrix as an inverse-rule operator
+    on a crossed cell."""
     Mx, My = int(n_orders_x), int(n_orders_y)
     ks = np.arange(-2 * Mx, 2 * Mx + 1)
     ls = np.arange(-2 * My, 2 * My + 1)
@@ -2251,6 +2255,73 @@ def _internal_analytic_convolution(eps_background, shapes, orders, n_orders_x,
         eps_background, shapes, orders, n_orders_x, n_orders_y, period_x,
         period_y)
     return np.conj(EPS)
+
+
+# Condition-number ceiling of the analytic [[1/eps]] before the 1-D inverse rule
+# of an 'li' shapes layer inverts it (_internal_analytic_li_operators).
+# MEASURED (cond at n_orders 8 / 32 / 128 / 512, line in eps = 1): physical
+# lines stay <= 3.3e4 -- eps -20 (+0 / +2i) 31..222, -50+5i 80..501, -150
+# 184..1330, -1000 4.3e3..3.3e4, dielectrics = max/min eps (4, 12), a
+# dielectric slot in -20+2i 16..198 -- while the singular case (eps = -1 in
+# eps = 1 at duty 0.5, cell-average 1/eps = 0) is 2.5e15 / 4.5e14 / 1.4e14 /
+# 4.3e13, where the inverse silently returned R_TM 0.986 / 1.0009 with an
+# energy closure of -1.35e-2.  1e12 leaves >= 7 decades of headroom on the
+# physical side and >= 1.6 decades on the singular side.  Near-singular but
+# lossy cases (eps -1 + 1e-6 i, cond 2.0e6) are still solved.  cond is
+# invariant under the gauge conjugation, so it is read on the PUBLIC matrix.
+_LI_SHAPES_COND_MAX = 1e12
+
+
+def _internal_analytic_li_operators(eps_background, shapes, orders,
+                                    n_orders_x, n_orders_y, period_x,
+                                    period_y):
+    """INTERNAL-gauge operators of a 1-D ``'li'`` analytic-shape layer
+    (``RCWAStack`` Phase C1): ``(EPS, Cxx)``, with ``Cxx = None`` when no shape
+    differs from the background.  The 'li' twin of
+    :func:`_internal_analytic_convolution`, and the same bridge rule: build the
+    PUBLIC operators from the PUBLIC shapes, then conjugate the OPERATORS --
+    ``EPS = conj(T_pub[eps])``, ``Cxx = conj(inv(T_pub[1/eps]))``.  Conjugating
+    the shape permittivities first would yield the point mirror of the cell.
+
+    Placement is the ``eps_cell`` 'li' path's on a 1-D stack
+    (``_li_convolutions_2d`` on an ``Sy = 1`` cell): ``Cxx = [[1/eps]]^{-1}`` is
+    the INVERSE rule for the wall-NORMAL ``E_x``; ``EPS = [[eps]]`` feeds the
+    wall-tangential ``E_y`` block (``Cyy``) and the ``E_z`` elimination.  The
+    shapes are disjoint, so ``1/eps = 1/eps_bg + sum_s (1/eps_s - 1/eps_bg)
+    1_s`` is exact and its Fourier series is the additive sum of the form
+    factors (the second return of :func:`_analytic_convolutions_2d`).
+
+    The no-contrast case returns ``Cxx = None`` so the caller takes the scalar
+    Laurent path, mirroring the ``eps_cell`` 'li' path's uniform-cell
+    fall-through.  1-D only (``n_orders_y = 0``): in 2-D the inverse of the
+    global ``[[1/eps]]`` is NOT Li's sequential rule.  Host NumPy.
+
+    An ill-conditioned ``[[1/eps]]`` (``cond > _LI_SHAPES_COND_MAX``) raises
+    :class:`numpy.linalg.LinAlgError` instead of returning a silently wrong
+    inverse: the inverse rule is ill-posed when the cell average of ``1/eps``
+    is near zero (e.g. a lossless ``eps = -1`` line in ``eps = 1`` at duty
+    0.5)."""
+    if int(n_orders_y) != 0:
+        raise NotImplementedError(
+            "RCWAStack: formulation='li' on a shapes layer is implemented for "
+            "1-D stacks only (n_orders_y = 0).")
+    EPS_pub, EINV_pub = _analytic_convolutions_2d(
+        eps_background, shapes, orders, n_orders_x, n_orders_y, period_x,
+        period_y)
+    eps_bg = _C(eps_background)
+    scale = max(1.0, abs(eps_bg), *(abs(_C(s["eps"])) for s in shapes))
+    if all(abs(_C(s["eps"]) - eps_bg) <= 1e-12 * scale for s in shapes):
+        return np.conj(EPS_pub), None
+    cond = float(np.linalg.cond(EINV_pub))
+    if not np.isfinite(cond) or cond > _LI_SHAPES_COND_MAX:
+        raise np.linalg.LinAlgError(
+            f"RCWAStack: formulation='li' on this shapes layer is ill-posed -- "
+            f"the analytic [[1/eps]] Toeplitz has condition number {cond:.3e} "
+            f"(> {_LI_SHAPES_COND_MAX:.0e}), so its inverse [[1/eps]]^-1 is "
+            f"numerically meaningless.  This happens when the cell average of "
+            f"1/eps is near zero (e.g. a lossless eps = -1 line in eps = 1 at "
+            f"duty 0.5).  Use formulation='laurent' for this layer.")
+    return np.conj(EPS_pub), np.conj(np.linalg.inv(EINV_pub))
 
 
 @_with_blas_limit
@@ -2549,5 +2620,6 @@ __all__ = [
     "_shape_form_factor",
     "_analytic_convolutions_2d",
     "_internal_analytic_convolution",
+    "_internal_analytic_li_operators",
     "rcwa_efficiency_2d_shapes",
 ]

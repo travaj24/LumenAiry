@@ -425,8 +425,10 @@ def test_w8_disjoint_pair_matches_the_painted_raster():
 
 def test_w8_inverse_eps_second_return_is_the_analytic_1_over_eps():
     """``_analytic_convolutions_2d``'s second return is documented as the
-    DIRECT-rule Laurent transform of ``1/eps`` (kept for factorization studies,
-    read by no shipped formulation since audit M10).  Cross-validate the claim:
+    DIRECT-rule Laurent transform of ``1/eps`` (discarded by the Laurent paths
+    since audit M10; since Phase C1 the 1-D ``'li'`` shapes layer of
+    ``RCWAStack`` inverts it into the inverse-rule ``[[1/eps]]^{-1}``).
+    Cross-validate the claim:
     it must be what an FFT of a ``1/eps`` cell converges to -- measured net
     3.73 .. 4.28 over a 4x refinement for all three kinds, lossless and lossy,
     reaching 1.8e-3 at S = 256."""
