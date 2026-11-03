@@ -2134,7 +2134,17 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
     on the corner (Duffy) rule with ``n`` nodes per direction per piece
     (:func:`_stag_duffy_points`); on the tensor rule its moments would only
     fall like ``n^-2`` and the criterion would run to the cap
-    (``validation/probe_pmm2d_curved/build_b/b1_quadrature_demand_M6.json``)."""
+    (``validation/probe_pmm2d_curved/build_b/b1_quadrature_demand_M6.json``).
+
+    Audit L-8 (2026-11-02): a PINCHED cell -- a wall line through an outline's
+    tangent point squeezes the cell to zero height there, so ``det J``
+    vanishes quadratically along a line through the cell -- makes ``1 / det
+    J`` and ``g / det J`` non-integrable.  Their moments then grow in
+    proportion to ``n`` and the raw moment error reads 0.5 at every count
+    (``|m_n - m_2n| / |m_2n|`` with ``m_2n = 2 m_n``).  Such cells
+    (:func:`_stag_map_pinched_cells`) get their own warning, which names them
+    and reports the moment error of the REST of the map; the node count is
+    unchanged (it still runs to the cap)."""
     from numpy.polynomial.legendre import legvander
     tol = _STAG_MAP_QUAD_TOL if tol is None else float(tol)
     cap = _STAG_MAP_QUAD_CAP if cap is None else int(cap)
@@ -2174,13 +2184,18 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
     n = 2 * int(M) + 8
     m_lo = moments(n)
     err = np.inf
+    # per-cell moment errors and moment growth of the LAST check, for the
+    # diagnostic only (the node count depends on ``err`` alone)
+    cells = [(sx, sy) for sx in range(bx.N) for sy in range(by.N)]
+    cell_err = [np.inf] * len(cells)
+    cell_growth = [1.0] * len(cells)
     while True:
         n2 = 2 * n
         m_hi = moments(n2) if n2 <= 2 * cap else None
         if m_hi is None:
             break
         err = 0.0
-        for cl, ch in zip(m_lo, m_hi):
+        for i, (cl, ch) in enumerate(zip(m_lo, m_hi)):
             # scales: sqrt(g) and 1 / sqrt(g) each on their own; the three
             # metric weights g11 / sqrt(g), g12 / sqrt(g), g22 / sqrt(g) are
             # the entries of ONE tensor (chi_t) and share its scale -- a map
@@ -2189,24 +2204,116 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
             # B build finding)
             sc = [float(np.max(np.abs(b))) for b in ch]
             ts = max(sc[2:])
+            ce = 0.0
             for k, (a, b) in enumerate(zip(cl, ch)):
                 s = sc[k] if k < 2 else ts
                 if not np.all(np.isfinite(a)):
-                    err = np.inf
+                    ce = np.inf
                 elif s > 0.0:
-                    err = max(err, float(np.max(np.abs(a - b))) / s)
+                    ce = max(ce, float(np.max(np.abs(a - b))) / s)
+            err = max(err, ce)
+            cell_err[i] = ce
+            sl = [float(np.max(np.abs(a))) for a in cl]
+            cell_growth[i] = max((h / lo if lo > 0.0 else 1.0)
+                                 for h, lo in zip(sc, sl))
         if err <= tol or n2 > cap:
             break
         n, m_lo = n2, m_hi
     if err > tol:
+        pinched = _stag_map_pinched_cells(
+            bx, by, cmap, 2 * n,
+            [c for c, e, g in zip(cells, cell_err, cell_growth)
+             if e > tol and g >= _STAG_MAP_PINCH_GROWTH
+             and c not in corners])
+        if not pinched:
+            warnings.warn(
+                f"Granet2DTransverseE: the coordinate map's geometric weights "
+                f"are not resolved to the quadrature tolerance {tol:.0e} "
+                f"within {n} Gauss nodes per axis per cell (moment error "
+                f"{err:.2e}); the operators carry a quadrature error of that "
+                f"order.  The map varies too sharply inside a cell -- add "
+                f"walls where it is steep, or soften it.", stacklevel=4)
+            return n
+        rest = [e for c, e in zip(cells, cell_err) if c not in pinched]
+        err_rest = max(rest) if rest else 0.0
+        where = "; ".join(
+            f"cell {c} near (x, y) = ({X / cmap.period_x:.4f}, "
+            f"{Y / cmap.period_y:.4f}) x the period"
+            for c, (X, Y) in pinched.items())
         warnings.warn(
-            f"Granet2DTransverseE: the coordinate map's geometric weights "
-            f"are not resolved to the quadrature tolerance {tol:.0e} within "
-            f"{n} Gauss nodes per axis per cell (moment error {err:.2e}); "
-            f"the operators carry a quadrature error of that order.  The map "
-            f"varies too sharply inside a cell -- add walls where it is "
-            f"steep, or soften it.", stacklevel=4)
+            f"Granet2DTransverseE: the coordinate map pinches a cell to zero "
+            f"width or height -- {where}.  A curved outline touches a wall "
+            f"line of the grid at its tangent point there (e.g. a bar wall "
+            f"placed exactly on a circle's top or bottom), so two opposite "
+            f"edges of the cell meet and det J = 0 along a line through the "
+            f"cell (a cusp).  The weights 1 / det J and g / det J are not "
+            f"integrable across that line, so their moments grow with the "
+            f"node count and the map-quadrature check cannot converge in "
+            f"that cell: its raw moment error {err:.2e} at {n} Gauss nodes "
+            f"per axis per cell measures that growth and is only a very "
+            f"loose upper bound, NOT the error of the operators.  The rest "
+            f"of the map reads a moment error of {err_rest:.2e} (tolerance "
+            f"{tol:.0e}).  R / T converge in the node count there, but only "
+            f"algebraically, and that is not checked here (measured on bar "
+            f"walls placed on a circle's tangent points: R changes by ~1e-7 "
+            f"from 144 to 288 nodes and lies within 1e-6 of a smooth fit "
+            f"through nearby heights, below the n_modes discretisation "
+            f"error).  To remove the cusp, move that wall away from the "
+            f"outline (outward, so it no longer touches it) by about 1e-3 of "
+            f"the period -- moving it into the outline folds the map and is "
+            f"refused; or accept the result.",
+            stacklevel=4)
+        if err_rest > tol:
+            warnings.warn(
+                f"Granet2DTransverseE: the coordinate map's geometric weights "
+                f"are not resolved to the quadrature tolerance {tol:.0e} "
+                f"within {n} Gauss nodes per axis per cell (moment error "
+                f"{err_rest:.2e} outside the pinched cells); the operators "
+                f"carry a quadrature error of that order.  The map varies too "
+                f"sharply inside a cell -- add walls where it is steep, or "
+                f"soften it.", stacklevel=4)
     return n
+
+
+#: A cell whose largest geometric-weight moment grows by at least this factor
+#: when the node count doubles (at the last check of :func:`_stag_map_nodes`)
+#: is a candidate PINCHED cell: a convergent (integrable) weight's moments
+#: settle, while ``1 / det J`` across a line where ``det J`` vanishes
+#: quadratically (a cell squeezed to zero height at an outline's tangent
+#: point) has moments that grow in proportion to the node count (factor 2).
+_STAG_MAP_PINCH_GROWTH = 1.5
+#: ... confirmed by the geometry: ``min det J / max det J`` over the cell's
+#: tensor-rule nodes below this.  Measured on bar walls placed exactly on a
+#: circle's tangent points: 2.8e-5 at 288 nodes (1.7e-3 at 36, so a cap
+#: below the default may miss it and fall back to the generic wording); the
+#: same walls 1e-3 of the period outside the tangent read 1.1e-2.
+_STAG_MAP_PINCH_DETJ = 1.0e-3
+
+
+def _stag_map_pinched_cells(bx, by, cmap, n, candidates):
+    """``{(sx, sy): (x, y)}`` -- the cells among ``candidates`` whose ``det
+    J`` on the ``n``-node tensor rule falls below :data:`_STAG_MAP_PINCH_DETJ`
+    of its own maximum (a cell pinched to zero height or width), each with
+    the physical point of its smallest ``det J``.  DIAGNOSTIC ONLY: it feeds
+    the wording of the :func:`_stag_map_nodes` warning, never the node count
+    or the weights."""
+    if not candidates:
+        return {}
+    xg, _wg = leggauss(int(n))
+    out = {}
+    for sx, sy in candidates:
+        U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+        V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+        X, Y, xu, xv, yu, yv = cmap.geom(sx, sy, U, V)
+        sg = np.abs(xu * yv - xv * yu)
+        top = float(np.max(sg))
+        if not top > 0.0:
+            continue
+        i = int(np.argmin(sg))
+        if float(sg.flat[i]) < _STAG_MAP_PINCH_DETJ * top:
+            out[(sx, sy)] = (float(np.broadcast_to(X, sg.shape).flat[i]),
+                             float(np.broadcast_to(Y, sg.shape).flat[i]))
+    return out
 
 
 def _stag_map_eff(eps, sg, g11, g12, g22):
