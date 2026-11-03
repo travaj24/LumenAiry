@@ -3399,6 +3399,27 @@ def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
        cross-check against a direct higher-``N`` solve.  It is most reliable
        for clean dielectric convergence and as a per-order error gauge.
 
+    .. note::
+       LOSSY-METAL CORNERS (audit L-1, 2026-11-02 DynaMeta bridge audit).
+       Even a monotone tail can be PRE-ASYMPTOTIC: the corner singularity
+       makes every method algebraic, and the local exponent keeps drifting
+       over the ``N`` range a user can afford, so the three-point
+       ``'richardson'`` limit moves with the window.  Measured on a 1-D
+       lamellar grating (lambda 1.31 um, period 600 nm, eps -20+2i, duty 0.5,
+       depth 120 nm, air over an n = 1.5 substrate, normal incidence, TM),
+       ``RCWAStack`` ``formulation='li'`` (``eps_cell``, ``Sx = 8 N``): the
+       local rate falls N^-1.11 (N 128-256) -> N^-0.99 (512-768) ->
+       N^-0.89 (1024-1536), and this function returns 0.508376 from
+       N = 32 / 64 / 128, 0.508747 from 256 / 384 / 512 / 768 (it uses the
+       last three), 0.508743 from 512 / 768 / 1024 and 0.508763 from
+       768 / 1024 / 1536 -- against the truth 0.508768 from ``PMMStack``
+       degree extrapolation (degree 24 .. 256, rate degree^-2.2, the same
+       function on degree windows returns 0.508768 for every window from
+       64 / 96 / 128 up).  ``'laurent'`` on the same fixture approaches from
+       above (0.50945 at N = 768).  For a 1-D metallic reference use PMM
+       degree extrapolation; for ``'li'`` quote the spread of the last two
+       windows as the uncertainty.
+
     Parameters
     ----------
     values : array-like of float
