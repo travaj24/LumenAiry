@@ -4577,7 +4577,18 @@ def _jax_eig_stable():
         return lam, V
 
     def _eig_raw_fwd(A, tau_rel):
+        # An eager gradient through the cluster rule decomposes the same
+        # concrete matrix twice (the first pass of _jax_cluster_routed and the
+        # rule's forward); the per-call memo (_JaxEigMemo) hands the second
+        # call the first one's arrays when the input BITS are identical.
+        memo = _JAX_EIG_MEMO.get()
+        if memo is not None:
+            hit = memo.lookup(A)
+            if hit is not None:
+                return hit, hit
         lam, V = jnp.linalg.eig(A)
+        if memo is not None:
+            memo.store(A, (lam, V))
         return (lam, V), (lam, V)
 
     def _eig_raw_bwd(tau_rel, res, cot):
@@ -4956,6 +4967,168 @@ def _jax_eig_cluster_vjp():
     return core
 
 
+# ---------------------------------------------------------------------------
+# The closure conversions of the rule, without their per-call overhead (L-2)
+# ---------------------------------------------------------------------------
+# Measured on the eager GATE D gradient of DynaMeta's lumenairy_berreman_jax
+# (5.50.0, cProfile of 10 gradients, 12.8 s): ``jax.checking_leaks()`` around
+# the two ``jax.closure_convert`` calls cost 2.47 s (its trace-exit check runs
+# ``gc.collect()`` and it bypasses every nested trace cache), and the eager
+# evaluation of the re-record jaxpr ran the WHOLE solve again -- its eigs and
+# everything downstream of them -- to read back the problems only.
+#
+# * ``checking_leaks`` was there only to reach ``closure_convert``'s UNCACHED
+#   path: its strong LRU is keyed by the (fresh, per-call) function, so a
+#   cached conversion pins every call's arrays.  The same uncached path is
+#   taken here directly (``_closure_convert_uncached``: the body of
+#   ``jax._src.custom_derivatives._closure_convert_for_avals``, which is what
+#   ``closure_convert`` runs under leak checking), so nothing is pinned and
+#   no leak check runs.  The traced jaxpr is the same one (the leak-checking
+#   flag changes which caches are consulted, not what is traced).
+# * ``dce=True`` (EAGER only, see ``_jax_eager_regime``) drops the WHOLE
+#   equations whose results no output uses (``_dce_whole_equations``).  Every
+#   equation that remains is the original one, evaluated as before (one
+#   primitive -- or one inner ``jit`` -- at a time, same inputs), so every
+#   value is the same bit for bit; a dropped equation contributed only zero
+#   cotangents.  Under a staging trace (``jit``, ``scan`` ...) nothing is
+#   dropped: the staged program is exactly what it was (its lowered text is
+#   pinned identical), and XLA removes the dead code itself.
+# * The eager first pass and the rule's forward decompose the same concrete
+#   matrices: ``_JaxEigMemo`` hands the second ``eig`` the first one's arrays
+#   when the input bytes are identical (the second LAPACK call per problem
+#   was the other half of the eager eig cost).
+# If the JAX internals are not where this expects them, both fall back to
+# the 5.50.0 path (``closure_convert`` under ``checking_leaks``), which
+# ``_CLUSTER_RULE_LEAN = False`` also selects (the A/B switch of the pinning
+# test and the benchmark).
+_CLUSTER_RULE_LEAN = True
+_CC_INTERNALS = None
+
+
+def _cc_internals():
+    """The JAX internals of :func:`_closure_convert_uncached` (resolved once),
+    or ``False`` when they are not available."""
+    global _CC_INTERNALS
+    if _CC_INTERNALS is None:
+        try:
+            from jax._src import core as jcore, linear_util as lu
+            from jax._src.api_util import debug_info, flatten_fun_nokwargs
+            from jax._src.custom_derivatives import (
+                _maybe_perturbed,
+                partition_list,
+            )
+            from jax._src.interpreters import ad, batching, partial_eval as pe
+            from jax._src.util import split_list
+            getattr(pe, "trace_to_jaxpr_dynamic")
+            for name in ("eval_jaxpr", "typeof", "trace_ctx", "EvalTrace",
+                         "Var"):
+                getattr(jcore, name)
+            eager_traces = (ad.LinearizeTrace, ad.JVPTrace,
+                            batching.BatchTrace)
+            _CC_INTERNALS = (jcore, lu, debug_info, flatten_fun_nokwargs,
+                             _maybe_perturbed, partition_list, pe, split_list,
+                             eager_traces)
+        except (ImportError, AttributeError):  # pragma: no cover
+            _CC_INTERNALS = False
+    return _CC_INTERNALS
+
+
+def _jax_eager_regime():
+    """True when no STAGING trace is active: the current JAX trace is the
+    eager evaluation, possibly under autodiff / vmap traces only (``jax.grad``,
+    ``jax.vjp``, ``jax.vmap`` called eagerly).  False under ``jit`` (and any
+    other staging trace), for an unknown trace type, or when the internals
+    are not available -- the conservative answer, which keeps the 5.50.0
+    staged program."""
+    impl = _cc_internals() if _CLUSTER_RULE_LEAN else False
+    if not impl:
+        return False
+    jcore, eager_traces = impl[0], impl[8]
+    t = jcore.trace_ctx.trace
+    for _ in range(256):
+        if type(t) is jcore.EvalTrace:
+            return True
+        if not isinstance(t, eager_traces):
+            return False
+        t = getattr(t, "parent_trace", None)
+    return False
+
+
+def _dce_whole_equations(jcore, jaxpr, consts):
+    """``(jaxpr, consts)`` without the equations no output depends on (and the
+    constants only they read).  WHOLE equations only: a kept equation is the
+    original object, never rewritten -- unlike ``pe.dce_jaxpr``, which also
+    prunes unused outputs INSIDE a kept ``jit`` / ``cond`` / ``scan`` and so
+    would change the program XLA compiles for it.  An equation with effects is
+    always kept.  On an unexpected jaxpr API the input is returned unchanged
+    (no DCE, same values)."""
+    try:
+        used = {v for v in jaxpr.outvars if isinstance(v, jcore.Var)}
+        keep = []
+        for eqn in reversed(jaxpr.eqns):
+            if eqn.effects or any(v in used for v in eqn.outvars):
+                keep.append(eqn)
+                used.update(v for v in eqn.invars
+                            if isinstance(v, jcore.Var))
+        if len(keep) == len(jaxpr.eqns):
+            return jaxpr, consts
+        keep.reverse()
+        pairs = [(v, c) for v, c in zip(jaxpr.constvars, consts) if v in used]
+        new = jaxpr.replace(constvars=[v for v, _c in pairs], eqns=keep)
+        return new, [c for _v, c in pairs]
+    except (AttributeError, TypeError, ValueError):  # pragma: no cover
+        return jaxpr, consts
+
+
+def _jax_eval_trace_current():
+    """True when the current JAX trace is the plain eager evaluation (no
+    autodiff, vmap or staging trace at all: nothing can be differentiated)."""
+    impl = _cc_internals()
+    return bool(impl) and type(impl[0].trace_ctx.trace) is impl[0].EvalTrace
+
+
+def _closure_convert_uncached(fun, *example_args, dce=False):
+    """``jax.closure_convert(fun, *example_args)`` through its UNCACHED path
+    and without leak checking; with ``dce`` the jaxpr's dead equations (and
+    the closed-over values only they used) are dropped first (block comment
+    above).  Returns ``(converted_fun, const_args)`` like ``closure_convert``."""
+    import jax
+    impl = _cc_internals() if _CLUSTER_RULE_LEAN else False
+    if not impl:
+        with jax.checking_leaks():
+            return jax.closure_convert(fun, *example_args)
+    (jcore, lu, debug_info, flatten_fun_nokwargs, _maybe_perturbed,
+     partition_list, pe, split_list, _eager) = impl
+    flat_args, in_tree = jax.tree_util.tree_flatten(example_args)
+    in_avals = tuple(map(jcore.typeof, flat_args))
+    dbg = debug_info("closure_convert", fun, example_args, {})
+    wrapped_fun, out_tree = flatten_fun_nokwargs(
+        lu.wrap_init(fun, debug_info=dbg), in_tree)
+    jaxpr, _out_avals, consts = pe.trace_to_jaxpr_dynamic(wrapped_fun,
+                                                          in_avals)
+    out_tree = out_tree()
+    if dce:
+        jaxpr, consts = _dce_whole_equations(jcore, jaxpr, consts)
+    (closure_consts, const_args), merge = partition_list(_maybe_perturbed,
+                                                         consts)
+    num_consts = len(const_args)
+
+    def converted_fun(*args_hconsts):
+        num_args = len(args_hconsts) - num_consts
+        args, cargs = split_list(args_hconsts, [num_args])
+        cs = merge(closure_consts, cargs)
+        all_args, in_tree2 = jax.tree_util.tree_flatten(tuple(args))
+        if in_tree != in_tree2:
+            raise TypeError(
+                f"_closure_convert_uncached: the inputs must have the pytree "
+                f"structure of the example arguments ({in_tree}), got "
+                f"{in_tree2}")
+        out_flat = jcore.eval_jaxpr(jaxpr, cs, *all_args)
+        return jax.tree_util.tree_unflatten(out_tree, out_flat)
+
+    return converted_fun, const_args
+
+
 def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
                              split_rel=None, anchors=None, select_flag=None):
     """``consumer(tuple(eig_fn(L, G) for (L, G) in problems))`` with a
@@ -5009,13 +5182,12 @@ def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
         lambda a, b: tuple(eig_fn(L, G) for L, G in zip(a, b)), Ls, Gs)
     example = jax.tree_util.tree_map(lambda s: jnp.zeros(s.shape, s.dtype),
                                      shapes)
-    # ``closure_convert`` caches its result in a STRONG LRU keyed by the
-    # (fresh, per-call) consumer: with leak checking on it takes its uncached
-    # path, so an eager loop of gradients does not pin every call's arrays.
+    # Uncached closure conversion (``jax.closure_convert`` would pin every
+    # call's arrays in its strong LRU) -- see _closure_convert_uncached.
     has_select = select_flag is not None
     fn = consumer if has_select else (lambda e, _u: consumer(e))
-    with jax.checking_leaks():
-        conv, consts = jax.closure_convert(fn, example, jnp.asarray(False))
+    conv, consts = _closure_convert_uncached(
+        fn, example, jnp.asarray(False), dce=_jax_eager_regime())
 
     def _anc(a):
         if a is None or (not hasattr(a, "shape") and len(a) == 0):
@@ -5141,11 +5313,72 @@ class _RouteReplay:
         return jnp.logical_and(uniform, jnp.logical_not(self.grad_branch))
 
 
+class _JaxEigMemo:
+    """The per-call eig memo of an EAGER gradient through
+    :func:`_jax_cluster_routed`: the differentiated eig's forward
+    (``_eig_raw_fwd``) stores ``(lam, V)`` of every CONCRETE matrix it
+    decomposes, keyed by the matrix's exact bytes (shape, dtype and every
+    bit -- not ``==``, which equates -0.0 and +0.0), and a later call on a
+    bit-identical matrix gets those arrays back instead of a second LAPACK
+    call.  ``eig`` is a pure function of its input bits, so the returned
+    values (and the residuals of its VJP, which are the same ``(lam, V)``)
+    are the ones the second call would have computed.  A matrix that differs
+    in any bit, or a traced one, is simply decomposed."""
+
+    __slots__ = ("entries",)
+
+    def __init__(self):
+        self.entries = []
+
+    @staticmethod
+    def _key(A):
+        import jax
+        if isinstance(A, jax.core.Tracer) or not isinstance(A, jax.Array):
+            return None
+        a = np.asarray(A)
+        return (a.shape, a.dtype.str, a.tobytes())
+
+    def lookup(self, A):
+        k = self._key(A)
+        if k is None:
+            return None
+        for kk, val in self.entries:
+            if kk == k:
+                return val
+        return None
+
+    def store(self, A, val):
+        k = self._key(A)
+        if k is not None:
+            self.entries.append((k, val))
+
+
+_JAX_EIG_MEMO: "_contextvars.ContextVar" = _contextvars.ContextVar(
+    "lumenairy_jax_eig_memo", default=None)
+
+
 def _jax_cluster_routed(solve, *, gap_rel=None):
     """``solve()`` with the reverse pass of the degenerate-cluster rule over
     EVERY ``_jax_twin_eig`` it calls (block comment above), each problem
     with its own anchors, and the eig-branch derivative of every
     :func:`_jax_uniform_select` shortcut the solve takes."""
+    from ...backend import jax_cluster_rule_enabled
+    gap = _EIG_CLUSTER_GAP_REL if gap_rel is None else float(gap_rel)
+    # an eager DIFFERENTIATED call (some autodiff / vmap trace active, no
+    # staging trace) with the rule on: the first pass and the rule's forward
+    # decompose the same concrete matrices -- share them (_JaxEigMemo)
+    if not (gap > 0.0 and jax_cluster_rule_enabled() and _jax_eager_regime()
+            and not _jax_eval_trace_current()):
+        return _jax_cluster_routed_body(solve, gap_rel)
+    tok = _JAX_EIG_MEMO.set(_JaxEigMemo())
+    try:
+        return _jax_cluster_routed_body(solve, gap_rel)
+    finally:
+        _JAX_EIG_MEMO.reset(tok)
+
+
+def _jax_cluster_routed_body(solve, gap_rel):
+    """The body of :func:`_jax_cluster_routed`."""
     import jax
     import jax.numpy as jnp
     rec0 = _RouteRecord()
@@ -5185,8 +5418,11 @@ def _jax_cluster_routed(solve, *, gap_rel=None):
                 if rec.flags else jnp.asarray(False))
         return rec.problems, anchors, flag
 
-    with jax.checking_leaks():
-        conv_r, consts_r = jax.closure_convert(rerecord)
+    # Eagerly, only the problems' own operations are evaluated (dce): the
+    # re-recorded solve's eigs and everything downstream of them are dead
+    # here, and they were a whole extra solve per gradient.
+    conv_r, consts_r = _closure_convert_uncached(rerecord,
+                                                 dce=_jax_eager_regime())
     problems, anchors, flag = conv_r(*consts_r)
     has_select = bool(rec0.flags)
 
