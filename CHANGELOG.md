@@ -4,6 +4,188 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.50.1] — 2026-11-03
+
+A correctness release driven by an audit of the DynaMeta-to-Lumenairy bridge
+(2026-11-02, findings L-1 .. L-10).  The headline is a
+lateral point-mirror in the RCWA and PMM solvers: since 5.5.0 every patterned
+layer was solved as `eps(-x, -y)` instead of the declared `eps(x, y)`.  Also in
+this release: Li's factorization on analytic `shapes=` layers (1-D, and 2-D
+axis-aligned rectangles), `layer_absorption` on `shapes=` layers, a faster
+JAX degenerate-cluster rule, and documentation for three audit findings.
+
+**Results change** for any patterned layer whose unit cell is not symmetric
+about the cell origin -- see the first section.
+
+### Fixed -- RCWA and PMM solved the point mirror of every patterned layer (5.5.0 .. 5.50.0)
+
+The public convention is `exp(-i w t)` (`Im(eps) > 0` is loss); the solver
+cores run in `exp(+i w t)` and are reached by complex conjugation.
+Conjugation also reverses the sign of every lateral harmonic, so the core's
+permittivity Toeplitz matrix must be `conj(c_{m-m'})`.  Every bridge instead
+handed `conj(eps)` to kernels that build the PUBLIC rule `c_{m-m'}`, which is
+`conj(c_{m'-m})` -- the Toeplitz matrix of `conj(eps(-x, -y))`.  Loss,
+incidence, order labels and uniform layers (tensors included) were right;
+only the lateral pattern was mirrored through the cell origin (1-D: `x -> -x`;
+2-D: `(x, y) -> (-x, -y)`, which in the plane is a 180-degree rotation).
+
+*Who is affected.* A cell symmetric about the origin (or about `P/2`) is its
+own mirror and is unaffected, bit for bit.  For any other cell:
+
+* a blazed / asymmetric grating sent its power to the wrong side order
+  (`+1 <-> -1`);
+* at oblique or conical incidence the efficiencies themselves change,
+  absorption included (an asymmetric lossy staircase at `theta = 0.5`, TE:
+  `A = 0.709828` before, `0.477867` after, grcwa `0.477864`);
+* internal fields were reconstructed at mirrored positions, and stacks that
+  mixed differently-built layers (e.g. a binary `rcwa_efficiency_1d` grating
+  is a translation of its mirror) were mis-registered against each other.
+
+Zeroth-order efficiencies of a single layer at normal incidence are
+mirror-blind (reciprocity), and a 180-degree-rotation test cannot see the
+mirror at all, which is why no existing test caught it.
+
+*Fix* -- build the public operator, then conjugate the operator; no kernel
+changed:
+
+* `lumenairy/elements/rcwa/_core.py` `_internal_cell`: conjugate and
+  node-lattice point mirror (`j -> -j mod S` per lateral axis).  Used by every
+  `RCWAStack` cell / tensor site and by `rcwa_efficiency_2d`,
+  `prepare_rcwa_2d`, `rcwa_jones_2d`.
+* `lumenairy/elements/rcwa/twod.py` `_internal_analytic_convolution`:
+  conjugate of the PUBLIC analytic Toeplitz for `RCWAStack(shapes=)` and
+  `rcwa_efficiency_2d_shapes`.
+* `lumenairy/elements/rcwa/_core.py` `_internal_profiles_1d`: mirrored
+  segment edges for `rcwa_jones_1d` / `rcwa_jones_1d_segments`.
+* `rcwa_efficiency_1d` (binary) is unchanged: its mirror is a translation and
+  every output it returns is translation-invariant.
+* PMM (affected since 5.8.0): every entry that takes lateral structure --
+  `PMMStack`, `pmm_efficiency_1d_segments` / `pmm_jones_1d_segments`, the
+  slanted, covariant and conical 1-D entries, `PMM2DStack` /
+  `PMM2DStackHybrid`, `pmm_efficiency_2d(_cell)`, `prepare_pmm_2d(_cell)`,
+  `pmm_jones_2d`, `PMM2DStackPure` (`eps_cell`, per-layer walls, `shapes=`
+  and curved maps), the staggered entries, and every JAX twin.  The mirror
+  entered differently in each core family, so each has its own fix:
+  * 1-D nodal cores (public gauge): two calibrations that had been tuned
+    against the then-mirrored RCWA are removed -- an element-order reversal
+    in `lumenairy/elements/pmm/_core.py` `_segment_elem_bnds` and the
+    slant-convection sign (`_sem_modes_slant`, `_build_generator_metric`).
+  * 1-D covariant core: a bridge `_internal_mirror_1d` in
+    `lumenairy/elements/pmm/_core.py` (reversed regions, negated slant, and the
+    tensor mirrored as `M eps M`, `M = diag(-1, 1, 1)`).  This also removes
+    the "~0.1 covariant out-of-plane TM floor" documented up to 5.50.0 -- it
+    was the same frame mismatch.
+  * 2-D hybrid: `lumenairy/elements/pmm/twod.py` `_build_axis` lays its
+    elements in the internal frame and `_internal_slant` negates the slant.
+  * Staggered / `PMM2DStackPure`: the Bloch glue in
+    `lumenairy/elements/pmm/twod_staggered.py` `_stag_bloch_tau` (and the
+    far-field kernels and mapped incident load) now use the public carrier;
+    the old glue solved the cell rotated by 180 degrees.
+  * Every sheared cascade's transmitted-amplitude phase reference is one
+    kernel, `_frame_anchor_phase` in `lumenairy/elements/pmm/_core.py`.
+
+  **Slanted layers now walk toward `+x` with depth, as documented**; before
+  this release they walked toward `-x`.  The binary 1-D PMM entries, the
+  uniform conical path and BOR are unaffected (BOR bit-identical).  On the
+  staircase example above: `PMMStack` `0.709845 -> 0.477858`, `PMM2DStack`
+  `0.7097 -> 0.4817`, `PMM2DStackPure` `0.70378 -> 0.48384` (its own
+  converged reference `0.483870`).
+
+*Evidence.* Per-order R/T against grcwa 0.1.2 to 1e-15 (`phi = 0, pi/2,
+0.7`); first-order Born on weak asymmetric gratings; translation phases
+`exp(-i (m Kx a + n Ky b))` on shifted layers; internal fields registered to
+grcwa's real-space field.  New `tests/unit/test_rcwa_point_mirror_fix.py`
+(grcwa-free) gates every bridge site; each test fails when its one site is
+reverted; `tests/unit/test_pmm_point_mirror_fix.py` does the same for PMM
+(bridge pieces, absorptance, translation law, blaze direction, Born, slant
+direction, frame anchor, field registration), and the PMM-vs-RCWA
+cross-engine gates agree again.  Every PMM pin that moved was a value of the
+mirrored structure: a scratch plugin restoring the 5.50.0 conventions
+reproduces each old pin on the fixed tree.  One stored RCWA value moved: the W7-D layer-absorption split
+`0.16541074 -> 0.15788743` (the old pin was the mirrored field times the
+declared mask; the new value is checked against a mask-free flux oracle).
+
+### Added -- `formulation='li'` on analytic `shapes=` layers (audit L-4)
+
+`RCWAStack.add_layer(..., shapes=..., formulation='li')` (alias `'fff'`) is
+now accepted, built analytically from the shapes' form factors -- no raster,
+no width quantization:
+
+* **1-D stacks** (any shapes):  `Cxx = [[1/eps]]^-1` (inverse rule for the
+  wall-normal `E_x`), `Cyy = EZZ = [[eps]]`.  On the metal-line fixture
+  (1.31 um, `P = 600 nm`, `eps = -20+2i`, duty 0.5) the error against the PMM
+  limit is `5.1e-3 / 1.8e-3 / 8.5e-4 / 1.9e-4` at `N = 32 / 64 / 128 / 512`;
+  conical pin against `pmm_jones_1d_conical` within `1e-7` where Laurent is
+  `3.6e-5` off.
+* **2-D stacks, axis-aligned rectangles**: Li's sequential rule
+  `[[ [[1/eps]]_x^-1 ]]_y` for `E_x` (and the swap for `E_y`), exact per
+  y-band with an exact band transform -- the `S -> inf` limit of the
+  `eps_cell` 'li' path.  On a lossy Ag pillar 'li' and the independent
+  `PMM2DStackPure` approach each other from opposite sides as the truncation
+  grows (R `0.310` at `N = 34` vs `0.322` at `n_modes = 16`), while Laurent and
+  grcwa sit near `0.24`.
+* Disks, ellipses and anything else under `'li'` on a 2-D stack raise
+  `ValueError` (Li's rule for curved shapes is future work).  A singular
+  `[[1/eps]]` (cond > 1e12, e.g. a lossless `eps = -1` line at duty 0.5)
+  raises `LinAlgError` pointing to `formulation='laurent'`.
+* Lossless metal at large truncation (`N >= 18`) closes energy to about
+  `1e-12 .. 2.5e-12` under every formulation (Laurent and the `eps_cell`
+  raster included): round-off amplified by the plasmonic solve, not an
+  operator defect.
+
+### Added -- `layer_absorption` on `shapes=` layers (audit L-3)
+
+`RCWAResult.layer_absorption` no longer raises on a stack holding `shapes=`
+layers.  The in-plane integral is exact: the `Im(eps)` form-factor series,
+kept to the difference-order box, sampled on its own grid, so by Parseval the
+grid mean is the integral of the exact indicator times `|E|^2` (closure
+`<= 9e-12` with a Gauss-Legendre depth rule; point-sampling a disk's
+indicator was `1.5e-3` off even at 1024 nodes).  New keyword
+`return_raw=False`: `True` returns the un-normalised physical integrals,
+the honest closure check (the default rescaling makes the sum equal `A` by
+construction).  Uniform / `eps_cell` / tensor layers are byte-identical.
+
+### Changed -- unknown keys in a `shapes=` dict now raise
+
+Every shape kind reads a fixed set of keys -- `shape`, `eps`, `center` plus
+`size` (rectangle), `radius` (disk) or `semi_axes` (ellipse).  Any other key
+now raises `ValueError` naming it.  Previously it was silently ignored: a
+rectangle given `angle=0.7` was solved unrotated (`|dR| = 0`, where a real
+rotation moves R by `2.7e-2`).  Shapes are axis-aligned; there is no
+rotation key.
+
+### Changed -- faster JAX degenerate-cluster rule (audit L-2)
+
+The eager gradient path of the degenerate-cluster rule no longer re-runs the
+whole solve, no longer runs a leak check per call, no longer decomposes each
+matrix twice, and no longer compiles a fresh XLA program per eager gradient
+(5.50.0 kept every one alive: 21-25 MB RSS and one compilation per gradient;
+now none).  Jitted programs are unchanged (same lowered text, bit-identical
+values).  Eager / eager-vmap gradients move by round-off only: `<= 6e-13`
+relative without a firing cluster, up to `~2e-8` at a firing cluster (within
+5.50.0's own eager-vs-jit spread).  The lean path self-tests once against
+`jax.closure_convert` and falls back to the 5.50.0 path, with one
+`RuntimeWarning`, if anything disagrees.
+
+### Changed -- clearer PMM diagnostics (audit L-8, L-9)
+
+Text only; R / T bit-identical.  The hybrid 2-D PMM's DOF refusal states the
+`max_nodal_dof` the layout needs and points rastered curved inclusions to
+`PMM2DStackPure(...).add_layer(..., shapes=[Circle(...)])`.  The Granet
+map-quadrature warning recognizes cells pinched to zero height (a wall
+exactly on a circle's tangent points), reports the moment error of the rest
+of the map, and gives the remedy (move the wall outward by about `1e-3 P`).
+
+### Documentation (audit L-1, L-6, L-10)
+
+* `RCWAStack.add_layer` / `rcwa_extrapolate`: convergence on lossy-metal
+  corners (measured local rates; Richardson windows against the PMM limit).
+* The pixel-cell contract gains the caller-lattice table (centre vs node
+  painting, closed vs half-open membership) and its measured cost.
+* `set_jax_cluster_rule`: the `theta = 0` gradient error against the
+  distance to a Rayleigh anomaly (NaN exactly on it), pinned by
+  `tests/unit/test_jax_cluster_rule_near_rayleigh_anomaly.py`.
+
 ## [5.50.0] — 2026-10-04
 
 Curved in-plane geometry for the pure (no-floor) staggered 2-D polynomial modal
@@ -7225,7 +7407,7 @@ fast path cannot fire there (both `A22` and `B11` are non-zero), so it was assem
 `2N x 2N` blocks -- twelve matrix products and TWO `_guarded_inverse` calls -- to use two of
 them on one or two columns.
 
-New `_redheffer_star_rt` (`lumenairy/elements/rcwa/_core.py:2998`) computes those two
+New `_redheffer_star_rt` (`lumenairy/elements/rcwa/_core.py:3114`) computes those two
 products directly.  With `D = (I - B11 A22)^-1`, `u = A21 c` and `z = D B11 u`, the
 push-through identity `(I - A22 B11)^-1 = I + A22 D B11` removes the second inverse
 outright and the star reduces to
@@ -7233,11 +7415,11 @@ outright and the star reduces to
     S11 c = A11 c + A12 z        S21 c = B21 (u + A22 z)
 
 -- seven mat-vecs, ONE `2N` product and ONE inverse.  Wired at
-`rcwa/oned.py:721` (planar TE/TM fast path), `rcwa/oned.py:756` (the 2N path of `rcwa_efficiency_1d`),
-`rcwa/oned.py:1153` (`rcwa_jones_1d` / `rcwa_jones_1d_segments`, both polarizations in one
-block), `rcwa/twod.py:2487` (`rcwa_efficiency_2d`), `rcwa/twod.py:1400` (`PreparedRCWA2D.solve`),
-`rcwa/twod.py:2101` (`rcwa_jones_2d`, in-plane and full-3x3), `rcwa/twod.py:2487`
-(`rcwa_efficiency_2d_shapes`) and `rcwa/_core.py:2559` (`_symmetric_solve_rt`, the single-layer
+`rcwa/oned.py:730` (planar TE/TM fast path), `rcwa/oned.py:765` (the 2N path of `rcwa_efficiency_1d`),
+`rcwa/oned.py:1169` (`rcwa_jones_1d` / `rcwa_jones_1d_segments`, both polarizations in one
+block), `rcwa/twod.py:2800` (`rcwa_efficiency_2d`), `rcwa/twod.py:1402` (`PreparedRCWA2D.solve`),
+`rcwa/twod.py:2101` (`rcwa_jones_2d`, in-plane and full-3x3), `rcwa/twod.py:2800`
+(`rcwa_efficiency_2d_shapes`) and `rcwa/_core.py:2675` (`_symmetric_solve_rt`, the single-layer
 even-parity fold).
 
 Measured on the 1-D metallic ladder (Ag `n = 0.135 + 3.99j` at 633 nm, period 1 um, depth
@@ -7286,13 +7468,13 @@ inverse was ever the refusing one (`rcond_refuse` is armed only on
 shortcuts are taken on the same concrete tests as before -- a chain that paid no star
 inverse still pays none.
 
-DELIBERATELY NOT APPLIED to `rcwa/_core.py:2591` `_symmetric_cascade_rt`: `elements/pmm/stack2d.py`
+DELIBERATELY NOT APPLIED to `rcwa/_core.py:2707` `_symmetric_cascade_rt`: `elements/pmm/stack2d.py`
 and `pmm/twod_jones.py` fold their own cascades through it, and closing its last star on the
 sources would move the PMM engines' last bits from inside the RCWA package.  Pinned by a
 test.
 
-Files: `lumenairy/elements/rcwa/_core.py:2998` (new `_redheffer_star_rt`), `:2903`,
-`:5067` (`__all__`); `rcwa/oned.py:41,:721,:756,:1153`; `rcwa/twod.py:39,:1253,:1377,:2035,:2418`.
+Files: `lumenairy/elements/rcwa/_core.py:3114` (new `_redheffer_star_rt`), `:3019`,
+`:5067` (`__all__`); `rcwa/oned.py:42,:721,:756,:1153`; `rcwa/twod.py:40,:1253,:1377,:2105,:2418`.
 Tests: `tests/unit/test_audit2609_b5_rcwa_eme_bor.py::test_d2_closed_form_matches_the_independent_star_oracle`,
 `::test_d2_closed_form_matches_the_oracle_on_the_metallic_chain`,
 `::test_d2_a_single_layer_solve_records_one_star_inverse_not_two`,
@@ -7311,9 +7493,9 @@ there: a cell whose geometry AND director are invariant under the x <-> y mirror
 the mirror forces `Jxx == Jyy` and `Jxy == Jyx` at normal incidence -- came back with a
 difference, and mirroring any cell did not mirror its Jones matrix.
 
-`_li_convolutions_2d_tensor_full` (`lumenairy/elements/rcwa/twod.py:544`) now returns the
+`_li_convolutions_2d_tensor_full` (`lumenairy/elements/rcwa/twod.py:545`) now returns the
 mean of the two orders, with the single order split out as `_li_tensor_full_l2l1`
-(`rcwa/twod.py:587`) and still reachable through `symmetrize=False`.  The 3x3 transpose is the
+(`rcwa/twod.py:588`) and still reachable through `symmetrize=False`.  The 3x3 transpose is the
 in-plane argument with the component permutation `(x, y, z) -> (y, x, z)`: `exx<->eyy`,
 `exy<->eyx`, `exz<->eyz`, `ezx<->ezy`, `ezz` alone, the pixel grid transposed and the
 order-label columns swapped, so that `T P L2L1(eps) P T = L1L2(P eps^T P)` and the nine
@@ -7353,8 +7535,8 @@ generalization of the shipped in-plane fix rather than a second, different one.
 The in-plane `_li_convolutions_2d_tensor` is untouched.  The extra cost is one more
 scalar-pivot factorization pass, the cheap half of the build.
 
-Files: `lumenairy/elements/rcwa/twod.py:544` (`_li_convolutions_2d_tensor_full`, now
-symmetrized, `+ n_orders_y` and `symmetrize=`), `:585` (`_li_tensor_full_l2l1`), `:1977`
+Files: `lumenairy/elements/rcwa/twod.py:545` (`_li_convolutions_2d_tensor_full`, now
+symmetrized, `+ n_orders_y` and `symmetrize=`), `:585` (`_li_tensor_full_l2l1`), `:2027`
 (the call site and its comment).
 Tests: `tests/unit/test_audit2609_b5_rcwa_eme_bor.py::test_d3_offplane_fff_nv_keeps_the_cells_own_mirror`,
 `::test_d3_offplane_fff_nv_is_mirror_covariant`,
@@ -7366,8 +7548,8 @@ Tests: `tests/unit/test_audit2609_b5_rcwa_eme_bor.py::test_d3_offplane_fff_nv_ke
 ### Unchanged (measured) -- RCWA: the two Toeplitz inverses keep their explicit inverse (H4, deferred item D1)
 
 WP-A14 deferred a Levinson / Gohberg-Semencul route for the two genuinely Toeplitz inverses
-of the 1-D solve -- `inv([[1/eps]])` (`lumenairy/elements/rcwa/oned.py:135`) and
-`inv([[eps]])` in the planar TM fast path (`rcwa/oned.py:708`) -- and named a cheaper 80 %:
+of the 1-D solve -- `inv([[1/eps]])` (`lumenairy/elements/rcwa/oned.py:136`) and
+`inv([[eps]])` in the planar TM fast path (`rcwa/oned.py:717`) -- and named a cheaper 80 %:
 `scipy.linalg.solve_toeplitz` wherever the inverse is immediately multiplied.  Both sites
 were measured against that route and both KEEP the explicit inverse.  Nothing in the
 library changed; what follows is the evidence, so the decision is re-openable rather than
@@ -7510,27 +7692,27 @@ entry; both items are a docstring and two added tests.
 sweep, but `_tensor_layer_modes` rebuilt the per-axis projections
 (`_axis_projection` + `pinv`) and the `_proj` sandwiches at **every wavelength
 and every angle**, where the scalar branch cached them (finding **G10(d)**, P2;
-`lumenairy/elements/pmm/twod_jones.py:149`, `lumenairy/elements/pmm/stack2d.py:1187`).
+`lumenairy/elements/pmm/twod_jones.py:151`, `lumenairy/elements/pmm/stack2d.py:1188`).
 
 The source-free half of the assembly is now
 `twod_jones._tensor_projected_ops(ax, ay, x_walls, y_walls, tile_i, ox, oy,
 formulation)` -- the off-plane Schur fold and the three discretization branches
-**moved verbatim** (`lumenairy/elements/pmm/twod_jones.py:149`), returning
+**moved verbatim** (`lumenairy/elements/pmm/twod_jones.py:151`), returning
 `dict(kind, Gx0F, IpxF, Gy0F, IpyF, Cxx, Cxy, Cyx, Cyy, EZZ, oop)`.  `kind`
 names which axes carry a k0-free derivative part, which is exactly where the
 three branches differ: `'uniform'` has none and is `diag(k)` on both axes
-(`lumenairy/elements/pmm/twod_jones.py:208`); `'x'`/`'y'` (a separable cell) has
+(`lumenairy/elements/pmm/twod_jones.py:210`); `'x'`/`'y'` (a separable cell) has
 one, `kron(Iy, g1)/k0 + kx0*kron(Iy, ip1)` on the patterned axis and exact
 `diag(k)` on the wall-less one
-(`lumenairy/elements/pmm/twod_jones.py:287`, `:298`); `'xy'` (crossed) has both,
+(`lumenairy/elements/pmm/twod_jones.py:289`, `:300`); `'xy'` (crossed) has both,
 in the scalar branch's `Gx0F/k0 + kx0*Ip` shape
-(`lumenairy/elements/pmm/twod_jones.py:333`).  `_tensor_layer_modes` keeps its
-signature and gains `ops=` (`lumenairy/elements/pmm/twod_jones.py:372`);
+(`lumenairy/elements/pmm/twod_jones.py:335`).  `_tensor_layer_modes` keeps its
+signature and gains `ops=` (`lumenairy/elements/pmm/twod_jones.py:374`);
 handed one, it rebuilds `GxF`/`GyF` from `kind` with the same expression in the
-same order (`lumenairy/elements/pmm/twod_jones.py:413`) and goes straight to the
+same order (`lumenairy/elements/pmm/twod_jones.py:415`) and goes straight to the
 circular restriction, the fold gate, the block-eig gauge and the eig.
 `PMM2DStackHybrid` caches it beside the scalar `lops`
-(`lumenairy/elements/pmm/stack2d.py:1189`), on the FULL order box so one entry
+(`lumenairy/elements/pmm/stack2d.py:1190`), on the FULL order box so one entry
 serves both truncations (`keep` is applied at use, as `_restrict_lops` already
 did for the scalar branch).
 
@@ -7572,7 +7754,7 @@ non-vacuity guard that feeds a deliberately perturbed build through and
 requires the perturbation to come out the other side.
 
 One key change came with it: `_geom_key` now carries `formulation`
-(`lumenairy/elements/pmm/stack2d.py:609`).  The cached scalar `lops` never
+(`lumenairy/elements/pmm/stack2d.py:610`).  The cached scalar `lops` never
 depended on it (they carry every rule's operator side by side and the caller
 routes), but the cached tensor operators do -- `EZZ` is `inv([[1/e_zz]])` under
 `'li'` and the direct `[[e_zz]]` otherwise -- and `formulation` is a plain public
@@ -8151,7 +8333,7 @@ half of an import cycle.  `_core` re-exports all of them
 `_core.py` 5119 -> 4967 lines, and its module docstring now carries the section
 map and says why `__all__` lists 95 names of which 90 are private.
 
-`_validate_shapes` deliberately STAYS in `_core` (`rcwa/_core.py:2003`): it is
+`_validate_shapes` deliberately STAYS in `_core` (`rcwa/_core.py:2013`): it is
 policy rather than geometry, and it must resolve `_shapes_overlap` through
 `_core`'s own globals, which is where
 `test_niche_audit_w9_overlap_exact.py::test_w9d_the_predicate_counter_sees_a_pair_that_needs_it`
@@ -8222,7 +8404,7 @@ silently dropped (`hfpi.py:1082`).
 On an out-of-plane or slanted cell at normal incidence the even-parity fold
 probe ran the whole projected-operator assembly, answered `None` because the
 fold does not apply there, and the cascade then assembled it again.  The build
-is hoisted (`elements/pmm/twod_jones.py:1052`) and passed to both calls
+is hoisted (`elements/pmm/twod_jones.py:1055`) and passed to both calls
 (`:1058`, `:1074`).  `_tensor_layer_modes` only reads that dict, so one build
 serves both and the answer is bit-identical by construction.
 
@@ -8231,7 +8413,7 @@ serves both and the answer is bit-identical by construction.
 `__init__` refused an out-of-vocabulary value and then stored it as a plain
 attribute, so `st.formulation = 'fff_nv'` was ACCEPTED and read through an
 `== 'li'` test that a typo silently fails -- the stack behaved as `'laurent'`
-and said nothing.  The three are properties now (`elements/pmm/stack2d.py:470`,
+and said nothing.  The three are properties now (`elements/pmm/stack2d.py:471`,
 `:467`, `:476`) sharing one vocabulary with the constructor
 (`_check_formulation` `:91`, `_check_cascade` `:103`, `_symmetry_on`), and
 `st.symmetry = 'auto'` resolves to `True` on assignment exactly as the

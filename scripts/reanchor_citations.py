@@ -164,24 +164,14 @@ EDITED_IN_PLACE = {
     # override.  The record of the flips lives in the CHANGELOG ``[5.49.0]``
     # block and the WP-C2 audit documents; the D7 guard they exercised is
     # still tested, against a synthetic entry the tests inject.
-    # Symmetric-point gradient fix (5.50.0): ``rcwa_jones_2d``'s JAX branch was
-    # restructured so that every eigen-decomposition is recorded and replayed
-    # through the degenerate-cluster rule, and the traced Li route was built.
-    # Two cited lines MOVED and were RE-INDENTED into the new blocks, their
-    # text unchanged; exact-text anchoring cannot follow a re-indent, so the
-    # human's answer is recorded here (content digest is whitespace-stripped).
-    #   expected: '# on the two sources rather than assembled (_redheffer_star_rt).'  inside "def rcwa_jones_2d("
-    ('lumenairy/elements/rcwa/twod.py', 2035): (
-        2101, 'symmetric-point gradients 5.50.0: the closed-star comment moved '
-        'into the routed solve of rcwa_jones_2d (re-indented, text unchanged)',
-        '1c79cd4d1049c92103efc6b46bb5e2ac124e18d14c131b7dc180feee67a86fed',
-        '5.50.0', 'def rcwa_jones_2d('),
-    #   expected: '# no scope signal at all.'  inside "def rcwa_jones_2d("
-    ('lumenairy/elements/rcwa/twod.py', 1977): (
-        2023, 'symmetric-point gradients 5.50.0: the Li scope-notice comment moved '
-        'into the traced-li block of rcwa_jones_2d (re-indented, text unchanged)',
-        '9911028483b8dcec900878551f949f4baf0937992c2cf68aaee148d1c52125e0',
-        '5.50.0', 'def rcwa_jones_2d('),
+    # RETIRED at 5.50.1: two 5.50.0 entries -- ``lumenairy/elements/rcwa/twod.py``
+    # 2035 / 1977 (base ``b80b354c``) -- answered the re-indent of two comment
+    # lines into ``def rcwa_jones_2d(`` by the symmetric-point gradient fix:
+    # ``# on the two sources rather than assembled (_redheffer_star_rt).`` and
+    # ``# no scope signal at all.``  They expired by design at 5.50.1.  The
+    # 5.47.0 block now cites those lines where they are (``:2105`` / ``:2027``
+    # at 5.50.1) and its base moved to the commit that re-points them, where
+    # the citations anchor by content with no override.
 }
 
 #: Every override this run REFUSED, as dicts carrying both lines.  The CLI
