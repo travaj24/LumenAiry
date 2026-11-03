@@ -852,6 +852,15 @@ def test_the_band_the_warning_names_carries_a_measurable_cost():
     per, wl, th = 0.93, 0.66, 0.19
     epsp, epsh, tt = 6.25, 2.1, 0.14
     w0, w2, yw = (0.155, 0.585), (0.315, 0.795), (0.22, 0.68)
+    # POINT-MIRROR FIX (v5.50.1): every reading in this docstring was
+    # measured on v5.21..v5.50, which solved the point mirror of the
+    # declared walls (PMM2DStackPure) and of the declared segments (the 1-D
+    # oracle).  The fixture is therefore re-stated as what was measured --
+    # every wall w -> 1 - w and the sliver centre 0.41 -> 0.59.  (On the
+    # literal walls the band arm reads 0.0110 against the ordinary 0.0154
+    # at M = 6: this cost is a property of a device, not of every device.)
+    w0, w2, yw = tuple((1.0 - b, 1.0 - a) for a, b in (w0, w2, yw))
+    sc = 1.0 - 0.41
 
     def _oracle(deg):
         st = PMMStack(per, degree=deg, far_field_orders=5)
@@ -876,7 +885,7 @@ def test_the_band_the_warning_names_carries_a_measurable_cost():
         return c
 
     def _err(frac, M=6):
-        sw = [(0.41 - frac / 2) * per, (0.41 + frac / 2) * per]
+        sw = [(sc - frac / 2) * per, (sc + frac / 2) * per]
         st = PMM2DStackPure(per, n_modes=M, n_orders=1,
                             layer_grids="per-layer")
         yws = [yw[0] * per, yw[1] * per]

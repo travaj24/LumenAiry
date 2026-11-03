@@ -370,16 +370,22 @@ def _o2_scalar_cell():
     shape that excites the generalized generator's rank deficiency.  A tensor
     cell of comparable contrast does NOT: 88 such solves in this
     verification's census were all healthy."""
+    # POINT-MIRROR FIX (v5.50.1): this device was MEASURED on v5.8..v5.50,
+    # which solved the point mirror of every patterned hybrid cell (and
+    # of its slant).  The rank-deficient blow-up it demonstrates belongs
+    # to THAT solid, so the fixture is re-stated as it: the cell point-
+    # mirrored (footprint pixels: both axes reversed) and the slant
+    # negated.  The registered device of the old literal does not blow up.
     c = np.full((6, 6), 1.0, dtype=complex)
     c[:, :3] = O2_PROF[:, None]
-    return c
+    return c[::-1, ::-1]
 
 
 def _o2_hyb(slant, norders, degree=11, theta=25.0):
     st = PMM2DStackHybrid(1.20 * UM, 1.20 * UM, n_superstrate=1.0,
                           n_substrate=1.5, n_orders=norders, degree=degree)
     st.add_layer(0.50 * UM, eps_cell=_o2_scalar_cell(),
-                 slant=(None if slant == 0 else (slant, 0.0)))
+                 slant=(None if slant == 0 else (-slant, 0.0)))  # mirror image
     st.set_source(0.68 * UM, theta=math.radians(theta))
     return st
 

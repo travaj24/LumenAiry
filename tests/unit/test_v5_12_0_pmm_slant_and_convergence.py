@@ -745,7 +745,12 @@ def _oop_staircase(er, eg, slant, n_slabs=200, n_orders=15, angle=0.0):
     S = None
     Mp = Mref
     for s in range(n_slabs):
-        inside = np.mod(xq - tanp * ((s + 0.5) * dz) / period, 1.0) < duty
+        # The rcwa kernels read the INTERNAL cell conj(eps(-x)) (the lateral
+        # half of the loss-gauge bridge, rcwa._core._internal_cell -- the
+        # point-mirror fix of v5.50.1): sample the profile at -x.  Up to v5.50
+        # this oracle sampled +x and so solved the MIRROR (slant -phi), which
+        # the then-mirrored PMM slant agreed with.
+        inside = np.mod(-xq - tanp * ((s + 0.5) * dz) / period, 1.0) < duty
         prof = {kk: np.where(inside, erc[ij], egc[ij]).astype(C)
                 for kk, ij in keys.items()}
         cc = _RC._tensor_convolutions_full(prof, M)

@@ -562,7 +562,9 @@ _REANCHOR = _REPO_ROOT / 'scripts' / 'reanchor_citations.py'
 #: numbers the block first quoted) and moved ONCE, at the 5.50.0 fold, to
 #: ``b80b354c`` (the 5.49.0 release commit, tag ``v5.49.0``).  Not a moving
 #: target otherwise: a base moves only when the overrides answering it expire.
-_V547_BASE = 'b80b354c'
+#: Moved a SECOND time at 5.50.1, to ``768f04f8`` (the 5.50.1 release commit, which
+#: re-points the two citations the expired 5.50.0 overrides answered).
+_V547_BASE = '768f04f8'
 _V547_BLOCK = '[5.47.0]'
 
 

@@ -376,21 +376,50 @@ __all__ = ["pmm_efficiency_2d_staggered", "pmm_jones_2d_staggered"]
 _C = np.complex128
 
 #: Sign applied to the OUT-OF-PLANE tensor entries (``e13, e23, e31, e32``) in
-#: :meth:`Granet2DTransverseE._assemble_oop`.  It is the 180-degree rotation
-#: about ``z`` that the shipped gauge carries: the ``Basis1D`` glue
-#: ``tau = exp(-i alpha0 p)`` makes the basis run as ``exp(-i alpha0 x)``
+#: :meth:`Granet2DTransverseE._assemble_oop` (and, with them, to the slant
+#: vector, :func:`_slant_rot_gauge`): the 180-degree rotation about ``z``
+#: between the basis and the ``eps_cell`` / far-field indexing.
+#:
+#: POINT-MIRROR FIX (v5.50.1): it is now ``+1.0`` -- NO rotation -- because the
+#: rotation itself is gone.  Up to v5.50 the ``Basis1D`` glue was
+#: ``tau = exp(-i alpha0 p)``, so the basis ran as ``exp(-i alpha0 x)``
 #: (MEASURED, ``validation/probe_pmm2d_staggered_oop/g0f_basis_phase_slope.py``)
-#: while the far-field kernel and the ``eps_cell`` indexing run the other way.
-#: In-plane operators are invariant under that rotation -- which is exactly why
-#: it was unobservable for the isotropic and Stage-A paths -- and it is a pure
-#: SIGN on the out-of-plane block, so it is applied once, in the assembly.
-#: DERIVED BY MEASUREMENT 2026-09-09 (build doc
-#: docs/audits/BUILD_PMM2D_STAGGERED_OOP_2026_09_09.md, tables T2/T3): with
-#: -1.0 a uniform out-of-plane slab reproduces ``berreman_jones_1d`` to ~1e-15
-#: at oblique and conical incidence; with +1.0 the same solve sits at ~1e-03.
-#: It is a module constant so a test can walk BOTH arms of that two-sided
-#: claim through the shipped code rather than re-deriving it.
-_OOP_ROT_SIGN = -1.0
+#: while the public carrier is ``exp(+i alpha0 x)``: the whole solve was
+#: rotated by 180 degrees about ``z``.  The v5.21-v5.50 code compensated the
+#: two places where that rotation is visible on a UNIFORM slab -- the
+#: out-of-plane entries and the slant (this constant at ``-1.0``) -- and the
+#: far-field kernel order, but NOT the place where it is visible on a
+#: PATTERNED cell: a 180-degree rotation of the solve is the point mirror
+#: ``eps(-x, -y)`` of the cell, which every staggered path solved.  The
+#: glue (:func:`_stag_bloch_tau`), the far-field kernels and the incident load
+#: now all run the public carrier, so the solve is not rotated and no
+#: compensation is needed.  The two-sided measurement survives with its arms
+#: swapped: with ``+1.0`` a uniform out-of-plane slab reproduces
+#: ``berreman_jones_1d`` to round-off at oblique and conical incidence, with
+#: ``-1.0`` it sits at ~1e-03.  It stays a module constant so a test can walk
+#: BOTH arms through the shipped code.
+_OOP_ROT_SIGN = 1.0
+
+
+def _stag_bloch_tau(alpha0, period):
+    """The Bloch glue ``tau`` of the periodic seam hat (Granet Eq. 33) -- the
+    ONE place the staggered family fixes its transverse carrier.
+
+    The hat is ``Ltilde_1`` on the first segment and ``tau * Ltilde_2`` on the
+    last, i.e. ``f(P-) = tau f(0+)``.  For the PUBLIC carrier
+    ``exp(+i alpha0 x)`` (``f(x + P) = exp(+i alpha0 P) f(x)``) that is
+    ``tau = exp(+i alpha0 P)``.  ``alpha0`` is the DIMENSIONAL Bloch
+    wavenumber (``kx0 * k0``).  The far-field kernels
+    (:func:`_stag_fourier_projection`, :func:`_far_projector_mapped`) extract
+    order ``m`` with the CONJUGATE carrier ``exp(-i (m G + alpha0) x)`` and the
+    incident load (:func:`_stag_incident_load_mapped`) drives
+    ``exp(+i alpha0 . r)``, so all three agree with this glue.
+
+    POINT-MIRROR FIX (v5.50.1): v5.21 .. v5.50 used ``exp(-i alpha0 P)`` (with
+    the two kernels conjugated to match), a solve rotated by 180 degrees about
+    ``z`` -- the point mirror ``eps(-x, -y)`` of every patterned cell (see
+    :data:`_OOP_ROT_SIGN`)."""
+    return np.exp(1j * float(alpha0) * float(period))
 
 #: Constant relating the out-of-plane generator's magnetic state ``G = i Z0 H``
 #: to the Eq.-25 tangential-H partner ``[H1; H2]`` that :func:`_region_modes`
@@ -1740,7 +1769,7 @@ def _stag_cross_mass_1d(ba: Basis1D, bb: Basis1D, which: str):
 
     The LEFT set is CONJUGATED, and unlike the 1-D nodal SEM's real cross-mass
     this one is COMPLEX: :class:`Basis1D` glues its periodic hat with
-    ``tau = exp(-i alpha0 d)`` (Eq. 33), so the basis itself carries the Bloch
+    ``tau = exp(+i alpha0 d)`` (Eq. 33, :func:`_stag_bloch_tau`), so the basis itself carries the Bloch
     phase and both the mass and the cross-mass are complex.  ``Cab^T`` in the
     1-D mortar algebra is therefore ``Cab^H`` here -- using the transpose is a
     silent error at normal incidence (``tau = 1``) and O(1) at oblique.
@@ -2134,7 +2163,17 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
     on the corner (Duffy) rule with ``n`` nodes per direction per piece
     (:func:`_stag_duffy_points`); on the tensor rule its moments would only
     fall like ``n^-2`` and the criterion would run to the cap
-    (``validation/probe_pmm2d_curved/build_b/b1_quadrature_demand_M6.json``)."""
+    (``validation/probe_pmm2d_curved/build_b/b1_quadrature_demand_M6.json``).
+
+    Audit L-8 (2026-11-02): a PINCHED cell -- a wall line through an outline's
+    tangent point squeezes the cell to zero height there, so ``det J``
+    vanishes quadratically along a line through the cell -- makes ``1 / det
+    J`` and ``g / det J`` non-integrable.  Their moments then grow in
+    proportion to ``n`` and the raw moment error reads 0.5 at every count
+    (``|m_n - m_2n| / |m_2n|`` with ``m_2n = 2 m_n``).  Such cells
+    (:func:`_stag_map_pinched_cells`) get their own warning, which names them
+    and reports the moment error of the REST of the map; the node count is
+    unchanged (it still runs to the cap)."""
     from numpy.polynomial.legendre import legvander
     tol = _STAG_MAP_QUAD_TOL if tol is None else float(tol)
     cap = _STAG_MAP_QUAD_CAP if cap is None else int(cap)
@@ -2174,13 +2213,18 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
     n = 2 * int(M) + 8
     m_lo = moments(n)
     err = np.inf
+    # per-cell moment errors and moment growth of the LAST check, for the
+    # diagnostic only (the node count depends on ``err`` alone)
+    cells = [(sx, sy) for sx in range(bx.N) for sy in range(by.N)]
+    cell_err = [np.inf] * len(cells)
+    cell_growth = [1.0] * len(cells)
     while True:
         n2 = 2 * n
         m_hi = moments(n2) if n2 <= 2 * cap else None
         if m_hi is None:
             break
         err = 0.0
-        for cl, ch in zip(m_lo, m_hi):
+        for i, (cl, ch) in enumerate(zip(m_lo, m_hi)):
             # scales: sqrt(g) and 1 / sqrt(g) each on their own; the three
             # metric weights g11 / sqrt(g), g12 / sqrt(g), g22 / sqrt(g) are
             # the entries of ONE tensor (chi_t) and share its scale -- a map
@@ -2189,24 +2233,116 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
             # B build finding)
             sc = [float(np.max(np.abs(b))) for b in ch]
             ts = max(sc[2:])
+            ce = 0.0
             for k, (a, b) in enumerate(zip(cl, ch)):
                 s = sc[k] if k < 2 else ts
                 if not np.all(np.isfinite(a)):
-                    err = np.inf
+                    ce = np.inf
                 elif s > 0.0:
-                    err = max(err, float(np.max(np.abs(a - b))) / s)
+                    ce = max(ce, float(np.max(np.abs(a - b))) / s)
+            err = max(err, ce)
+            cell_err[i] = ce
+            sl = [float(np.max(np.abs(a))) for a in cl]
+            cell_growth[i] = max((h / lo if lo > 0.0 else 1.0)
+                                 for h, lo in zip(sc, sl))
         if err <= tol or n2 > cap:
             break
         n, m_lo = n2, m_hi
     if err > tol:
+        pinched = _stag_map_pinched_cells(
+            bx, by, cmap, 2 * n,
+            [c for c, e, g in zip(cells, cell_err, cell_growth)
+             if e > tol and g >= _STAG_MAP_PINCH_GROWTH
+             and c not in corners])
+        if not pinched:
+            warnings.warn(
+                f"Granet2DTransverseE: the coordinate map's geometric weights "
+                f"are not resolved to the quadrature tolerance {tol:.0e} "
+                f"within {n} Gauss nodes per axis per cell (moment error "
+                f"{err:.2e}); the operators carry a quadrature error of that "
+                f"order.  The map varies too sharply inside a cell -- add "
+                f"walls where it is steep, or soften it.", stacklevel=4)
+            return n
+        rest = [e for c, e in zip(cells, cell_err) if c not in pinched]
+        err_rest = max(rest) if rest else 0.0
+        where = "; ".join(
+            f"cell {c} near (x, y) = ({X / cmap.period_x:.4f}, "
+            f"{Y / cmap.period_y:.4f}) x the period"
+            for c, (X, Y) in pinched.items())
         warnings.warn(
-            f"Granet2DTransverseE: the coordinate map's geometric weights "
-            f"are not resolved to the quadrature tolerance {tol:.0e} within "
-            f"{n} Gauss nodes per axis per cell (moment error {err:.2e}); "
-            f"the operators carry a quadrature error of that order.  The map "
-            f"varies too sharply inside a cell -- add walls where it is "
-            f"steep, or soften it.", stacklevel=4)
+            f"Granet2DTransverseE: the coordinate map pinches a cell to zero "
+            f"width or height -- {where}.  A curved outline touches a wall "
+            f"line of the grid at its tangent point there (e.g. a bar wall "
+            f"placed exactly on a circle's top or bottom), so two opposite "
+            f"edges of the cell meet and det J = 0 along a line through the "
+            f"cell (a cusp).  The weights 1 / det J and g / det J are not "
+            f"integrable across that line, so their moments grow with the "
+            f"node count and the map-quadrature check cannot converge in "
+            f"that cell: its raw moment error {err:.2e} at {n} Gauss nodes "
+            f"per axis per cell measures that growth and is only a very "
+            f"loose upper bound, NOT the error of the operators.  The rest "
+            f"of the map reads a moment error of {err_rest:.2e} (tolerance "
+            f"{tol:.0e}).  R / T converge in the node count there, but only "
+            f"algebraically, and that is not checked here (measured on bar "
+            f"walls placed on a circle's tangent points: R changes by ~1e-7 "
+            f"from 144 to 288 nodes and lies within 1e-6 of a smooth fit "
+            f"through nearby heights, below the n_modes discretisation "
+            f"error).  To remove the cusp, move that wall away from the "
+            f"outline (outward, so it no longer touches it) by about 1e-3 of "
+            f"the period -- moving it into the outline folds the map and is "
+            f"refused; or accept the result.",
+            stacklevel=4)
+        if err_rest > tol:
+            warnings.warn(
+                f"Granet2DTransverseE: the coordinate map's geometric weights "
+                f"are not resolved to the quadrature tolerance {tol:.0e} "
+                f"within {n} Gauss nodes per axis per cell (moment error "
+                f"{err_rest:.2e} outside the pinched cells); the operators "
+                f"carry a quadrature error of that order.  The map varies too "
+                f"sharply inside a cell -- add walls where it is steep, or "
+                f"soften it.", stacklevel=4)
     return n
+
+
+#: A cell whose largest geometric-weight moment grows by at least this factor
+#: when the node count doubles (at the last check of :func:`_stag_map_nodes`)
+#: is a candidate PINCHED cell: a convergent (integrable) weight's moments
+#: settle, while ``1 / det J`` across a line where ``det J`` vanishes
+#: quadratically (a cell squeezed to zero height at an outline's tangent
+#: point) has moments that grow in proportion to the node count (factor 2).
+_STAG_MAP_PINCH_GROWTH = 1.5
+#: ... confirmed by the geometry: ``min det J / max det J`` over the cell's
+#: tensor-rule nodes below this.  Measured on bar walls placed exactly on a
+#: circle's tangent points: 2.8e-5 at 288 nodes (1.7e-3 at 36, so a cap
+#: below the default may miss it and fall back to the generic wording); the
+#: same walls 1e-3 of the period outside the tangent read 1.1e-2.
+_STAG_MAP_PINCH_DETJ = 1.0e-3
+
+
+def _stag_map_pinched_cells(bx, by, cmap, n, candidates):
+    """``{(sx, sy): (x, y)}`` -- the cells among ``candidates`` whose ``det
+    J`` on the ``n``-node tensor rule falls below :data:`_STAG_MAP_PINCH_DETJ`
+    of its own maximum (a cell pinched to zero height or width), each with
+    the physical point of its smallest ``det J``.  DIAGNOSTIC ONLY: it feeds
+    the wording of the :func:`_stag_map_nodes` warning, never the node count
+    or the weights."""
+    if not candidates:
+        return {}
+    xg, _wg = leggauss(int(n))
+    out = {}
+    for sx, sy in candidates:
+        U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+        V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+        X, Y, xu, xv, yu, yv = cmap.geom(sx, sy, U, V)
+        sg = np.abs(xu * yv - xv * yu)
+        top = float(np.max(sg))
+        if not top > 0.0:
+            continue
+        i = int(np.argmin(sg))
+        if float(sg.flat[i]) < _STAG_MAP_PINCH_DETJ * top:
+            out[(sx, sy)] = (float(np.broadcast_to(X, sg.shape).flat[i]),
+                             float(np.broadcast_to(Y, sg.shape).flat[i]))
+    return out
 
 
 def _stag_map_eff(eps, sg, g11, g12, g22):
@@ -2829,8 +2965,8 @@ class Granet2DTransverseE:
         self.k0 = float(k0)
         self.alpha0x = float(alpha0x)
         self.alpha0y = float(alpha0y)
-        taux = np.exp(-1j * alpha0x * px)
-        tauy = np.exp(-1j * alpha0y * py)
+        taux = _stag_bloch_tau(alpha0x, px)     # PUBLIC carrier (point-mirror
+        tauy = _stag_bloch_tau(alpha0y, py)     # fix: was exp(-i alpha0 p))
         self.bx = Basis1D(px, wx, M, taux)
         self.by = Basis1D(py, wy, M, tauy)
         self.eps_cell = np.asarray(eps_cell, dtype=_C)   # (Nx,Ny) or (Nx,Ny,3,3)
@@ -2865,15 +3001,18 @@ class Granet2DTransverseE:
         # cross-section taken at the layer's TOP -- normalised by the SAME
         # helper both 2-D engines and the 1-D entries use, so a scalar
         # ``slant=0.0`` and ``slant=None`` are one (vertical, byte-identical)
-        # path.  The INTERNAL shear of the frame ``x = u + t w`` is the
-        # NEGATIVE of it, pinned FOUR ways in the build doc's tables, each
-        # against an independently validated engine: B5 against
-        # ``pmm_efficiency_1d_slanted`` per order (1.22e-03 vs 4.15e-01), M4b
-        # against the hybrid slant metric (1.23e-02 vs 2.79e-01, and only the
-        # right arm improves with truncation), M4c against a pure-solver
-        # z-staircase (converges only marching WITH the slant), and B4a
-        # against the EXACT quartic roots (1.4e-14 vs 3.5e-02).  The rotation
-        # gauge flips it once more (:func:`_slant_rot_gauge`).
+        # path.  POINT-MIRROR FIX (v5.50.1): the INTERNAL shear of the frame
+        # ``x = u + t w`` IS the public pair -- checked against a fine fixed-
+        # RCWA z-staircase (formulation 'li') of the declared parallelogram
+        # to 2e-04 / 6e-05 (TM / TE rows), against 3.2e-02 / 1.5e-02 for the
+        # negated pair.  v5.21 .. v5.50 used the NEGATIVE, pinned four ways
+        # (build doc tables B5, M4b, M4c, B4a) against engines that were all
+        # point-mirrored at the time -- the 1-D slant solver, the hybrid
+        # slant metric, this solver's own staircase -- and then flipped once
+        # more by the rotation gauge (:func:`_slant_rot_gauge`, now the
+        # identity): one consistent mirror image.  The exact-quartic B4a gate
+        # survives (a uniform slab's dispersion is mirror-invariant only
+        # TOGETHER with the incidence, which the old basis also reversed).
         self.slant = _norm_slant_pair(slant, "Granet2DTransverseE")
         self.slanted = not _slant_is_zero(self.slant)
         self._slant_rot = (0.0, 0.0)
@@ -2892,7 +3031,7 @@ class Granet2DTransverseE:
             # A sheared cell IS an out-of-plane cell in the frame, ALWAYS.
             self.eps_lab = cell33               # the cell the CALLER passed
             self.eps_cell, txr, tyr = _slant_rot_gauge(
-                cell33, -self.slant[0], -self.slant[1])
+                cell33, self.slant[0], self.slant[1])
             self._slant_rot = (txr, tyr)
             self._eps_pre_rotated = True    # _assemble_oop must not re-rotate
         # OUT-OF-PLANE dispatch (Stage B).  The test is the RELATIVE floor the
@@ -3459,8 +3598,12 @@ class Granet2DTransverseE:
         ``e33``-Schur is POINTWISE per cell -- never a product of separately
         discretized factors, the ordering the 1-D ``gen2`` prototype got wrong.
 
-        THE ROTATION GAUGE (:data:`_OOP_ROT_SIGN`).  The shipped ``Basis1D``
-        glue is ``tau = exp(-i alpha0 p)``, so the basis carries
+        THE ROTATION GAUGE (:data:`_OOP_ROT_SIGN`) -- HISTORY: since the
+        point-mirror fix (v5.50.1) the glue runs the public carrier
+        (:func:`_stag_bloch_tau`), there is no rotation and the constant is
+        ``+1``; the account below is of v5.21 .. v5.50, whose rotation also
+        point-mirrored every patterned cell.  The ``Basis1D``
+        glue was ``tau = exp(-i alpha0 p)``, so the basis carried
         ``exp(-i alpha0 x)`` -- MEASURED, not asserted:
         ``validation/probe_pmm2d_staggered_oop/g0f_basis_phase_slope.py`` fits
         the reconstructed order-m field's phase slope at -2.65539 against
@@ -3481,10 +3624,11 @@ class Granet2DTransverseE:
         tensor is rotated by 180 degrees about z" are the SAME statement.  Both
         directions are measured in
         ``docs/audits/BUILD_PMM2D_STAGGERED_OOP_2026_09_09.md``: with the
-        rotation a uniform out-of-plane slab reproduces ``berreman_jones_1d`` to
+        rotation a uniform out-of-plane slab reproduced ``berreman_jones_1d`` to
         ~1e-15 at conical incidence; with ``_OOP_ROT_SIGN`` flipped to +1 the
-        same solve sits at ~1e-03, the size of the prototype's own
-        negate-the-out-of-plane-block negative control.
+        same solve sat at ~1e-03, the size of the prototype's own
+        negate-the-out-of-plane-block negative control.  (With the public glue
+        the arms swap: ``+1`` is the Berreman-exact one.)
 
         THE SLANT (roadmap Phase D, 2026-09-10).  A constant x-z / y-z shear
         adds exactly two things to the pencil below and NOTHING else: the
@@ -3915,21 +4059,22 @@ def _stag_fourier_projection(basis: Basis1D, orders, alpha0=0.0):
     _rules = {nq: (xg, wg, Vref)}
     # per-segment contribution of local function a to Rayleigh order m.  The
     # modal field is a BLOCH mode: the tau-glued basis carries the transverse
-    # momentum (tau = exp(-i alpha0 d)), so the physical field is
-    # ~ exp(-i alpha0 x) p(x), and the library's Rayleigh order m (far-field
-    # kxv = kx0 + m*wl/period) has transverse dependence e^{-i(alpha0 + mG)x}.
+    # momentum (tau = exp(+i alpha0 d), _stag_bloch_tau), so the physical field
+    # is ~ exp(+i alpha0 x) p(x), and the library's Rayleigh order m (far-field
+    # kxv = kx0 + m*wl/period) has transverse dependence e^{+i(alpha0 + mG)x}.
     # Its amplitude is recovered by projecting on the CONJUGATE kernel
-    # e^{+i(mG + alpha0) x}.  Both pieces of the kernel matter and each failure
+    # e^{-i(mG + alpha0) x}.  Both pieces of the kernel matter and each failure
     # is invisible in a subset of tests: omitting ``alpha0`` breaks the
     # one-period orthogonality at oblique (energy loss even in the specular
     # order); flipping the sign of ``m`` deposits physical order -m into slot m
     # (a MIRROR) -- exact at normal incidence (kz even in kx) and for
     # reflection-symmetric cells, but at oblique every |m|>0 order gets the
-    # WRONG kz flux factor (kz(+m) applied to order -m's amplitude), which
-    # leaked/gained several % energy for patterned cells (asymmetric-cell
-    # per-order oracle test vs pmm_efficiency_2d_cell pinned the form
-    # stag[m] = oracle[-m]*kz(m)/kz(-m) before this fix).
-    #   c[m, seg, a] = (1/d) INT_seg Ltilde_a(u(x)) e^{+i(mG + alpha0)x} dx
+    # WRONG kz flux factor (kz(+m) applied to order -m's amplitude).
+    # POINT-MIRROR FIX (v5.50.1): v5.21 .. v5.50 ran glue AND kernel with the
+    # opposite carrier (exp(-i alpha0 d) / e^{+i(mG + alpha0) x}) -- consistent
+    # with each other, but a 180-degree rotation of the whole solve, i.e. the
+    # point mirror of every patterned cell (see _OOP_ROT_SIGN).
+    #   c[m, seg, a] = (1/d) INT_seg Ltilde_a(u(x)) e^{-i(mG + alpha0)x} dx
     # SITE 4 of 4 for non-uniform segments: the quadrature points and the
     # ``J/d`` weight come from segment ``n``'s OWN affine map (Eq. 31).  On the
     # uniform path ``Jn[seg]`` is the constant ``J``, so the projector is
@@ -3947,7 +4092,7 @@ def _stag_fourier_projection(basis: Basis1D, orders, alpha0=0.0):
             else:
                 xg, wg, Vref = hit
         xphys = 0.5 * (xb[seg] + xb[seg + 1]) + J * xg     # physical x at quad pts
-        phase = np.exp(1j * np.outer(kvec, xphys))         # (nO, nq)
+        phase = np.exp(-1j * np.outer(kvec, xphys))        # (nO, nq)
         # contribution[m,a] = (J/d) sum_q phase[m,q] wg[q] Vref[a,q]
         T_local[:, seg, :] = (J / d) * (phase * wg) @ Vref.T
     # assemble onto the global dofs of a chosen set (list of (N,M) stencils)
@@ -4012,12 +4157,12 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
     :func:`_far_projector_2d`.
 
     The shipped kernel extracts order ``m`` as
-    ``a_m = (1/A) INT E(x, y) exp(+i k_m . r) dx dy`` (the sign is the
+    ``a_m = (1/A) INT E(x, y) exp(-i k_m . r) dx dy`` (the sign is the
     order-mirror fix of :func:`_stag_fourier_projection`).  Under the map the
     solver holds the COVARIANT components ``E' = J^T E`` on the ``(u, v)``
     cell, and ``dx dy = det J du dv``, so
 
-        a_m = (1/A) INT INT cof(J) E'(u, v) exp(+i k_m . Phi(u, v)) du dv
+        a_m = (1/A) INT INT cof(J) E'(u, v) exp(-i k_m . Phi(u, v)) du dv
         cof(J) = det J * J^-T = [[ y_v, -y_u], [-x_v, x_u]]
 
     i.e. ``det J E_x = y_v E'_u - y_u E'_v`` and ``det J E_y = -x_v E'_u +
@@ -4112,8 +4257,8 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
                 vals[nm + "x"] = (ix, cx[ix] @ Vref)
                 vals[nm + "y"] = (iy, cy[iy] @ Vref)
             w2 = (wg[:, None] * wg[None, :]) * (bx.Jn[sx] * by.Jn[sy] / A)
-            ph = xp.exp(1j * (kxv[:, None, None] * Xp[None]
-                              + kyv[:, None, None] * Yp[None]))
+            ph = xp.exp(-1j * (kxv[:, None, None] * Xp[None]     # conj of the
+                               + kyv[:, None, None] * Yp[None]))  # carrier
             # E'_u lives in V1 = B(u) (x) Btilde(v), E'_v in V2 = Btilde(u)
             # (x) B(v); the four cofactor entries select the output component
             for key, coef, xs, ys in (("xu", yv, "Bx", "Ty"),
@@ -4158,12 +4303,12 @@ def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
     (Phase C of the curved-cell plan; Phase B finding F-B4, Phase A verifier
     D4).
 
-    The incident wave is ``E_t(x, y) = e0 exp(-i (alpha0x x + alpha0y y))``
+    The incident wave is ``E_t(x, y) = e0 exp(+i (alpha0x x + alpha0y y))``
     (the far-field convention of :func:`_stag_fourier_projection`: order 0
-    has transverse dependence ``e^{-i alpha0 . r}``, ``e0 = (E_x, E_y)``).
+    has transverse dependence ``e^{+i alpha0 . r}``, ``e0 = (E_x, E_y)``).
     In the solver's ``(u, v)`` frame its COVARIANT components are
-    ``E'_u = e0 . dPhi/du e^{-i alpha0 . Phi}`` and ``E'_v = e0 . dPhi/dv
-    e^{-i alpha0 . Phi}`` (``E' = J^T E``), which are NOT polynomials under a
+    ``E'_u = e0 . dPhi/du e^{+i alpha0 . Phi}`` and ``E'_v = e0 . dPhi/dv
+    e^{+i alpha0 . Phi}`` (``E' = J^T E``), which are NOT polynomials under a
     non-polynomial map: the plane wave is not an exact discrete half-space
     mode.  Its faithful representation is the L2 projection onto the
     staggered basis, ``G c = b`` with ``G`` the PLAIN block Gram and
@@ -4235,7 +4380,7 @@ def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
                 Vv = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
                 X = cmap.geom(sx, sy, U, Vv)
             Xp, Yp, xu, xv, yu, yv = X
-            ph = xp.exp(-1j * (a0x * Xp + a0y * Yp))
+            ph = xp.exp(1j * (a0x * Xp + a0y * Yp))      # PUBLIC carrier
             w2 = (wg[:, None] * wg[None, :]) * (bx.Jn[sx] * by.Jn[sy])
             f1 = (ex0 * xu + ey0 * yu) * ph * w2           # E'_u
             f2 = (ex0 * xv + ey0 * yv) * ph * w2           # E'_v

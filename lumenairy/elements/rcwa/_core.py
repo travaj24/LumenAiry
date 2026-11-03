@@ -2000,6 +2000,16 @@ def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y, *,
 # it guards.
 
 
+# The complete key vocabulary of each analytic shape kind (what
+# ``_shape_form_factor`` reads); anything else is refused by
+# ``_validate_shapes`` rather than silently ignored.
+_SHAPE_KEYS = {
+    "rectangle": frozenset({"shape", "eps", "center", "size"}),
+    "disk": frozenset({"shape", "eps", "center", "radius"}),
+    "ellipse": frozenset({"shape", "eps", "center", "semi_axes"}),
+}
+
+
 def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
     """Validate the analytic-shape list against the silent-wrong-answer traps,
     each rejected up front with a ``fn_name:`` prefix:
@@ -2008,6 +2018,9 @@ def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
       missing / non-numeric ``eps``, geometry or ``center`` entry.  These used
       to surface as a bare ``KeyError('radius')`` / ``TypeError`` from deep
       inside the form factors (audit W8 2026-07-27);
+    * an unknown key (anything outside ``_SHAPE_KEYS[kind]``) -- the form
+      factors never read it, so e.g. a rectangle's ``angle`` was silently
+      dropped and the shape solved unrotated;
     * zero or negative size -- a non-positive dimension vanishes or sign-flips
       the shape's contribution to the permittivity spectrum;
     * area fraction > 1 -- a shape whose area exceeds the cell drives the
@@ -2059,7 +2072,6 @@ def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
             raise ValueError(
                 f"{fn_name}: shapes[{i}] has unknown shape {kind!r} (expected "
                 f"'rectangle', 'disk' or 'ellipse').")
-
         def _req(key, n, what, _i=i, _sh=sh, _kind=kind):
             """The required geometry entry, as a tuple of ``n`` floats."""
             if key not in _sh:
@@ -2107,6 +2119,18 @@ def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
             raise ValueError(
                 f"{fn_name}: shapes[{i}] ({kind}) has a non-finite center "
                 f"{(cx, cy)!r}; the form factor's phase would be NaN.")
+        extra = sorted(set(sh) - _SHAPE_KEYS[kind])
+        if extra:
+            # An unread key is silently dropped by the form factors -- e.g.
+            # ``angle=0.7`` on a rectangle solved it UNROTATED (|dR| = 0.0
+            # where a genuinely rotated rectangle moves R by 2.7e-2; Phase D
+            # verification 2026-11-03).  The vocabulary has no rotation.
+            raise ValueError(
+                f"{fn_name}: shapes[{i}] ({kind}) has unknown "
+                f"key(s) {extra}; a {kind} takes only "
+                f"{sorted(_SHAPE_KEYS[kind])}.  Shapes are axis-aligned "
+                f"(there is no rotation) -- an unknown key would be silently "
+                f"ignored, so it is refused.")
         descs.append((kind, sup_x, sup_y, (cx, cy)))
         for d in dims:
             if not (np.isfinite(d) and d > 0.0):
@@ -2202,6 +2226,98 @@ def _validate_shapes(fn_name, shapes, period_x, period_y, *, n_orders_y=None):
                 f"return the y-averaged structure's answer (measured on a disk: "
                 f"R00 = 0.0548 against the y-resolved 0.0069, with a 4.4e-16 "
                 f"energy closure -- undetectable).  Use n_orders_y >= 1.")
+
+
+
+# ===========================================================================
+# Public -> internal bridge for the LATERAL structure (the point mirror)
+# ===========================================================================
+#
+# THE ONE PLACE where a patterned layer's PUBLIC description becomes the cell
+# the convolution kernels read (``_eps_convolution_2d``, ``_li_convolutions_2d*``,
+# ``_nv_field_2d``, ``_analytic_convolutions_2d``, ``_toeplitz_of_profile``).
+#
+# The public gauge is ``exp(-i w t)`` with ``E = sum_m S_m exp(+i kx_m x)``;
+# the eigenmode/S-matrix core runs in ``exp(+i w t)``, reached by complex
+# conjugation.  Conjugation maps the permittivity to ``conj(eps)`` AND the
+# transverse carrier ``exp(+i kx_m x)`` to ``exp(-i kx_m x)``, so the internal
+# Toeplitz the core needs is
+#
+#     T_int[m, m'] = conj(c_{m - m'}),   c_k = < eps(x) exp(-i k K x) >_x
+#
+# (the conjugate of the public Toeplitz).  The kernels, however, implement the
+# PUBLIC rule ``[m, m'] = FT_{m - m'}[f]`` on whatever cell they are handed.
+# Fed ``f = conj(eps)`` -- as every bridge did from v5.5.0 to v5.50.0 -- they
+# return ``FT_{m-m'}[conj eps] = conj(c_{m' - m})``: the transpose, which is the
+# Toeplitz of ``conj(eps(-x, -y))``.  The solver therefore solved the POINT
+# MIRROR of the declared cell, while the incidence (``kx0``, ``ky0``) and the
+# order labels kept the public meaning (a UNIFORM layer, tensor or not, has no
+# lateral structure and was always right).
+#
+# The fix is a pure COORDINATE flip of the pattern, applied here and nowhere
+# else: ``FT_{m-m'}[conj eps(-x, -y)] = conj(c_{m - m'})`` exactly.  Tensor
+# COMPONENTS are NOT transformed -- only where each value sits; the kx-linear
+# off-plane terms (``EZX``, ``EXZ`` ...) already carry the right sign, as the
+# uniform tilted-tensor slab proves against the analytic answer at +/-theta.
+# Every downstream reader of the internal cell (the Li / FFF / normal-vector
+# blocks, the even-parity probe, the E_z recovery of the internal field) sees
+# the same flipped cell, so they stay mutually consistent by construction.
+# For analytic SHAPES the same operator is reached more directly: build the
+# PUBLIC analytic Toeplitz and conjugate it (``twod._internal_analytic_
+# convolution``) -- the identity ``T_int = conj(T_pub)`` that the pixel flip
+# realises, with no geometry rewriting at all.
+
+
+def _point_mirror_index(n):
+    """Host int index ``j -> (-j) mod n`` -- the exact point mirror ``x -> -x``
+    of the NODE lattice ``x_j = j P / n`` that defines a pixel for the whole
+    suite (see :func:`~lumenairy.elements.rcwa.twod._eps_convolution_2d`).  Its
+    DFT is ``c_k -> c_{-k}`` exactly, for any ``n`` (odd or even)."""
+    return (-np.arange(int(n))) % int(n)
+
+
+def _internal_cell(cell, xp=None):
+    """PUBLIC pixel cell (``(Sx, Sy)`` scalar or ``(Sx, Sy, 3, 3)`` tensor) ->
+    the INTERNAL-gauge cell every convolution kernel reads:
+    ``out[j, i, ...] = conj(cell[-j mod Sx, -i mod Sy, ...])``.
+
+    Conjugation is the loss-sign half of the bridge; the node-lattice point
+    mirror is the carrier half (see the block comment above).  Only the two
+    LATERAL axes are re-indexed; tensor components are untouched.  The gather
+    uses plain host int arrays, so it runs unchanged on NumPy / CuPy / JAX and
+    is differentiable (a permutation) w.r.t. every pixel value."""
+    xp = array_namespace(cell) if xp is None else xp
+    c = xp.conj(xp.asarray(cell))
+    c = c[_point_mirror_index(c.shape[0])]
+    if c.ndim >= 2 and c.shape[1] > 1:
+        c = c[:, _point_mirror_index(c.shape[1])]
+    return c
+
+
+# The ANALYTIC-SHAPE form of the bridge is
+# :func:`~lumenairy.elements.rcwa.twod._internal_analytic_convolution`: the
+# conjugate of the PUBLIC analytic ``[[eps]]`` (``conj(c_{m-m'})`` exactly, by
+# construction, for ANY form factor -- no per-primitive reflection rule).
+
+
+def _internal_profiles_1d(profiles, edges, xp):
+    """Point mirror ``x -> -x`` of INTERNAL-gauge (already conjugated) 1-D
+    per-component profiles (the carrier half of the bridge for the 1-D Jones
+    family; :func:`_jones_1d_from_profiles` is its one caller).
+
+    ``edges`` given (piecewise-constant VALUE arrays on ``[e_s, e_{s+1})``):
+    segment ``s`` moves to ``[1 - e_{s+1}, 1 - e_s)``, i.e. the edges become
+    ``1 - edges[::-1]`` and the value arrays reverse -- the exact mirror
+    (``_step_coeffs`` then returns ``c_{-k}``).  ``edges=None`` (a uniform node
+    SAMPLING): the node-lattice index mirror of :func:`_internal_cell`.
+    Returns ``(profiles, edges)``."""
+    if edges is None:
+        return ({k: xp.asarray(v)[_point_mirror_index(xp.asarray(v).shape[0])]
+                 for k, v in profiles.items()}, None)
+    e = np.asarray(edges, dtype=float)
+    rev = np.arange(e.shape[0] - 2, -1, -1)
+    mirrored = tuple(float(v) for v in (1.0 - e[::-1]))
+    return ({k: xp.asarray(v)[rev] for k, v in profiles.items()}, mirrored)
 
 
 
@@ -3399,6 +3515,27 @@ def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
        cross-check against a direct higher-``N`` solve.  It is most reliable
        for clean dielectric convergence and as a per-order error gauge.
 
+    .. note::
+       LOSSY-METAL CORNERS (audit L-1, 2026-11-02 DynaMeta bridge audit).
+       Even a monotone tail can be PRE-ASYMPTOTIC: the corner singularity
+       makes every method algebraic, and the local exponent keeps drifting
+       over the ``N`` range a user can afford, so the three-point
+       ``'richardson'`` limit moves with the window.  Measured on a 1-D
+       lamellar grating (lambda 1.31 um, period 600 nm, eps -20+2i, duty 0.5,
+       depth 120 nm, air over an n = 1.5 substrate, normal incidence, TM),
+       ``RCWAStack`` ``formulation='li'`` (``eps_cell``, ``Sx = 8 N``): the
+       local rate falls N^-1.11 (N 128-256) -> N^-0.99 (512-768) ->
+       N^-0.89 (1024-1536), and this function returns 0.508376 from
+       N = 32 / 64 / 128, 0.508747 from 256 / 384 / 512 / 768 (it uses the
+       last three), 0.508743 from 512 / 768 / 1024 and 0.508763 from
+       768 / 1024 / 1536 -- against the truth 0.508768 from ``PMMStack``
+       degree extrapolation (degree 24 .. 256, rate degree^-2.2, the same
+       function on degree windows returns 0.508768 for every window from
+       64 / 96 / 128 up).  ``'laurent'`` on the same fixture approaches from
+       above (0.50945 at N = 768).  For a 1-D metallic reference use PMM
+       degree extrapolation; for ``'li'`` quote the spread of the last two
+       windows as the uncertainty.
+
     Parameters
     ----------
     values : array-like of float
@@ -4577,7 +4714,18 @@ def _jax_eig_stable():
         return lam, V
 
     def _eig_raw_fwd(A, tau_rel):
+        # An eager gradient through the cluster rule decomposes the same
+        # concrete matrix twice (the first pass of _jax_cluster_routed and the
+        # rule's forward); the per-call memo (_JaxEigMemo) hands the second
+        # call the first one's arrays when the input BITS are identical.
+        memo = _JAX_EIG_MEMO.get()
+        if memo is not None:
+            hit = memo.lookup(A)
+            if hit is not None:
+                return hit, hit
         lam, V = jnp.linalg.eig(A)
+        if memo is not None:
+            memo.store(A, (lam, V))
         return (lam, V), (lam, V)
 
     def _eig_raw_bwd(tau_rel, res, cot):
@@ -4910,7 +5058,15 @@ def _jax_eig_cluster_vjp():
                 _o, v = jax.vjp(lambda e, *c: conv(e, jnp.asarray(True), *c),
                                 eo, *consts)
                 return v(ct)
-            eb, *cb = jax.lax.cond(use, at_eig, lambda _: dvjp(ct), None)
+            # concrete (eager) predicate: a Python branch -- a fresh lax.cond
+            # here compiled a new XLA program on every eager gradient
+            # (block comment above _cc_internals)
+            pick = _concrete_bool(use)
+            if pick is None:
+                eb, *cb = jax.lax.cond(use, at_eig, lambda _: dvjp(ct),
+                                       None)
+            else:
+                eb, *cb = at_eig(None) if pick else dvjp(ct)
         else:
             use = jnp.asarray(False)
             eb, *cb = dvjp(ct)
@@ -4946,7 +5102,13 @@ def _jax_eig_cluster_vjp():
             # for all of them, which is exact for the others too (their lift
             # is zero: four evaluations at the same point, weights summing
             # to one).
-            LGb = jax.lax.cond(_batch_any()(anyc), lifted, plain, None)
+            pred = _batch_any()(anyc)
+            # eager vmap: the OR is concrete -- a Python branch (as above)
+            pick = _concrete_bool(pred)
+            if pick is None:
+                LGb = jax.lax.cond(pred, lifted, plain, None)
+            else:
+                LGb = lifted(None) if pick else plain(None)
         else:
             LGb = lifted(None) if flag else plain(None)
         return (*LGb, Kb, Ab, Sb, *cb)
@@ -4954,6 +5116,334 @@ def _jax_eig_cluster_vjp():
     core.defvjp(core_fwd, core_bwd)
     _JAX_EIG_CLUSTER_VJP = core
     return core
+
+
+# ---------------------------------------------------------------------------
+# The closure conversions of the rule, without their per-call overhead (L-2)
+# ---------------------------------------------------------------------------
+# Measured on the eager GATE D gradient of DynaMeta's lumenairy_berreman_jax
+# (5.50.0, cProfile of 10 gradients, 12.8 s): ``jax.checking_leaks()`` around
+# the two ``jax.closure_convert`` calls cost 2.47 s (its trace-exit check runs
+# ``gc.collect()`` and it bypasses every nested trace cache), and the eager
+# evaluation of the re-record jaxpr ran the WHOLE solve again -- its eigs and
+# everything downstream of them -- to read back the problems only.
+#
+# * ``checking_leaks`` was there only to reach ``closure_convert``'s UNCACHED
+#   path: its strong LRU is keyed by the (fresh, per-call) function, so a
+#   cached conversion pins every call's arrays.  The same uncached path is
+#   taken here directly (``_closure_convert_uncached``: the body of
+#   ``jax._src.custom_derivatives._closure_convert_for_avals``, which is what
+#   ``closure_convert`` runs under leak checking), so nothing is pinned and
+#   no leak check runs.  The traced jaxpr is the same one (the leak-checking
+#   flag changes which caches are consulted, not what is traced).
+# * ``dce=True`` (EAGER only, see ``_jax_eager_regime``) drops the WHOLE
+#   equations whose results no output uses (``_dce_whole_equations``).  Every
+#   equation that remains is the original one, evaluated as before (one
+#   primitive -- or one inner ``jit`` -- at a time, same inputs), so every
+#   value is the same bit for bit.  EVERY closed-over constant stays an input
+#   (a constant only dead code read still reaches the rule as an input and
+#   gets its instantiated zero cotangent, as in 5.50.0: at a point where its
+#   producer's derivative is infinite that zero is pushed through it and
+#   gives NaN, as it does under ``jit`` -- dropping it gave 0 eagerly).
+#   Under a staging trace (``jit``, ``scan`` ...) the conversions do no DCE.
+#   An eagerly built (DCE'd) consumer can still be staged LATER -- inside the
+#   reverse pass's ``lax.cond`` when its predicate is traced, or by a
+#   ``jit`` of the returned ``vjp`` function -- and that staged program then
+#   lacks the dead equations; the values are the same, because JAX removes
+#   dead code before lowering in any case.  A function traced under ``jit``
+#   from the start lowers to exactly the 5.50.0 text (pinned).
+# * The eager first pass and the rule's forward decompose the same concrete
+#   matrices: ``_JaxEigMemo`` hands the second ``eig`` the first one's arrays
+#   when the input bytes are identical (the second LAPACK call per problem
+#   was the other half of the eager eig cost).
+# * The reverse pass branches in PYTHON on a concrete predicate (eager, and
+#   eager ``vmap`` -- ``_batch_any`` returns the unbatched OR there): the
+#   ``lax.cond`` it replaces was built from fresh closures on every eager
+#   gradient, so every gradient compiled a new XLA program and kept it in
+#   JAX's strong primitive cache (measured on the 1-D RCWA stack: one cond,
+#   one compilation and ~19 MB of RSS per gradient; 75-80 % of the remaining
+#   eager rule-on time).  The branch taken evaluates op by op instead of as
+#   one compiled program, so eager gradients move from 5.50.0's by
+#   round-off: without a firing cluster <= 9e-14 relative on the three
+#   benchmark workloads and 6e-13 on a two-layer stack whose gradient is
+#   small against its terms (measured); up to ~2e-8 where a firing
+#   cluster's lifted stencil amplifies round-off by ~1 / split_rel.  The eager vmap gradient now equals the eager one bit
+#   for bit, so that deviation IS 5.50.0's own eager-vs-vmap spread; against
+#   an extrapolated finite-difference reference every mode, old and new,
+#   lies 4e-9 .. 3.4e-8 from it at a firing cluster and the new values stay
+#   inside 5.50.0's envelope -- round-off, not an accuracy loss.  A traced
+#   predicate keeps the ``lax.cond``: under ``jit``, and in a nested eager
+#   ``vmap(vmap(grad))``, whose OR is still batched by the outer ``vmap``
+#   (that case still compiles once per gradient).
+# The lean path is self-tested once, on first use (``_lean_impl``), against
+# ``jax.closure_convert`` on a small closure; if the JAX internals are not
+# where this expects them, or the self-test disagrees or raises, or a lean
+# conversion raises, the 5.50.0 path (``closure_convert`` under
+# ``checking_leaks``, ``lax.cond`` always) is used instead -- which
+# ``_CLUSTER_RULE_LEAN = False`` also selects (the A/B switch of the pinning
+# test and the benchmark).
+_CLUSTER_RULE_LEAN = True
+_CC_INTERNALS = None
+_LEAN_SELFTEST = None   # None: not run yet; True: passed; False: failed
+_LEAN_SELFTEST_LOCK = threading.Lock()
+
+
+def _cc_internals():
+    """The JAX internals of :func:`_closure_convert_uncached` (resolved once),
+    or ``False`` when they are not available."""
+    global _CC_INTERNALS
+    if _CC_INTERNALS is None:
+        try:
+            from jax._src import core as jcore, linear_util as lu
+            from jax._src.api_util import debug_info, flatten_fun_nokwargs
+            from jax._src.custom_derivatives import (
+                _maybe_perturbed,
+                partition_list,
+            )
+            from jax._src.interpreters import ad, batching, partial_eval as pe
+            from jax._src.util import split_list
+            getattr(pe, "trace_to_jaxpr_dynamic")
+            for name in ("eval_jaxpr", "typeof", "trace_ctx", "EvalTrace",
+                         "Var"):
+                getattr(jcore, name)
+            eager_traces = (ad.LinearizeTrace, ad.JVPTrace,
+                            batching.BatchTrace)
+            _CC_INTERNALS = (jcore, lu, debug_info, flatten_fun_nokwargs,
+                             _maybe_perturbed, partition_list, pe, split_list,
+                             eager_traces)
+        except (ImportError, AttributeError):  # pragma: no cover
+            _CC_INTERNALS = False
+    return _CC_INTERNALS
+
+
+def _lean_selftest_body(impl):
+    """Convert one small closure (a traced closed-over value, a dead use of
+    it, a select argument) with the lean helper and with
+    ``jax.closure_convert``: the same number of hoisted constants, the same
+    staged program text (``make_jaxpr`` of the gradient, no DCE), and the
+    same eager value and gradient bit for bit (with DCE).  Raises on any
+    difference."""
+    import jax
+    import jax.numpy as jnp
+    n_consts = {}
+
+    def outer(s, lean, dce):
+        w = jnp.arange(1.0, 4.0) * s
+        k = jnp.cos(s)
+
+        def fn(e, u):
+            _dead = jnp.exp(w) * k
+            return jnp.where(u, e, jnp.sin(e) * w + jnp.sum(jnp.cos(w)))
+        ex = (jnp.zeros(3), jnp.asarray(False))
+        if lean:
+            conv, cs = _closure_convert_lean(impl, fn, *ex, dce=dce)
+        else:
+            with jax.checking_leaks():
+                conv, cs = jax.closure_convert(fn, *ex)
+        n_consts[(lean, dce)] = len(cs)
+        return jnp.sum(conv(jnp.arange(3.0), jnp.asarray(False), *cs) ** 2)
+
+    x = jnp.asarray(0.7)
+    ref = jax.value_and_grad(lambda s: outer(s, False, False))(x)
+    new = jax.value_and_grad(lambda s: outer(s, True, True))(x)
+    for a, b in zip(ref, new):
+        if not np.array_equal(np.asarray(a), np.asarray(b)):
+            raise AssertionError(f"eager value {a} != {b}")
+    t_ref = str(jax.make_jaxpr(jax.grad(lambda s: outer(s, False, False)))(x))
+    t_new = str(jax.make_jaxpr(jax.grad(lambda s: outer(s, True, False)))(x))
+    if t_ref != t_new:
+        raise AssertionError("staged program text differs")
+    if len(set(n_consts.values())) != 1:
+        raise AssertionError(f"hoisted constants differ: {n_consts}")
+
+
+def _lean_impl():
+    """The JAX internals of the lean path when it is switched on, resolved
+    and SELF-TESTED (once, in a fresh thread so no caller's trace is
+    active), else ``False`` (the 5.50.0 path).  A failed self-test warns
+    once and switches the lean path off for the process."""
+    global _LEAN_SELFTEST
+    if not _CLUSTER_RULE_LEAN:
+        return False
+    impl = _cc_internals()
+    if not impl:
+        return False
+    if _LEAN_SELFTEST is None:
+        with _LEAN_SELFTEST_LOCK:          # concurrent first use: run once
+            if _LEAN_SELFTEST is None:
+                _LEAN_SELFTEST = _run_lean_selftest(impl)
+    return impl if _LEAN_SELFTEST else False
+
+
+def _run_lean_selftest(impl):
+    """Run :func:`_lean_selftest_body` in a fresh thread; True only when it
+    RETURNED (a thread that dies of a ``BaseException`` or cannot be started
+    counts as a failure).  A failure warns once."""
+    err, ok = [], []
+
+    def run():
+        try:
+            _lean_selftest_body(impl)
+        except Exception as exc:  # untypeable: private-JAX-API probe
+            err.append(exc)
+            return
+        ok.append(True)                    # the LAST statement of a pass
+
+    th = threading.Thread(target=run, name="lumenairy-lean-selftest",
+                          daemon=True)
+    try:
+        th.start()
+    except RuntimeError as exc:            # no thread can be started
+        err.append(exc)
+    else:
+        th.join()
+    passed = bool(ok) and not err
+    if not passed:
+        why = (f"{type(err[0]).__name__}: {err[0]}" if err
+               else "the self-test thread did not complete")
+        warnings.warn(
+            f"lumenairy: the lean closure conversion of the JAX "
+            f"degenerate-cluster rule failed its self-test on this JAX "
+            f"({why}); using the 5.50.0 path (slower eager gradients, the "
+            f"5.50.0 values).", RuntimeWarning, stacklevel=3)
+    return passed
+
+
+def _jax_eager_regime():
+    """True when no STAGING trace is active: the current JAX trace is the
+    eager evaluation, possibly under autodiff / vmap traces only (``jax.grad``,
+    ``jax.vjp``, ``jax.vmap`` called eagerly).  False under ``jit`` (and any
+    other staging trace), for an unknown trace type, or when the lean path is
+    off or unavailable -- the conservative answer, which keeps the 5.50.0
+    staged program."""
+    impl = _lean_impl()
+    if not impl:
+        return False
+    jcore, eager_traces = impl[0], impl[8]
+    t = jcore.trace_ctx.trace
+    for _ in range(256):
+        if type(t) is jcore.EvalTrace:
+            return True
+        if not isinstance(t, eager_traces):
+            return False
+        t = getattr(t, "parent_trace", None)
+    return False
+
+
+def _concrete_bool(x):
+    """``bool(x)`` when ``x`` is concrete and the lean path is on, else
+    ``None`` (a traced predicate: the caller keeps its ``lax.cond``)."""
+    if not _lean_impl():
+        return None
+    import jax
+    if isinstance(x, jax.core.Tracer):
+        return None
+    try:
+        return bool(x)
+    except jax.errors.ConcretizationTypeError:  # pragma: no cover
+        return None
+
+
+def _dce_whole_equations(jcore, jaxpr):
+    """``jaxpr`` without the equations no output depends on.  WHOLE
+    equations only: a kept equation is the original object, never rewritten
+    -- unlike ``pe.dce_jaxpr``, which also prunes unused outputs INSIDE a
+    kept ``jit`` / ``cond`` / ``scan`` and so would change the program XLA
+    compiles for it.  An equation with effects is always kept, and so is
+    every constvar and input (see the block comment above).  On an
+    unexpected jaxpr API the input is returned unchanged (no DCE, same
+    values)."""
+    try:
+        used = {v for v in jaxpr.outvars if isinstance(v, jcore.Var)}
+        keep = []
+        for eqn in reversed(jaxpr.eqns):
+            if eqn.effects or any(v in used for v in eqn.outvars):
+                keep.append(eqn)
+                used.update(v for v in eqn.invars
+                            if isinstance(v, jcore.Var))
+        if len(keep) == len(jaxpr.eqns):
+            return jaxpr
+        keep.reverse()
+        return jaxpr.replace(eqns=keep)
+    except (AttributeError, TypeError, ValueError):  # pragma: no cover
+        return jaxpr
+
+
+def _jax_eval_trace_current():
+    """True when the current JAX trace is the plain eager evaluation (no
+    autodiff, vmap or staging trace at all: nothing can be differentiated)."""
+    impl = _cc_internals()
+    return bool(impl) and type(impl[0].trace_ctx.trace) is impl[0].EvalTrace
+
+
+def _closure_convert_lean(impl, fun, *example_args, dce=False,
+                          fun_errors=None):
+    """The lean conversion itself (see :func:`_closure_convert_uncached`).
+    An exception raised by ``fun`` itself is appended to ``fun_errors`` (when
+    given) before it propagates."""
+    import jax
+    if fun_errors is not None:
+        user_fun = fun
+
+        def fun(*a):
+            try:
+                return user_fun(*a)
+            except BaseException as exc:
+                fun_errors.append(exc)
+                raise
+    (jcore, lu, debug_info, flatten_fun_nokwargs, _maybe_perturbed,
+     partition_list, pe, split_list, _eager) = impl
+    flat_args, in_tree = jax.tree_util.tree_flatten(example_args)
+    in_avals = tuple(map(jcore.typeof, flat_args))
+    dbg = debug_info("closure_convert", user_fun if fun_errors is not None
+                     else fun, example_args, {})
+    wrapped_fun, out_tree = flatten_fun_nokwargs(
+        lu.wrap_init(fun, debug_info=dbg), in_tree)
+    jaxpr, _out_avals, consts = pe.trace_to_jaxpr_dynamic(wrapped_fun,
+                                                          in_avals)
+    out_tree = out_tree()
+    if dce:
+        jaxpr = _dce_whole_equations(jcore, jaxpr)
+    (closure_consts, const_args), merge = partition_list(_maybe_perturbed,
+                                                         consts)
+    num_consts = len(const_args)
+
+    def converted_fun(*args_hconsts):
+        num_args = len(args_hconsts) - num_consts
+        args, cargs = split_list(args_hconsts, [num_args])
+        cs = merge(closure_consts, cargs)
+        all_args, in_tree2 = jax.tree_util.tree_flatten(tuple(args))
+        if in_tree != in_tree2:
+            raise TypeError(
+                f"_closure_convert_uncached: the inputs must have the pytree "
+                f"structure of the example arguments ({in_tree}), got "
+                f"{in_tree2}")
+        out_flat = jcore.eval_jaxpr(jaxpr, cs, *all_args)
+        return jax.tree_util.tree_unflatten(out_tree, out_flat)
+
+    return converted_fun, const_args
+
+
+def _closure_convert_uncached(fun, *example_args, dce=False):
+    """``jax.closure_convert(fun, *example_args)`` through its UNCACHED path
+    and without leak checking; with ``dce`` the jaxpr's dead equations are
+    dropped first (block comment above).  Returns ``(converted_fun,
+    const_args)`` like ``closure_convert``.  A failure of the lean
+    conversion MACHINERY falls back, for this call, to the 5.50.0
+    conversion; an exception raised by ``fun`` itself propagates unchanged
+    (``fun`` is not run a second time -- a solve may count its passes)."""
+    import jax
+    impl = _lean_impl()
+    if impl:
+        fun_errors = []
+        try:
+            return _closure_convert_lean(impl, fun, *example_args, dce=dce,
+                                         fun_errors=fun_errors)
+        except Exception:  # untypeable: private-JAX-API boundary, see above
+            if fun_errors:
+                raise
+    with jax.checking_leaks():
+        return jax.closure_convert(fun, *example_args)
 
 
 def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
@@ -5009,13 +5499,12 @@ def _jax_eig_cluster_adjoint(eig_fn, problems, consumer, *, gap_rel=None,
         lambda a, b: tuple(eig_fn(L, G) for L, G in zip(a, b)), Ls, Gs)
     example = jax.tree_util.tree_map(lambda s: jnp.zeros(s.shape, s.dtype),
                                      shapes)
-    # ``closure_convert`` caches its result in a STRONG LRU keyed by the
-    # (fresh, per-call) consumer: with leak checking on it takes its uncached
-    # path, so an eager loop of gradients does not pin every call's arrays.
+    # Uncached closure conversion (``jax.closure_convert`` would pin every
+    # call's arrays in its strong LRU) -- see _closure_convert_uncached.
     has_select = select_flag is not None
     fn = consumer if has_select else (lambda e, _u: consumer(e))
-    with jax.checking_leaks():
-        conv, consts = jax.closure_convert(fn, example, jnp.asarray(False))
+    conv, consts = _closure_convert_uncached(
+        fn, example, jnp.asarray(False), dce=_jax_eager_regime())
 
     def _anc(a):
         if a is None or (not hasattr(a, "shape") and len(a) == 0):
@@ -5141,11 +5630,72 @@ class _RouteReplay:
         return jnp.logical_and(uniform, jnp.logical_not(self.grad_branch))
 
 
+class _JaxEigMemo:
+    """The per-call eig memo of an EAGER gradient through
+    :func:`_jax_cluster_routed`: the differentiated eig's forward
+    (``_eig_raw_fwd``) stores ``(lam, V)`` of every CONCRETE matrix it
+    decomposes, keyed by the matrix's exact bytes (shape, dtype and every
+    bit -- not ``==``, which equates -0.0 and +0.0), and a later call on a
+    bit-identical matrix gets those arrays back instead of a second LAPACK
+    call.  ``eig`` is a pure function of its input bits, so the returned
+    values (and the residuals of its VJP, which are the same ``(lam, V)``)
+    are the ones the second call would have computed.  A matrix that differs
+    in any bit, or a traced one, is simply decomposed."""
+
+    __slots__ = ("entries",)
+
+    def __init__(self):
+        self.entries = []
+
+    @staticmethod
+    def _key(A):
+        import jax
+        if isinstance(A, jax.core.Tracer) or not isinstance(A, jax.Array):
+            return None
+        a = np.asarray(A)
+        return (a.shape, a.dtype.str, a.tobytes())
+
+    def lookup(self, A):
+        k = self._key(A)
+        if k is None:
+            return None
+        for kk, val in self.entries:
+            if kk == k:
+                return val
+        return None
+
+    def store(self, A, val):
+        k = self._key(A)
+        if k is not None:
+            self.entries.append((k, val))
+
+
+_JAX_EIG_MEMO: "_contextvars.ContextVar" = _contextvars.ContextVar(
+    "lumenairy_jax_eig_memo", default=None)
+
+
 def _jax_cluster_routed(solve, *, gap_rel=None):
     """``solve()`` with the reverse pass of the degenerate-cluster rule over
     EVERY ``_jax_twin_eig`` it calls (block comment above), each problem
     with its own anchors, and the eig-branch derivative of every
     :func:`_jax_uniform_select` shortcut the solve takes."""
+    from ...backend import jax_cluster_rule_enabled
+    gap = _EIG_CLUSTER_GAP_REL if gap_rel is None else float(gap_rel)
+    # an eager DIFFERENTIATED call (some autodiff / vmap trace active, no
+    # staging trace) with the rule on: the first pass and the rule's forward
+    # decompose the same concrete matrices -- share them (_JaxEigMemo)
+    if not (gap > 0.0 and jax_cluster_rule_enabled() and _jax_eager_regime()
+            and not _jax_eval_trace_current()):
+        return _jax_cluster_routed_body(solve, gap_rel)
+    tok = _JAX_EIG_MEMO.set(_JaxEigMemo())
+    try:
+        return _jax_cluster_routed_body(solve, gap_rel)
+    finally:
+        _JAX_EIG_MEMO.reset(tok)
+
+
+def _jax_cluster_routed_body(solve, gap_rel):
+    """The body of :func:`_jax_cluster_routed`."""
     import jax
     import jax.numpy as jnp
     rec0 = _RouteRecord()
@@ -5185,8 +5735,11 @@ def _jax_cluster_routed(solve, *, gap_rel=None):
                 if rec.flags else jnp.asarray(False))
         return rec.problems, anchors, flag
 
-    with jax.checking_leaks():
-        conv_r, consts_r = jax.closure_convert(rerecord)
+    # Eagerly, only the problems' own operations are evaluated (dce): the
+    # re-recorded solve's eigs and everything downstream of them are dead
+    # here, and they were a whole extra solve per gradient.
+    conv_r, consts_r = _closure_convert_uncached(rerecord,
+                                                 dce=_jax_eager_regime())
     problems, anchors, flag = conv_r(*consts_r)
     has_select = bool(rec0.flags)
 
@@ -5344,6 +5897,9 @@ __all__ = [
     "_box_hits_unit_disk",
     "_shapes_y_varying",
     "_validate_shapes",
+    "_point_mirror_index",
+    "_internal_cell",
+    "_internal_profiles_1d",
     "_fourier_coeffs_1d",
     "_toeplitz_1d",
     "_layer_Q_matrix",

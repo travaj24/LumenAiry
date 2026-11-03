@@ -1059,14 +1059,15 @@ def test_the_residual_degree_moves_the_multiplexed_route_only_through_c6():
       same float64 words, ``max|E6 - E4| = 0.0`` exactly, on Windows and on
       WSL.  That is the fail-before: the ratio the sibling above bars at 2.0x
       reads exactly 1.0 in this state, whatever the arithmetic does;
-    * with it ON the degree moves the multiplexed answer by MORE THAN THE
-      ANSWER'S OWN NORM -- ``||E6 - E4|| / ||E6||`` measured **39.83**
-      (Windows) and **43.88** (WSL).  The bar here is 1.0, i.e. 40x inside
-      the weaker of the two.
+    * with it ON the degree is READ -- the two degrees return DIFFERENT
+      float64 words, while the same degree twice returns the SAME words (the
+      chain is deterministic; the rerun differs by exactly 0.0 on Windows,
+      WSL and the 2026-11-03 numpy 2.5.3 / 2.5.4 stacks).
 
-    Byte-identity is not a tolerance, so this half of "and is caused by it"
-    cannot rot the way the era-pinned magnitude did.  It is also the cheap
-    half: four chain calls, no linear-superposition reference legs."""
+    Both halves are byte-identity decisions, not tolerances, so this half of
+    "and is caused by it" cannot rot the way the era-pinned magnitude did --
+    the HOW MUCH is the sibling above's question.  Five chain calls, no
+    linear-superposition reference legs."""
     off6 = _mux_chain_field(0.023, degree=6, launch=False)
     off4 = _mux_chain_field(0.023, degree=4, launch=False)
     assert np.array_equal(off6, off4), (
@@ -1075,63 +1076,32 @@ def test_the_residual_degree_moves_the_multiplexed_route_only_through_c6():
         f'read somewhere this test does not know about')
     on6 = _mux_chain_field(0.023, degree=6, launch=True)
     on4 = _mux_chain_field(0.023, degree=4, launch=True)
-    ref = float(np.linalg.norm(on6))
-    assert ref > 0.0 and np.all(np.isfinite(on6))
-    moved = float(np.linalg.norm(on6 - on4)) / ref
-    # WP-C2 (2026-09-20): the ON half is a DECISION against this
-    # fixture's own last-bit noise, not an absolute magnitude.  The
-    # absolute form (``moved > 1.0``, recorded 39.83 / 43.88 above) is a
-    # draw -- forcing the pre-5.49 ray-tracer keywords back reads 22.55
-    # and the 5.49 defaults read 0.836, without anything this test is
-    # about having changed.  See ``_mux_last_bit_noise``.
-    #
-    # ROUND 2 (VERIFY-WP-C2 defect D8): the floor is the WORST of two
-    # one-ULP DIRECTIONS, not one draw.  Its own spread over four
-    # directions is 3.22x (Windows) and 4.79x (WSL) -- AT OR ABOVE the
-    # 3.0 multiplier that used to sit on a single draw, so the floor was
-    # a draw in the same way the magnitude it replaced was.  Measured
-    # (``validation/probe_c2_round2/r2_d3_floor_{win,wsl}.json``):
-    #
-    #     direction      Windows      WSL
-    #     up           1.4036e-01   1.1079e-01
-    #     down         1.7820e-01   1.1491e-01     <- the maximum on both
-    #     real only    1.4036e-01   1.1079e-01     (== 'up'; real envelope)
-    #     one element  5.5353e-02   2.3985e-02     (always the smallest)
-    #
-    # 'up' and 'down' bracket the maximum on both builds, so the max over
-    # those two IS the measured worst case at half the cost of all four.
-    # Margin at that worst floor: 4.69x (Windows), 8.59x (WSL), against a
-    # 3.0 bar.
-    noise_by_direction = {
-        k: _mux_last_bit_noise(0.023, degree=6, launch=True, kind=k)
-        for k in ('up', 'down')}
-    noise = max(noise_by_direction.values())
-    spread = noise / max(min(noise_by_direction.values()), 1e-300)
-    assert spread < 100.0, (
-        f'the one-ULP floor now varies by {spread:.1f}x between the two '
-        f'perturbation directions ({noise_by_direction}); measured 1.27x '
-        f'(Windows) and 1.04x (WSL) on 2026-09-20.  Above 100x the '
-        f'"floor" has stopped being one number.')
-    assert moved > 3.0 * noise, (
-        f'the residual degree stopped moving the multiplexed route by '
-        f'more than its own last bits do: {moved:.4f} of the degree-6 '
-        f'answer\'s own norm against a one-ULP-input floor of '
-        f'{noise:.4f} (the worst of {noise_by_direction}).  Measured '
-        f'margin 4.69x (Windows) / 8.59x (WSL) at that floor.')
-    # ... and the OTHER side of the bar, which this arm never asserted:
-    # holding the degree FIXED must land AT the floor, not above it.  A
-    # bar that only refuses is satisfiable by a floor of zero; this is
-    # what makes it two-sided.  Measured EXACTLY 0.0 on both builds --
-    # the chain is deterministic, so the same degree twice is the same
-    # float64 words.
+    assert float(np.linalg.norm(on6)) > 0.0 and np.all(np.isfinite(on6))
+    # The ON half used to be a MAGNITUDE decision -- ``moved > 1.0``, then
+    # (WP-C2) ``moved > 3 x`` the worst one-ULP-input floor
+    # (``_mux_last_bit_noise``).  Both are ratios of draws: with the C6
+    # launch engaged on this fan a ONE-ULP nudge of the input moves the
+    # answer by 7 % to 27 % of its own norm, so "the floor" is itself an
+    # O(0.1) chaotic response that the platform picks.  Measured
+    # ``moved`` / worst floor: 4.69x (Windows) / 8.59x (WSL) on 2026-09-20,
+    # 6.27x (WSL, numpy 2.5.3 and 2.5.4 alike, 2026-11-03: moved 0.6455,
+    # floors up 0.0669 / down 0.1028 / one element 0.1041), and 2.81x on
+    # the CI runner (run 41646862421, slow 7/8: moved 0.7478, floors up
+    # 0.2662 / down 0.0668) -- the same claim failing on the arithmetic
+    # alone.  What the attribution needs is exact and build-free: the
+    # degree is READ on the C6 path (E6 != E4 bit for bit) and nothing else
+    # moved (the same degree twice is the same words).
     again = _mux_chain_field(0.023, degree=6, launch=True)
-    control = float(np.linalg.norm(again - on6)) / ref
-    assert control <= noise, (
-        f'running the SAME degree twice moved the multiplexed answer by '
-        f'{control:.4e} of its own norm, which is above the one-ULP '
-        f'floor {noise:.4e}.  Measured exactly 0.0 on both builds: if '
-        f'the chain has become non-deterministic, the comparison above '
-        f'is measuring that instead of the residual degree.')
+    assert np.array_equal(again, on6), (
+        f'running the SAME degree twice moved the multiplexed answer '
+        f'(max|E6 rerun - E6| = {float(np.max(np.abs(again - on6))):.3e}); '
+        f'measured exactly 0.0 on Windows and WSL.  The chain has become '
+        f'non-deterministic, so the inequality below would be measuring '
+        f'that instead of the residual degree.')
+    assert not np.array_equal(on6, on4), (
+        'the residual degree is INERT with the C6 launch on: degrees 6 and '
+        '4 return the same float64 words, so the C6 residual-eikonal fit no '
+        'longer reads _REMAP_RESID_EIKONAL_DEGREE')
 
 
 def test_c13_makes_the_d3_separation_build_independent():

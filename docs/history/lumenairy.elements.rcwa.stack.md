@@ -1,12 +1,19 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 5d7508cf5d3f39f761be80c132cb83242f1c8981863c2c4a2206814b544d89c1
-token_sha256: 2d9bc29fcb96726f94a9e89ec4b6dc0caadacc4ab3385543bd39a58acd3cd610
+ast_sha256: 9ab4b2c8faae58dd3aad80a3c2feb08ed955b883bb98e06fb2ab624aa205b21e
+token_sha256: 356150e73eec1293c3147ef8070eb7d8b1b13db7dda21e70d4e85e29ef736565
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-10-04 -- RCWAStack JAX cascade routed through _jax_cluster_routed; half-space mode cache skipped inside a jax trace (leaked tracers); symmetric-point docstring note
+re_recorded: 2026-11-03 -- RCWA point-mirror fix: every patterned-layer bridge site now reads the cell through rcwa._core._internal_cell (conj + node-lattice point mirror) and analytic shapes through twod._internal_analytic_convolution (conj of the PUBLIC operator); v5.5.0..v5.50.0 solved eps(-x,-y)
+re_recorded: 2026-11-03 -- Phase C1 (L-4), rebased on the point-mirror fix: formulation='li' on 1-D shapes layers -- _check_li_shapes, RCWAStack._shapes_operators (one site for _layer_modes and _layer_even_spec) calling twod._internal_analytic_convolution / _internal_analytic_li_operators (conj of the PUBLIC operators), formulation in the shapes eig key and carried through add_layer / _materialized_layers
+re_recorded: 2026-11-03 -- C1 follow-up: plain formatting of the zero-background 'li' refusal (the conditioning guard itself lives in twod._internal_analytic_li_operators)
+re_recorded: 2026-11-03 -- plan C2: layer_absorption on analytic shapes= layers (exact Parseval in-plane rule, return_raw)
+re_recorded: 2026-11-03 -- release 5.50.1 merge: point-mirror fix + C1 'li' shapes + C2 shapes absorption combined
+re_recorded: 2026-11-03 -- Phase D (L-4): formulation='li' on 2-D shapes layers of axis-aligned rectangles -- _check_li_shapes_2d; RCWAStack._shapes_operators now returns (EPS, Cxx, Cyy) (1-D: C1's operators, Cyy is EPS; 2-D: twod._internal_analytic_li_operators_2d, conj of the PUBLIC per-band Li operators) and both _layer_modes and _layer_even_spec place Cyy; the 2-D shapes 'li' refusal is lifted for rectangles
+re_recorded: 2026-11-03 -- release 5.50.1 merge: Phase D (2-D 'li' rectangles, _shapes_operators returns (EPS, Cxx, Cyy)) combined with C2 shapes absorption
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`

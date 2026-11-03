@@ -96,6 +96,7 @@ from ..rcwa._core import (
     _symmetry_on,
 )
 from ._core import (
+    _frame_anchor_phase,
     _interface_smatrix,
     _lossy_incidence,
     _propagation_smatrix,
@@ -112,6 +113,7 @@ from .twod import (
     _build_axis,
     _cell_to_walls_tile,
     _homogeneous_modes,
+    _internal_slant,
     _kz_forward2,
     _scan_solver,
     _validate_cell_cost,
@@ -467,7 +469,8 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
             kxv, kyv = kxv[keep], kyv[keep]
         gauge = _oop_block_gauge(kxv, kyv, orders2d, CxxF)
     return _layer_eigenmodes_tensor(GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ,
-                                    slant=slant, sym_gauge=gauge, **oop)
+                                    slant=_internal_slant(slant), sym_gauge=gauge,
+                                    **oop)
 
 
 #: Absolute tolerance on "is this cell CONSTANT-valued?", mirroring
@@ -1103,7 +1106,9 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     # -- the stack's :func:`stack2d._slant_frame_walk` reduced to one layer.
     # The sheared frame ``u = x - t z`` is anchored at the layer's TOP face, so
     # its exit plane sits a lateral ``t * depth`` from the lab one and each
-    # transmitted order picks up ``exp(+i k0 (alpha_m . t) d)``.  It is a
+    # transmitted order picks up ``exp(-i k0 (alpha_m . t) d)`` -- the shared
+    # ``_core._frame_anchor_phase`` (point-mirror fix v5.50.1: was ``+i``,
+    # correct only for the point-mirrored solid solved until then).  It is a
     # unimodular per-order phase: ``R``, ``T`` and the REFLECTION Jones never
     # see it (they are computed from the untouched cascade output), which is
     # exactly why its absence in the stack was invisible to every energy check.
@@ -1112,8 +1117,8 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     # ``stack2d._layer_enters_slant_frame``.
     tphase = None
     if not _slant_is_zero(slant) and not _slanted_cell_is_a_frame_noop(tile_i):
-        tphase = np.exp(1j * k0 * (kxv * float(slant[0]) * float(depth)
-                                   + kyv * float(slant[1]) * float(depth)))
+        tphase = _frame_anchor_phase(k0, kxv, float(slant[0]) * float(depth),
+                                     kyv, float(slant[1]) * float(depth))
     R_rows, T_rows, j_cols, jt_cols = [], [], [], []
     for ip, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
         # Unit tangential E along (ex0, ey0); the incident wave's longitudinal

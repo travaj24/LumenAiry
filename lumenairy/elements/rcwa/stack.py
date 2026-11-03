@@ -29,6 +29,7 @@ from ._core import (
     _homogeneous_eigenmodes,
     _interface_smatrix,
     _interface_smatrix_general,
+    _internal_cell,
     _jax_cluster_routed,
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
@@ -66,11 +67,15 @@ from .oned import (
     _resolve_incidence,
 )
 from .twod import (
-    _analytic_convolutions_2d,
     _eps_convolution_2d,
     _harmonic_orders_2d,
+    _internal_analytic_convolution,
+    _internal_analytic_li_operators,
+    _internal_analytic_li_operators_2d,
     _li_convolutions_2d,
     _li_convolutions_2d_tensor,
+    _li_rect_shapes_problem,
+    _shape_form_factor,
 )
 
 
@@ -260,6 +265,21 @@ below are MEASURED, not asserted (``tests/unit/test_niche_audit_w8_raster.py``
    what ``raster='area'`` integrates over); :meth:`RCWAStack.plot_geometry`
    renders on the SAME midpoint lattice so the picture matches the generator.
 
+REGISTRATION: THE CELL IS SOLVED WHERE IT IS DECLARED.  ``eps_cell[j, i]`` sits
+at ``(+j Px/Sx, +i Py/Sy)``, a shape at its ``center``, a segment on its
+``[lo, hi)`` -- in the same frame as ``theta`` / ``phi``, the order labels
+``kx_m = kx0 + m lambda/Px`` and the :meth:`RCWAResult.internal_field` grid.
+From v5.5.0 to v5.50.0 every patterned path solved the POINT MIRROR
+``eps(-x, -y)`` instead (the loss-convention conjugation also flips the
+transverse carrier, and the bridge kept the public Toeplitz rule); the lateral
+half of the bridge now lives in ONE place,
+:func:`~lumenairy.elements.rcwa._core._internal_cell` (and its
+``_internal_profiles_1d`` form; analytic shapes take the conjugate of the
+public operator, ``twod._internal_analytic_convolution``).  Cells symmetric about
+the origin (equivalently about ``P/2``) are unaffected bit-for-bit; cells
+symmetric about any other point keep their efficiencies and only their order
+PHASES move.
+
 BOUNDARY PIXELS ARE HARD-ASSIGNED, HALF-OPEN.  A feature occupying the
 period-fraction interval ``[lo, lo + w)`` claims pixel ``j`` iff
 ``(u_j - lo) mod 1 < w``: the LOWER edge is INCLUSIVE, the UPPER edge
@@ -285,6 +305,45 @@ entries (exact piecewise-constant Fourier series), or a
 :class:`~lumenairy.elements.pmm.PMMStack` taper (nodal walls, no raster).
 ``raster='area'`` is a THIRD, opt-in mitigation -- see
 :func:`_raster_cover_1d`.
+
+THE CALLER'S LATTICE DECIDES THE REALISED DUTY (audit L-6, 2026-11-02
+DynaMeta bridge audit).  The solver reads ``eps_cell[j]`` at the NODE
+``x = j P/S`` (point 1); a caller that paints its own cell picks a lattice and
+a membership test, and the quantisation above depends on both.  Realised duty
+of a line of duty 0.5 centred at ``P/2`` (edges at ``P/4``, ``3P/4``):
+
+==========  ======================  ==================  ====================
+``S``       centres ``(j+0.5)/S``   nodes ``j/S``,      nodes ``j/S``,
+            (either test)           closed ``<=``       half-open ``[lo, hi)``
+==========  ======================  ==================  ====================
+128         64/128 = 0.5            65/128 = 0.5078     64/128 = 0.5
+129         65/129 = 0.5039         64/129 = 0.4961     64/129 = 0.4961
+193         97/193 = 0.5026         96/193 = 0.4974     96/193 = 0.4974
+256         128/256 = 0.5           129/256 = 0.5039    128/256 = 0.5
+==========  ======================  ==================  ====================
+
+* Centre painting and node painting give duty errors of OPPOSITE SIGN.
+* An ODD ``S`` puts the edges of a cell-centred feature MID-PIXEL on either
+  lattice: the duty is off by ``1/(2S)`` whatever the membership test.
+* On an ``S`` divisible by 4 with NODES on the edges, a CLOSED test
+  (``|x - c| <= w/2``) claims both edge nodes (65/128); only the house
+  half-open test (BOUNDARY PIXELS above) gives 0.5.  Centre painting has
+  no node on the edges, so its test does not matter there.
+
+MEASURED COST (TE, E along the lines, on the ``add_layer`` L-1 metal fixture:
+lambda 1.31 um, period 600 nm, eps -20+2i, depth 120 nm, n = 1.5 substrate,
+normal incidence; reference ``PMMStack`` degree 64, converged to 1e-11 in TE).
+``dR/d(duty)`` = 1.206, so the 0.00388 duty shift of ``S = 129`` costs
+``R(65/129) - R(0.5)`` = 4.65e-3 (PMM at both duties; the linear estimate is
+4.68e-3).  A centre-painted ``eps_cell`` at
+``n_orders`` 32 errs 4.57e-3 at ``S = 129`` against 1.71e-5 at ``S = 256``
+(and only 7.96e-5 against the PMM value AT the realised duty 65/129: the
+error is the duty, not the solve); at ``n_orders`` 48, 3.08e-3 at ``S = 193``
+against 8.33e-6 at ``S = 384``.  The remedies are the ones above: an ``S`` on
+which the edges are unambiguous for your lattice and test, ``shapes=``, or
+``raster='area'``.  Edges that land on NO lattice point at any affordable
+``S`` (a duty like 0.43) keep an ``O(1/S)`` error that only the last two
+remove.
 
 TWO OPERATORS, TWO CELLS (audit W9, ``raster='harmonic'``).  A subpixel average
 cannot be a single number, because the factorization consumes the cell TWICE
@@ -405,6 +464,61 @@ def _raster_wants_companions(fn_name, raster, formulation):
             f"{fn_name}: formulation must be 'laurent' (default) or 'li'/'fff', "
             f"got {formulation!r}.")
     return raster == "harmonic" and f == "li"
+
+
+def _check_li_shapes(fn_name, shapes, period_y, eps_background):
+    """Preconditions of ``formulation='li'`` on a 1-D-stack ``shapes`` layer
+    (Phase C1, PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02 L-4).
+
+    * The shape list must be y-INVARIANT (every shape a rectangle spanning the
+      full ``period_y``, the shared :func:`_shapes_y_varying` predicate).  A
+      y-varying list enters a 1-D stack only through a y-average, and Li's
+      sequential rule for that average is not the analytic ``[[1/eps]]^{-1}``
+      of the averaged profile (it averages the per-row inverse instead -- the
+      2-D construction).  Rather than solve a different operator than the
+      ``eps_cell`` 'li' path would, refuse.
+    * ``eps_background`` must be non-zero (the inverse rule reads
+      ``1/eps_background``).  ``None`` skips this check (a dispersive
+      background, checked per wavelength by the caller)."""
+    i = _shapes_y_varying(shapes, period_y)
+    if i is not None:
+        raise ValueError(
+            f"{fn_name}: formulation='li' on a 1-D-stack shapes layer needs a "
+            f"y-INVARIANT shape list (rectangles spanning the full period_y "
+            f"{float(period_y):.6g} m), but shapes[{i}] "
+            f"({shapes[i].get('shape')}) varies along y.  A 1-D stack sees "
+            f"only its y-average, and the sequential rule for that average is "
+            f"the 2-D construction.  Use a 2-D stack (period_y / n_orders_y), "
+            f"where 'li' takes axis-aligned rectangles, or "
+            f"formulation='laurent' (y-averaged, with RCWAYAverageWarning), or "
+            f"rasterize the cell into eps_cell.")
+    if eps_background is not None and abs(_C(eps_background)) < 1e-12:
+        raise ValueError(
+            f"{fn_name}: formulation='li' needs a non-zero eps_background "
+            f"(got {complex(_C(eps_background))}); the inverse rule reads "
+            f"1/eps_background.")
+
+
+def _check_li_shapes_2d(fn_name, shapes, eps_background):
+    """Preconditions of ``formulation='li'`` on a 2-D-stack ``shapes`` layer
+    (Phase D, PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02 L-4): every shape an
+    AXIS-ALIGNED RECTANGLE (the analytic per-band inverse rule of
+    :func:`~lumenairy.elements.rcwa.twod._internal_analytic_li_operators_2d`
+    is exact for those only -- disks, ellipses and rotated rectangles are
+    Phase F), and a non-zero ``eps_background`` (``None`` skips that check: a
+    dispersive background, checked per wavelength by the caller)."""
+    problem = _li_rect_shapes_problem(shapes)
+    if problem is not None:
+        raise ValueError(
+            f"{fn_name}: formulation='li' on a 2-D-stack shapes layer: "
+            f"{problem}.  Use formulation='laurent' for this layer, or "
+            f"rasterize the cell into eps_cell, whose 'li' path takes any "
+            f"pixel pattern.")
+    if eps_background is not None and abs(_C(eps_background)) < 1e-12:
+        raise ValueError(
+            f"{fn_name}: formulation='li' needs a non-zero eps_background "
+            f"(got {complex(_C(eps_background))}); the inverse rule reads "
+            f"1/eps_background.")
 
 
 def _raster_companions(features, eps_bg, n_x, n_y):
@@ -1182,10 +1296,32 @@ class RCWAResult:
         return ix, iy
 
     @staticmethod
-    def _layer_im_eps(layer, xg, yg, period_x, period_y):
+    def _layer_im_eps(layer, xg, yg, period_x, period_y, *, n_orders=None):
         """``Im(eps_public(x, y)) >= 0`` of a SCALAR (uniform / isotropic) layer
         on the real-space field grid (the local loss density weight for
-        :meth:`layer_absorption`)."""
+        :meth:`layer_absorption`) -- or, for an analytic-``shapes`` layer, its
+        loss weight in the EXACT-QUADRATURE form described below.
+
+        ``shapes`` (plan C2, audit L-3).  The weight is the Fourier series of
+        ``Im(eps)`` -- background plus each shape's analytic form factor
+        (:func:`~lumenairy.elements.rcwa.twod._shape_form_factor`, so the
+        same centre, periodic wrap and disjoint superposition as the solve's
+        ``[[eps]]``) -- kept to the difference-order box ``|k_x| <= 2 M_x``,
+        ``|k_y| <= 2 M_y`` (``n_orders = (M_x, M_y)``; ``M_y = 0`` keeps only
+        the y-average, the structure an ``n_orders_y = 0`` stack solves).  The
+        reconstructed ``|E|^2`` is band-limited to exactly that box, so by
+        Parseval ``mean(weight * |E|^2)`` over ``n >= 4 M + 1`` nodes per axis
+        IS the integral of the EXACT shape indicator times ``|E|^2`` -- no
+        in-plane quadrature error, whatever the shape.  Point-wise the weight
+        carries the Gibbs ringing of a truncated series (it can dip below 0
+        near an edge), so it is a quadrature weight, not a loss map to plot.
+        Sampling the indicator at the nodes instead was measured to converge
+        only like ``1/n`` for an edge off the nodes and like the Gauss
+        circle problem for a disk (1.5e-3 relative at ``n = 1024``, ``M =
+        4``); this rule closes ``sum(layers) = A`` to 1e-13 with an exact
+        z-rule.  The series is the PUBLIC ``Im(eps)`` in declared
+        coordinates (the solve's internal-gauge operator is built separately
+        by ``twod._internal_analytic_convolution``)."""
         ny, nx = len(yg), len(xg)
         if layer.kind == "uniform":
             return np.full((ny, nx), float(np.imag(complex(layer.data))))
@@ -1195,9 +1331,32 @@ class RCWAResult:
             ix, iy = RCWAResult._cell_grid_index(xg, yg, period_x, period_y,
                                                  Sx, Sy)
             return np.imag(cell[np.ix_(ix, iy)]).T          # (ny, nx)
+        if layer.kind == "shapes":
+            # concrete values only: solve() refuses dispersive layers and the
+            # wavelength sweep retains no internal data, so a retained shapes
+            # layer never holds a wl -> eps callable here
+            def _im(v):
+                return float(np.imag(_C(v)))
+            mx, my = (int(n_orders[0]), int(n_orders[1]))
+            gx = 2.0 * np.pi * np.arange(-2 * mx, 2 * mx + 1) / period_x
+            gy = 2.0 * np.pi * np.arange(-2 * my, 2 * my + 1) / period_y
+            GX, GY = np.meshgrid(gx, gy)                    # (Ky, Kx)
+            eps_bg, shapes = layer.data
+            im_bg = _im(eps_bg)
+            phi = np.zeros(GX.shape, dtype=_C)
+            phi[2 * my, 2 * mx] = im_bg                     # background DC
+            for sh in shapes:
+                phi = phi + (_im(sh["eps"]) - im_bg) * _shape_form_factor(
+                    sh, GX, GY, period_x, period_y)
+            ex = np.exp(1j * gx[:, None] * np.asarray(xg)[None, :])  # (Kx, nx)
+            ey = np.exp(1j * gy[:, None] * np.asarray(yg)[None, :])  # (Ky, ny)
+            # real up to rounding: the form factor of a real indicator is
+            # Hermitian, F(-G) = conj(F(G))
+            return np.real(ey.T @ phi @ ex)                 # (ny, nx)
         raise NotImplementedError(
             "RCWAResult.layer_absorption: _layer_im_eps handles only uniform / "
-            "isotropic-cell layers; a tensor layer uses _layer_eps_tensor_grid.")
+            "isotropic-cell / analytic-shape layers; a tensor layer uses "
+            "_layer_eps_tensor_grid.")
 
     @staticmethod
     def _layer_eps_tensor_grid(layer, xg, yg, period_x, period_y):
@@ -1212,29 +1371,73 @@ class RCWAResult:
         g = cell[np.ix_(ix, iy)]                           # (nx, ny, 3, 3)
         return np.transpose(g, (1, 0, 2, 3))               # (ny, nx, 3, 3)
 
-    def layer_absorption(self, *, nx=64, ny=None, nz_per_layer=8):
+    def layer_absorption(self, *, nx=64, ny=None, nz_per_layer=8,
+                         return_raw=False):
         """Absorbed power fraction broken down PER LAYER (audit GAP6).
 
         The total absorptance ``A = 1 - sum(R) - sum(T)`` tells you how much
         power is lost but not WHERE; this attributes it to each layer by
         integrating the local loss density over each layer, normalised so the
         layers sum to the total absorptance (energy-conserving by construction).
-        For a scalar (uniform / isotropic) layer the density is
-        ``Im(eps) |E|^2``; for an ANISOTROPIC (tensor) layer it is the full
+        For a scalar (uniform / isotropic / analytic-shape) layer the density
+        is ``Im(eps) |E|^2``; for an ANISOTROPIC (tensor) layer it is the full
         quadratic form ``Im(E* . eps . E)`` (the rigorous power-loss operator,
         which reduces to ``Im(eps) |E|^2`` for a diagonal medium) -- the
         reconstructed ``(Ex, Ey, Ez)`` is contracted against the local
         ``Im(eps_tensor)``.
 
         Requires ``RCWAStack.solve(retain_internal=True)``.  Uniform,
-        isotropic-cell, and TENSOR (in-plane) layers are supported (raises for
-        analytic-shape layers, whose local map is not reconstructed here).
+        isotropic-cell, analytic-shape (``shapes=``) and TENSOR (in-plane)
+        layers are supported.
+
+        A ``shapes`` layer is integrated EXACTLY in-plane: the integral of
+        the exact shape indicator (the solve's own form factors -- same
+        centre, periodic wrap and superposition) against the reconstructed
+        ``|E|^2``, evaluated by Parseval on the difference-order box (see
+        :meth:`_layer_im_eps`) on its own ``(4 M_x + 2) x (4 M_y + 2)`` node
+        grid, so ``nx`` / ``ny`` do not enter it.  With ``n_orders_y = 0`` (a
+        1-D stack) the y-average is used, the structure such a stack solves.
+        Only the depth rule (``nz_per_layer``) is approximate there.
+
+        .. versionchanged:: 5.50.1
+           ``shapes`` layers no longer raise (plan C2, audit L-3); new
+           ``return_raw``.
+
+        Parameters
+        ----------
+        nx, ny : int, optional
+            Real-space quadrature grid over one unit cell (``ny`` defaults to
+            1 on a 1-D stack, else ``nx``) for the uniform / cell / tensor
+            layers; the field is sampled at the nodes ``(j - n//2) * period /
+            n``.  Not used by ``shapes`` layers (exact rule above).
+        nz_per_layer : int, optional
+            Mid-point depth samples per layer (error ``O(nz^-2)``; a lossy
+            metal layer several skin depths thick needs tens of samples --
+            measured on a 120 nm eps = -20 + 2i line at 1.31 um: the raw sum
+            is off A by 1e-2 at 8, 6e-4 at 32, 4e-5 at 128).
+        return_raw : bool, optional
+            ``False`` (default): the per-layer integrals are rescaled so each
+            row sums to :meth:`absorptance` exactly (the split is what is
+            reported; its closure is true by construction and tests
+            nothing).  ``True``: return the UN-normalised physical integrals
+            ``k0 * integral Im(eps)|E|^2 dV / (A_cell * kz_inc * |E_inc|^2)``
+            -- each layer's absorbed fraction from its own field alone, so
+            ``row.sum() - absorptance()[row]`` measures the quadrature
+            error.  ``shapes`` and uniform layers are exact in-plane and
+            leave only the depth rule.  An ``eps_cell`` / tensor layer is
+            sampled nearest-pixel, which is exact only when the field nodes
+            land ON the cell nodes (``nx = Sx``, ``ny = Sy``); nodes in
+            between read the pixel-replicated cell, not the solved
+            band-limited one, and floor the closure (measured on a 64-pixel
+            half-metal cell: 4.7e-5 at ``nx = 64``, ``nz_per_layer = 256``;
+            1.1e-2 at ``nx = 128`` and 7.3e-3 at ``nx = 1024``).
 
         Returns
         -------
         (2, n_layers) ndarray
             Absorbed fraction in each layer; row 0 for incident ``E_x``, row 1
-            for incident ``E_y``.  ``row.sum() == absorptance()[row]``.
+            for incident ``E_y``.  ``row.sum() == absorptance()[row]`` unless
+            ``return_raw=True``.
         """
         info = self._require_modal().get("internal")
         if info is None:
@@ -1255,13 +1458,33 @@ class RCWAResult:
         # Per-layer local loss operator: a scalar Im(eps) map for uniform /
         # isotropic layers, the full (ny, nx, 3, 3) tensor for anisotropic
         # layers (the loss density is then the quadratic form Im(E* . eps . E)).
-        if any(L.kind == "shapes" for L in layers):
-            raise NotImplementedError(
-                "RCWAResult.layer_absorption: analytic-shape layers are not "
-                "supported (their local Im(eps) map is not reconstructed here); "
-                "uniform, isotropic-cell, and tensor layers are.")
+        # A shapes layer gets its own exact-quadrature grid: >= 4 M + 1 nodes
+        # per axis resolve the band-limited |E|^2 (difference orders up to
+        # 2 M) exactly, and one node along y when the stack keeps no
+        # y-harmonic (the field is then y-invariant).  EVEN counts (4 M + 2):
+        # internal_field's carrier samples (j - n/2) * d while the grid built
+        # here is (j - n//2) * d, which agree only for even n (on an odd grid
+        # the weight would sit half a node off the field it multiplies).
+        modal = self._require_modal()
+        grid = [(nx_i, ny_i, dx, dy, xg, yg)] * nlay
+        nox, noy = int(info["nox"]), int(info["noy"])
+        for i, L in enumerate(layers):
+            if L.kind == "shapes":
+                nxs, nys = 4 * nox + 2, (1 if noy == 0 else 4 * noy + 2)
+                grid[i] = (nxs, nys, px / nxs, py / nys,
+                           (np.arange(nxs) - nxs // 2) * (px / nxs),
+                           (np.arange(nys) - nys // 2) * (py / nys))
+        # Every weight is sampled at the DECLARED (x, y): since the point-
+        # mirror fix the solve and internal_field are registered to the
+        # declared structure (an off-centre shape's split is pinned against
+        # the frame-free Poynting flux difference in
+        # tests/unit/test_c2_shapes_layer_absorption.py).
         im_eps = [None if L.kind == "tensor"
-                  else self._layer_im_eps(L, xg, yg, px, py) for L in layers]
+                  else (self._layer_im_eps(L, grid[i][4], grid[i][5], px, py,
+                                           n_orders=(nox, noy))
+                        if L.kind == "shapes"
+                        else self._layer_im_eps(L, xg, yg, px, py))
+                  for i, L in enumerate(layers)]
         eps_t = [self._layer_eps_tensor_grid(L, xg, yg, px, py)
                  if L.kind == "tensor" else None for L in layers]
         out = np.zeros((2, nlay))
@@ -1269,8 +1492,9 @@ class RCWAResult:
             raw = np.zeros(nlay)
             for i in range(nlay):
                 zl = (np.arange(nz_per_layer) + 0.5) / nz_per_layer * thick[i]
-                f = self.internal_field(zl, component="E", nx=nx_i, ny=ny_i,
-                                        dx=dx, dy=dy, layer=i, incident=inc)
+                gnx, gny, gdx, gdy = grid[i][:4]
+                f = self.internal_field(zl, component="E", nx=gnx, ny=gny,
+                                        dx=gdx, dy=gdy, layer=i, incident=inc)
                 ex, ey, ez = f["Ex"], f["Ey"], f["Ez"]
                 if ex.ndim == 2:                            # 1-D: (nz, nx)
                     ex, ey, ez = ex[:, None, :], ey[:, None, :], ez[:, None, :]
@@ -1287,6 +1511,17 @@ class RCWAResult:
                     dens = im_eps[i][None] * e2
                 # thickness-weighted cell+depth average of the loss density
                 raw[i] = thick[i] * float(np.mean(dens))
+            if return_raw:
+                # absorbed / incident flux: k0 * raw over kz_inc * |E_inc|^2
+                # (unit TANGENTIAL incident E; its longitudinal E_z adds
+                # (k_t . e / kz)^2, the same einc_sq the efficiencies use).
+                kz_inc = float(modal["kz_inc"])
+                long_inc = (float(modal["kx0"]) * inc[0]
+                            + float(modal["ky0"]) * inc[1])
+                einc_sq = (1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0
+                           else 1.0)
+                out[p] = info["k0"] * raw / (kz_inc * einc_sq)
+                continue
             total = raw.sum()
             out[p] = A_tot[p] * raw / total if total > 0 else np.zeros(nlay)
         return out
@@ -1303,7 +1538,7 @@ class _RCWALayer:
         self.thickness = thickness if is_jax_array(thickness) else float(thickness)
         self.kind = kind          # 'uniform' | 'iso' | 'shapes' | 'tensor'
         self.data = data
-        self.formulation = formulation   # 'laurent' | 'li' (iso layers)
+        self.formulation = formulation   # 'laurent' | 'li' (iso; shapes)
         self.dispersive = dispersive     # data holds wl -> value callable(s)
         # (exx, eyy) INVERSE-RULE companion cells of an iso 'li' layer, or None
         # (audit W9: raster='harmonic' subpixel smoothing -- see add_layer).
@@ -1473,9 +1708,10 @@ class RCWAStack:
         * ``kind`` -- ``'uniform' | 'iso' | 'shapes' | 'tensor'``;
         * ``data`` -- the layer specification exactly as ``add_layer``
           normalized it (``kind``-dependent: the scalar eps, the
-          ``(Sx, Sy)`` cell, the ``(shapes, eps_background)`` pair, or the
+          ``(Sx, Sy)`` cell, the ``(eps_background, shapes)`` pair, or the
           ``(Sx, Sy, 3, 3)`` tensor cell; wl-callables when dispersive);
-        * ``formulation`` -- ``'laurent' | 'li'`` (iso layers);
+        * ``formulation`` -- ``'laurent' | 'li'`` (iso layers, and shapes
+          layers -- on a 2-D stack, rectangles only);
         * ``dispersive`` -- True when ``data`` holds ``wl ->`` callables
           (solve via :meth:`solve_vs_wavelength`).
 
@@ -1563,8 +1799,27 @@ class RCWAStack:
         the Li-1997 sequential rule (inverse along each E-component's own
         axis, direct along the other, direct-rule ``E_z``), the
         fast-converging factorization for metal / high-contrast layers.
-        For 1-D stacks it reduces to the rigorous 1-D ``'li'`` placement.
-        Uniform / shapes / tensor layers accept only the default.
+        For 1-D stacks it reduces to the rigorous 1-D ``'li'`` placement:
+        inverse rule ``[[1/eps]]^{-1}`` for the wall-normal ``E_x``, direct
+        rule ``[[eps]]`` for ``E_y`` and for the ``E_z`` elimination.
+        ``shapes`` layers accept ``'li'`` on a 1-D stack (Phase C1): the same
+        placement, with both Toeplitz matrices built from the ANALYTIC form
+        factors (the shapes are disjoint, so the ``1/eps`` series is the exact
+        additive sum), hence no pixel lattice and no ``O(1/S)`` width
+        quantization.  The shape list must be y-invariant (rectangles spanning
+        the full ``period_y``; anything else raises, since a 1-D stack would
+        see only its y-average) and ``eps_background`` must be non-zero.  On a
+        2-D stack ``shapes`` layers accept ``'li'`` for AXIS-ALIGNED
+        RECTANGLES (Phase D): Li's sequential rule built analytically -- the
+        cell splits into y-bands between the rectangles' y-edges, each band's
+        x-Toeplitz of ``1/eps`` is analytic and INVERTED (inverse rule along
+        x), and the band-wise constant inverse is Fourier-transformed along y
+        exactly (direct rule along y) into ``Cxx``; ``Cyy`` swaps the axes.
+        It is the ``S -> inf`` limit of the ``eps_cell`` 'li' path on a raster
+        of the same cell.  Disks, ellipses and rotated rectangles raise (Li's
+        rule for curved shapes is future work); a band whose ``[[1/eps]]`` is
+        singular raises ``LinAlgError``.  Uniform and tensor layers accept only
+        the default.
 
         ``eps_cell_normal`` (audit W9, ``formulation='li'`` only): the
         INVERSE-RULE companion pair ``(exx, eyy)``, two cells of the SAME shape
@@ -1583,6 +1838,29 @@ class RCWAStack:
         the pair for you; see the PIXEL CELL CONTRACT block at the top of this
         module for what it buys (measured: 8x-1115x on the ``'li'`` wall-normal
         polarization).
+
+        CONVERGENCE ON LOSSY-METAL CORNERS (audit L-1, 2026-11-02 DynaMeta
+        bridge audit).  A right-angle corner of a lossy metal carries a field
+        singularity, so EVERY method converges only ALGEBRAICALLY there --
+        ``'li'`` included; no factorization removes it.  Measured on a 1-D
+        lamellar grating (lambda 1.31 um, period 600 nm, eps -20+2i, duty 0.5,
+        depth 120 nm, air over an n = 1.5 substrate, normal incidence, TM =
+        E across the lines; ``'li'`` on an ``eps_cell`` with ``Sx = 8 N`` so
+        the edges sit on pixel boundaries), against the PMM degree limit
+        R = 0.508768: ``'li'`` errs 4.7e-3 / 8.1e-4 / 3.8e-4 / 1.2e-4 / 6.5e-5
+        at ``n_orders`` N = 32 / 128 / 256 / 768 / 1536 (per side), a local
+        rate ~N^-1.1 that is still FALLING (1.11 at N 128-256, 0.99 at
+        512-768, 0.89 at 1024-1536); ``'laurent'`` (analytic ``shapes=``)
+        approaches from ABOVE once N >= 128 (0.51529 / 0.51166 / 0.50996 /
+        0.50945 at N = 128 / 256 / 512 / 768, 6.8e-4 high at 768);
+        :class:`~lumenairy.elements.pmm.PMMStack` converges as degree^-2.2.
+        Because the ``'li'`` rate is pre-asymptotic, a three-point Richardson
+        limit (:func:`~lumenairy.elements.rcwa.rcwa_extrapolate`) DRIFTS with
+        the window: 0.508747 from N = 384-768, 0.508743 from 512-1024,
+        0.508763 from 768-1536 (truth 0.508768).  For a 1-D metallic
+        REFERENCE value use PMM degree extrapolation (its windows agree to
+        1e-7 from degree 64 up); for ``'li'`` report the spread of the last
+        two extrapolation windows as its uncertainty.
         """
         # Uniform ANISOTROPIC entry (audit S1-14 / S5-11): a (3, 3) permittivity
         # tensor passed as ``eps`` is a spatially-uniform tensor layer.  Left in
@@ -1612,10 +1890,11 @@ class RCWAStack:
                 f"add_layer: formulation must be 'laurent' or 'li'/'fff', "
                 f"got {formulation!r}.")
         if f != "laurent" and eps_cell is None:
-            raise ValueError(
-                "add_layer: formulation='li' applies to isotropic patterned "
-                "layers (eps_cell) only; uniform / shapes / tensor layers "
-                "use their own factorizations.")
+            if shapes is None:
+                raise ValueError(
+                    "add_layer: formulation='li' applies to isotropic "
+                    "patterned layers only (eps_cell, or shapes); uniform "
+                    "and tensor layers use their own factorizations.")
         # INVERSE-RULE companion pair (audit W9).  Validated here, up front, so
         # a mis-shaped or mis-routed pair can never reach the solver and be read
         # as a different geometry than the cell it rides with.
@@ -1702,6 +1981,18 @@ class RCWAStack:
                     "add_layer: shapes requires eps_background.")
             disp = callable(eps_background) or any(
                 callable(sh.get("eps")) for sh in shapes)
+            if f == "li":
+                # Geometry is concrete even for a dispersive list (only the eps
+                # values are callables), so the 'li' preconditions are checked
+                # HERE, up front, for both flavours.
+                _validate_shapes("add_layer", shapes, self.period_x,
+                                 self.period_y, n_orders_y=None)
+                if self.is_1d:
+                    _check_li_shapes("add_layer", shapes, self.period_y,
+                                     None if disp else eps_background)
+                else:
+                    _check_li_shapes_2d("add_layer", shapes,
+                                        None if disp else eps_background)
             if not disp:
                 # n_orders_y mirrors the cell path's strict_y=not is_1d (audit
                 # W8): a 1-D stack's noy=0 sentinel WANTS the y-average, an
@@ -1714,11 +2005,11 @@ class RCWAStack:
                                            strict_y=not self.is_1d)
                 self._layers.append(
                     _RCWALayer(thickness, "shapes",
-                               (_C(eps_background), shapes)))
+                               (_C(eps_background), shapes), formulation=f))
             else:
                 self._layers.append(
                     _RCWALayer(thickness, "shapes", (eps_background, shapes),
-                               dispersive=True))
+                               formulation=f, dispersive=True))
         else:
             if callable(eps_tensor_cell):
                 self._layers.append(_RCWALayer(thickness, "tensor",
@@ -2390,7 +2681,14 @@ class RCWAStack:
                                            self.period_y, self.noy,
                                            strict_y=not self.is_1d,
                                            stacklevel=5)
-                out.append(_RCWALayer(L.thickness, "shapes", (bgv, sh)))
+                if L.formulation == "li" and self.is_1d:
+                    # the per-wavelength eps values are only known now
+                    _check_li_shapes("solve_vs_wavelength", sh, self.period_y,
+                                     bgv)
+                elif L.formulation == "li":
+                    _check_li_shapes_2d("solve_vs_wavelength", sh, bgv)
+                out.append(_RCWALayer(L.thickness, "shapes", (bgv, sh),
+                                      formulation=L.formulation))
             else:
                 tcell = np.asarray(L.data(wl), dtype=_C)
                 _validate_cell_sampling("solve_vs_wavelength", tcell, self.nox,
@@ -2585,7 +2883,8 @@ class RCWAStack:
         if layer.kind == "uniform":
             return ("uniform", complex(np.conj(layer.data)))
         if layer.kind == "iso":
-            cell_c = xp.conj(xp.asarray(layer.data))
+            # conj + point mirror: the ONE lateral bridge (_core._internal_cell)
+            cell_c = _internal_cell(layer.data, xp)
             EPS = _eps_convolution_2d(cell_c, orders, self.nox, self.noy)
             if getattr(layer, "formulation", "laurent") == "li":
                 e_np = to_numpy(cell_c)
@@ -2598,19 +2897,20 @@ class RCWAStack:
             P, Q = _scalar_PQ(Kx, Ky, EPS, EPS, None, xp)
             return ("PQ", P, Q, EPS)
         if layer.kind == "shapes":
-            eps_bg, shapes = layer.data
-            shapes_c = [dict(sh, eps=complex(np.conj(_C(sh["eps"]))))
-                        for sh in shapes]
-            EPS_np, _ = _analytic_convolutions_2d(   # [[1/eps]] unused (M10)
-                complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
-                self.noy, self.period_x, self.period_y)
+            EPS_np, Cxx_np, Cyy_np = self._shapes_operators(layer, orders)
             EPS = xp.asarray(EPS_np)
+            if Cxx_np is not None:           # 'li' (Phase C1 1-D, Phase D 2-D)
+                Cxx = xp.asarray(Cxx_np)
+                Cyy = EPS if Cyy_np is EPS_np else xp.asarray(Cyy_np)
+                Z = xp.zeros_like(Cxx)
+                P, Q = _tensor_PQ(Kx, Ky, Cxx, Z, Z, Cyy, EPS, xp)
+                return ("PQ", P, Q, EPS)
             P, Q = _scalar_PQ(Kx, Ky, EPS, EPS, None, xp)
             return ("PQ", P, Q, EPS)
         # tensor: in-plane only (OOP cannot fold)
         if _layer_offplane_or_traced(layer.data):
             return None
-        et = xp.conj(xp.asarray(layer.data))
+        et = _internal_cell(layer.data, xp)
 
         def cv(comp):
             return _eps_convolution_2d(comp, orders, self.nox, self.noy)
@@ -2618,6 +2918,39 @@ class RCWAStack:
                           cv(et[:, :, 1, 0]), cv(et[:, :, 1, 1]),
                           cv(et[:, :, 2, 2]), xp)
         return ("PQ", P, Q, cv(et[:, :, 0, 0]))
+
+    def _shapes_operators(self, layer, orders):
+        """Host (NumPy) operators of a ``shapes`` layer, INTERNAL gauge:
+        ``(EPS, Cxx, Cyy)``.  ``EPS`` is the analytic direct-rule ``[[eps]]``
+        (it also feeds the ``E_z`` elimination).  For an ``'li'`` layer with
+        contrast, ``(Cxx, Cyy)`` are the ``E_x`` / ``E_y`` blocks in the
+        ``eps_cell`` 'li' placement: on a stack with ``noy = 0`` (a 1-D stack,
+        Phase C1) ``Cxx = [[1/eps]]^{-1}`` and ``Cyy`` IS ``EPS`` (the same
+        object -- the C1 operators, unchanged); on a 2-D stack (Phase D,
+        axis-aligned rectangles) Li's sequential rule per axis.  Otherwise
+        ``Cxx = Cyy = None`` (Laurent).  All come from the shapes forms of the
+        lateral bridge in ``twod`` (:func:`_internal_analytic_convolution`,
+        :func:`_internal_analytic_li_operators`,
+        :func:`_internal_analytic_li_operators_2d`: the PUBLIC operator is
+        built and then conjugated -- never the shape permittivities, which
+        solves the point mirror of the cell).  THE single place a shapes layer
+        is factorized, shared by :meth:`_layer_modes` and
+        :meth:`_layer_even_spec` so the ordinary and even-parity cascades can
+        never disagree."""
+        eps_bg, shapes = layer.data
+        if getattr(layer, "formulation", "laurent") == "li":
+            if int(self.noy) == 0:
+                EPS, Cxx = _internal_analytic_li_operators(
+                    eps_bg, shapes, orders, self.nox, self.noy,
+                    self.period_x, self.period_y)
+                return EPS, Cxx, (None if Cxx is None else EPS)
+            return _internal_analytic_li_operators_2d(
+                eps_bg, shapes, orders, self.nox, self.noy, self.period_x,
+                self.period_y)
+        EPS = _internal_analytic_convolution(
+            eps_bg, shapes, orders, self.nox, self.noy, self.period_x,
+            self.period_y)
+        return EPS, None, None
 
     def _li_blocks(self, layer, cell_c, orders, xp):
         """The Li wall-normal blocks ``(Cxx, Cyy)`` of an ``'li'`` iso layer --
@@ -2654,8 +2987,8 @@ class RCWAStack:
         pair = getattr(layer, "normal_cells", None)
         if pair is None:
             return _li_convolutions_2d(cell_c, orders, self.nox, self.noy, xp)
-        exx = xp.conj(xp.asarray(pair[0]))
-        eyy = xp.conj(xp.asarray(pair[1]))
+        exx = _internal_cell(pair[0], xp)       # same lateral bridge as the
+        eyy = _internal_cell(pair[1], xp)       # cell itself (_internal_cell)
         Z = xp.zeros_like(exx)
         # symmetrize=False: this call wants the Li-1997 PER-AXIS rule (x-inverse
         # on exx into Cxx, y-inverse on eyy into Cyy), which is what the single
@@ -2684,7 +3017,8 @@ class RCWAStack:
             EPS = eps_u * xp.eye(Kx.shape[0], dtype=_C)
             return W, V, lam, EPS
         if layer.kind == "iso":
-            cell_c = xp.conj(xp.asarray(layer.data))
+            # conj + point mirror: the ONE lateral bridge (_core._internal_cell)
+            cell_c = _internal_cell(layer.data, xp)
             EPS = _eps_convolution_2d(cell_c, orders, self.nox, self.noy)
             if getattr(layer, "formulation", "laurent") == "li":
                 # Li-1997 sequential rule (audit GAP3, v5.14.1): rigorous
@@ -2704,18 +3038,25 @@ class RCWAStack:
             return W, V, lam, EPS
         if layer.kind == "shapes":
             # Analytic (host) form factors -> move the convolution to backend.
-            eps_bg, shapes = layer.data
-            shapes_c = [dict(s, eps=complex(np.conj(_C(s["eps"])))) for s in shapes]
-            EPS_np, _ = _analytic_convolutions_2d(   # [[1/eps]] unused (M10)
-                complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
-                self.noy, self.period_x, self.period_y)
+            EPS_np, Cxx_np, Cyy_np = self._shapes_operators(layer, orders)
             EPS = xp.asarray(EPS_np)
+            if Cxx_np is not None:
+                # 'li': the eps_cell 'li' placement.  1-D (Phase C1): inverse
+                # rule Cxx = [[1/eps]]^{-1} for the wall-normal E_x, direct
+                # rule for E_y (Cyy = EPS).  2-D rectangles (Phase D): Li's
+                # sequential rule per axis.  E_z elimination: direct (EZZ).
+                Cxx = xp.asarray(Cxx_np)
+                Cyy = EPS if Cyy_np is EPS_np else xp.asarray(Cyy_np)
+                Zli = xp.zeros_like(Cxx)
+                W, V, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Zli, Zli,
+                                                     Cyy, EPS)
+                return W, V, lam, EPS
             # Direct-rule E_z elimination (v5.14.1 audit F1: the dual-Laurent
             # [[1/eps]] z-rule is the wrong factorization for a z-invariant
             # layer -- E_z is wall-tangential; see rcwa_efficiency_2d_shapes).
             W, V, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
             return W, V, lam, EPS
-        et = xp.conj(xp.asarray(layer.data))
+        et = _internal_cell(layer.data, xp)      # conj + point mirror (bridge)
 
         def cv(comp):
             return _eps_convolution_2d(comp, orders, self.nox, self.noy)
@@ -2776,7 +3117,11 @@ class RCWAStack:
             # last bits from that layer's own solve.  ``repr`` keeps the key
             # hashable (a 'size' / 'center' may be a list) and is faithful for
             # the scalar geometry / eps fields the form factors read.
-            return ("shapes", complex(eps_bg),
+            # The formulation is part of the eigenproblem (Phase C1 / D: a
+            # shapes layer may be 'li'), so a 'laurent' and an 'li' layer of
+            # the same shapes must never share modes.
+            return ("shapes", getattr(layer, "formulation", "laurent"),
+                    complex(eps_bg),
                     tuple(tuple(sorted((k, repr(v)) for k, v in s.items()))
                           for s in shapes))
         try:                                   # iso / tensor: hash the cell
@@ -3299,7 +3644,7 @@ class RCWAStack:
                     Wf_l.append(Wf), Vf_l.append(Vf), lf_l.append(lf)
                     Wb_l.append(Wb), Vb_l.append(Vb), lb_l.append(lb)
                     EPS_l.append(EZZ)
-                    et = xp.conj(xp.asarray(L.data))
+                    et = _internal_cell(L.data, xp)   # as _layer_modes
                     EZX_l.append(_eps_convolution_2d(
                         et[:, :, 2, 0], orders, self.nox, self.noy))
                     EZY_l.append(_eps_convolution_2d(
