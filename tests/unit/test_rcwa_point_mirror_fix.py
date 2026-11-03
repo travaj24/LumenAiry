@@ -51,10 +51,13 @@ import pytest
 
 from lumenairy.elements.rcwa import (
     RCWAStack,
+    prepare_rcwa_2d,
+    rcwa_efficiency_2d,
+    rcwa_efficiency_2d_vs_wavelength,
     rcwa_jones_1d_segments,
     rcwa_jones_2d,
-    rcwa_efficiency_2d,
 )
+from lumenairy.elements.rcwa import stack as _stack_mod
 from lumenairy.elements.rcwa._core import (
     _internal_cell,
     _internal_profiles_1d,
@@ -448,6 +451,123 @@ def test_efficiency_2d_matches_stack_on_asymmetric_cell():
                                     polarization="tm", n_orders_x=M, n_orders_y=M)
     np.testing.assert_allclose(np.asarray(R2), np.asarray(R)[0], atol=1e-12)
     np.testing.assert_allclose(np.asarray(T2), np.asarray(T)[0], atol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# 6b. the bridge sites a full-solve comparison cannot see on its own
+#     (each test below FAILS when its one site is reverted to conj-only)
+# ---------------------------------------------------------------------------
+
+def _asym_cell(S=30):
+    U, V = np.meshgrid(np.arange(S) / S, np.arange(S) / S, indexing="ij")
+    cell = np.ones((S, S), complex)
+    cell[(U >= 0.1) & (U < 0.45) & (V >= 0.05) & (V < 0.3)] = 6 + 2j
+    cell[(U >= 0.6) & (U < 0.75) & (V >= 0.1) & (V < 0.45)] = 4.0
+    return cell
+
+
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_prepared_and_vs_wavelength_match_efficiency_2d(pol):
+    """``prepare_rcwa_2d`` / ``PreparedRCWA2D.solve`` and
+    ``rcwa_efficiency_2d_vs_wavelength`` carry their OWN bridge (the prepared
+    cache) -- per order they must equal ``rcwa_efficiency_2d`` on an
+    asymmetric cell at oblique conical incidence."""
+    px, py, d, M = 1.3, 1.2, 0.3, 3
+    cell = _asym_cell()
+    kw = dict(theta=0.45, phi=0.7, polarization=pol, n_orders_x=M, n_orders_y=M)
+    wls = (1.0, 1.07)
+    prep = prepare_rcwa_2d(px, py, cell, 1.5, 1.0, d, **kw)
+    o_s, R_s, T_s = rcwa_efficiency_2d_vs_wavelength(px, py, cell, 1.5, 1.0, d, wls, **kw)
+    for k, wl in enumerate(wls):
+        o, R, T = rcwa_efficiency_2d(px, py, cell, 1.5, 1.0, d, wl, **kw)
+        op, Rp, Tp = prep.solve(wl)
+        assert np.array_equal(np.asarray(o), np.asarray(op))
+        assert np.array_equal(np.asarray(o), np.asarray(o_s))
+        for a_, b_ in ((R, Rp), (T, Tp), (R, np.asarray(R_s)[k]), (T, np.asarray(T_s)[k])):
+            np.testing.assert_allclose(np.asarray(b_), np.asarray(a_), rtol=0, atol=1e-10)
+
+
+def test_even_parity_fold_keeps_the_order_phases_of_an_off_origin_cell(monkeypatch):
+    """At normal incidence a cell centro-symmetric about an OFF-origin point
+    takes the even-parity fold (``_layer_even_spec``).  Its efficiencies are
+    blind to a mirror (the mirror is a translation), but the per-order COMPLEX
+    amplitudes are not: they must equal the full solve's."""
+    calls = []
+    real = _stack_mod._symmetric_cascade_rt
+
+    def spy(*a, **k):
+        out = real(*a, **k)
+        calls.append(out is not None)
+        return out
+    monkeypatch.setattr(_stack_mod, "_symmetric_cascade_rt", spy)
+    px, py, S = 1.3, 1.2, 40
+    U, V = np.meshgrid(np.arange(S) / S, np.arange(S) / S, indexing="ij")
+    cell = np.ones((S, S), complex)
+    # a rectangle centred off-origin (half-pixel centre (11.5, 7.5)/S) and a
+    # second one point-symmetric to nothing but the common centre
+    cell[(U >= 0.2) & (U < 0.4) & (V >= 0.1) & (V < 0.3)] = 5.0 + 1.0j
+    out = {}
+    for sym in ("auto", False):
+        for f in ("laurent", "li"):
+            st = RCWAStack(px, period_y=py, n_superstrate=1.0, n_substrate=1.5, n_orders=3,
+                           n_orders_y=3)
+            st.add_layer(0.3, eps_cell=cell, formulation=f)
+            st.add_layer(0.2, eps=2.1)
+            r = st.set_source(WL, theta=0.0).solve(symmetry=sym)
+            out[sym, f] = r
+    assert calls and all(calls), calls             # the fold actually ran
+    for f in ("laurent", "li"):
+        for port in ("reflection", "transmission"):
+            a = out["auto", f].per_order_amplitudes(port=port)
+            b = out[False, f].per_order_amplitudes(port=port)
+            for c in ("Ex", "Ey"):
+                np.testing.assert_allclose(a[c], b[c], rtol=0, atol=1e-9)
+
+
+def test_offplane_internal_field_ez_follows_a_translation():
+    """The OOP ``internal_field`` recovers E_z through the retained EZX / EZY
+    convolutions (a separate bridge site from the modes): on a tilted-tensor
+    bar, shifting the structure by a = P/4 must shift |E_z| (and |E_x|) by +a,
+    and ``layer_absorption`` must be translation-invariant."""
+    P, a, nx, S = 0.9, 0.25, 240, 240
+    n = np.array([np.cos(0.7), 0.0, np.sin(0.7)])
+    T_lc = 2.25 * np.eye(3) + 0.9 * np.outer(n, n) + 0.1j * np.eye(3)
+    u = np.arange(S) / S
+    F, A = [], []
+    for lo in (0.10, 0.35):
+        cell = np.zeros((S, 1, 3, 3), complex) + np.eye(3)
+        cell[(u >= lo) & (u < lo + 0.3), 0] = T_lc
+        cell[(u >= lo + 0.3) & (u < lo + 0.4), 0] = (3.0 + 0.4j) * np.eye(3)
+        st = RCWAStack(P, n_superstrate=1.0, n_substrate=1.5, n_orders=10)
+        st.add_layer(0.3, eps_tensor_cell=cell)
+        st.add_layer(0.1, eps=2.0 + 0.15j)      # lossy spacer: a real split
+        r = st.set_source(WL, theta=0.3).solve(retain_internal=True)
+        F.append(r.internal_field(0.15, nx=nx, incident=(1.0, 0.0), component="E"))
+        A.append(r.layer_absorption(nx=nx, nz_per_layer=6))
+    sh = int(round(a * nx))
+    for c in ("Ez", "Ex"):
+        e0 = np.abs(np.asarray(F[0][c])[0])
+        e1 = np.abs(np.asarray(F[1][c])[0])
+        np.testing.assert_allclose(e1, np.roll(e0, sh), rtol=0, atol=1e-8 * e0.max())
+    np.testing.assert_allclose(A[1], A[0], rtol=0, atol=1e-9)
+
+
+def test_li_companion_pair_is_bridged_with_the_cell():
+    """``eps_cell_normal=(cell, cell)`` (the raster='harmonic' companion
+    route through ``_li_blocks``) reduces to the plain 'li' layer (the
+    library's documented reduction: Cxx bit-identical, Cyy ~4e-16 on a
+    y-uniform cell) -- only if the companions are bridged like the cell."""
+    P, S, M = 1.7, 240, 10
+    u = np.arange(S) / S
+    cell = np.where(u < 0.3, 6.0 + 2.0j, np.where(u < 0.55, 3.0 + 0.3j, 1.0 + 0j))[:, None]
+    out = []
+    for pair in (None, (cell, cell)):
+        st = RCWAStack(P, n_superstrate=1.0, n_substrate=1.5, n_orders=M)
+        st.add_layer(0.35, eps_cell=cell, formulation="li", eps_cell_normal=pair)
+        o, R, T = st.set_source(WL, theta=0.4).solve().efficiencies()
+        out.append((np.asarray(R), np.asarray(T)))
+    np.testing.assert_allclose(out[1][0], out[0][0], rtol=0, atol=1e-10)
+    np.testing.assert_allclose(out[1][1], out[0][1], rtol=0, atol=1e-10)
 
 
 # ---------------------------------------------------------------------------
