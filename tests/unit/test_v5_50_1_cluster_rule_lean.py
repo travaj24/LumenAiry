@@ -504,7 +504,7 @@ def test_a_failing_lean_conversion_falls_back_for_that_call(lean_switch,
     assert _close(g, ref)
 
 
-def _sym_rcwa_diag(t):
+def _sym_rcwa_diag(t, terms=False):
     """The verifier's loss c: the symmetric cell perturbed DIAGONALLY."""
     import jax.numpy as jnp
 
@@ -517,6 +517,8 @@ def _sym_rcwa_diag(t):
     st.set_source(1.0, theta=0.0, phi=0.0)
     _o, R, T = st.solve().efficiencies()
     w = jnp.asarray(np.cos(np.arange(R.shape[1])))
+    if terms:
+        return jnp.concatenate([R[0] * w, -0.3 * T[1] * w ** 2, T[0]])
     return jnp.sum(R[0] * w) - 0.3 * jnp.sum(T[1] * w ** 2) + jnp.sum(T[0])
 
 
@@ -550,15 +552,20 @@ def test_firing_cluster_gradients_against_an_extrapolated_reference(
     """ACCURACY, not only closeness to 5.50.0: at the symmetric point (the
     cluster fires) the lean eager, eager-vmap and jit gradients and the
     5.50.0 eager gradient all agree with a Richardson-extrapolated central
-    difference to the rule's round-off level (measured: every mode, old and
-    new, within 4.4e-9 .. 3.4e-8 of the reference; bar 1e-7)."""
+    difference to the rule's round-off level.  Errors and the reference's
+    own spread are divided by the CANCELLATION-AWARE scale
+    sum_m |d term_m / dp| (_cancellation_scale): the rule's round-off
+    amplification scales with the per-order term gradients, not with their
+    cancelling sum.  Bars: 1e-7 per mode, 1e-8 for the reference spread
+    (measured margins in the comments below)."""
     import jax
     import jax.numpy as jnp
     _core = lean_switch
     ref, spread = _extrapolated_derivative(loss, 0.0)
-    # the reference's own spread: measured 1.0e-9 (x sides) / 2.4e-9
-    # (diagonal) relative -- 10x below the bar it is used against
-    assert spread <= 1e-8 * abs(ref), (ref, spread)
+    scale = _cancellation_scale(loss, 0.0)
+    # the reference's own spread on that scale: measured 5.1e-12 (x sides,
+    # scale 205 |ref|) / 2.4e-12 (diagonal, scale 963 |ref|): >= 1981x
+    assert spread / scale <= 1e-8, (ref, spread, scale)
     x = jnp.asarray(0.0)
     vals = {
         "eager": float(jax.grad(loss)(x)),
@@ -567,8 +574,10 @@ def test_firing_cluster_gradients_against_an_extrapolated_reference(
     }
     _core._CLUSTER_RULE_LEAN = False
     vals["5.50.0 eager"] = float(jax.grad(lambda t: loss(t))(x))
-    errs = {k: abs(v - ref) / abs(ref) for k, v in vals.items()}
-    assert all(e <= _BAR_CLUSTER for e in errs.values()), (ref, errs)
+    # measured, every mode old and new: 9.9e-12 .. 6.8e-11 on this scale
+    # (4.4e-9 .. 3.4e-8 relative to |ref|): margin >= 1462x
+    errs = {k: abs(v - ref) / scale for k, v in vals.items()}
+    assert all(e <= _BAR_CLUSTER for e in errs.values()), (ref, scale, errs)
 
 
 class _ConsumerBoom(Exception):
