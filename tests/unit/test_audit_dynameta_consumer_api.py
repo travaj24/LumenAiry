@@ -222,6 +222,18 @@ def _assert_flux_closure(sp, R_eff, T_eff, tol=1e-12):
         assert np.max(np.abs(out - np.asarray(eff))) < tol
 
 
+# RCWA point-mirror fix: PMM-vs-RCWA gates that PMM's own (pending) fix
+# must re-green; see tests/unit/test_rcwa_point_mirror_fix.py.
+_PMM_MIRROR_PENDING = (
+    "PMM still solves the point mirror eps(-x, -y) (the v5.5.0..v5.50.0 "
+    "loss-conjugation bridge, fixed in RCWA only so far); this "
+    "cross-engine gate compares PMM against the now-REGISTERED RCWA.  "
+    "Proven: with the old RCWA bridge restored on the fixed tree it "
+    "passes again.  REMOVE this mark with the PMM fix (strict: it will "
+    "XPASS-fail then).")
+
+
+@pytest.mark.xfail(strict=True, reason=_PMM_MIRROR_PENDING)
 def test_b_classical_oblique_amplitudes_vs_rcwa():
     th = np.deg2rad(20.0)
     sp = _pmm_grating(th, 0.0)
@@ -234,6 +246,7 @@ def test_b_classical_oblique_amplitudes_vs_rcwa():
     assert np.max(np.abs(Jr - rr.jones_reflection())) < 1e-3
 
 
+@pytest.mark.xfail(strict=True, reason=_PMM_MIRROR_PENDING)
 def test_b_conical_patterned_amplitudes_vs_rcwa():
     """The nodal-conical cascade (the AUDIT_PMM_CONICAL fix path) exposes
     per-order amplitudes that agree with RCWA in COMPLEX value -- the

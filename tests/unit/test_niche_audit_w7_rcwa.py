@@ -388,7 +388,18 @@ def test_w7d_layer_absorption_split_uses_the_registered_map():
     resolution): measured on a 64-pixel half-metal cell over a lossy spacer,
     the metal layer's converged share was 0.16548922 (floor) vs 0.16541527
     (nearest) -- 7.4e-05 absolute, still 7.4e-05 at ``nx=4096``.  The total is
-    normalised, so only the SPLIT moved and energy could not see it."""
+    normalised, so only the SPLIT moved and energy could not see it.
+
+    RE-PINNED with the RCWA point-mirror fix (v5.5.0..v5.50.0 solved the cell
+    eps(-x); here the metal-on-[0, P/2) cell's mirror is a TRANSLATION, so the
+    total is unchanged but ``layer_absorption`` multiplied the field of the
+    TRANSLATED structure by the DECLARED Im(eps) map).  The old pins 0.16541074
+    (nearest) / 0.16548682 (floor) are reproduced EXACTLY on the fixed tree by
+    "field of the mirrored cell x declared mask".  Registered now: nearest
+    0.15788743, floor 0.15809033 (2.0e-4 apart), against a MASK-FREE oracle --
+    the Poynting-flux drop across the metal layer from ``internal_field`` --
+    of 0.15793005: nearest is 4.3e-5 from it, floor 1.6e-4, so the W7-D
+    verdict (nearest, not floor) stands on the declared structure."""
     st = rcwa.RCWAStack(period=0.6e-6, n_substrate=1.5, n_orders=6)
     cw = np.ones((64, 1), dtype=_C)
     cw[:32] = complex(0.15, 3.5) ** 2
@@ -400,8 +411,18 @@ def test_w7d_layer_absorption_split_uses_the_registered_map():
         res = st.solve(retain_internal=True, symmetry=False)
     a = res.layer_absorption(nx=1024, nz_per_layer=16)
     assert abs(float(a[0].sum()) - float(res.absorptance()[0])) < 1e-12
-    assert abs(float(a[0][0]) - 0.16541074) < 3e-5
-    assert not abs(float(a[0][0]) - 0.16548682) < 1e-6     # the floor answer
+    assert abs(float(a[0][0]) - 0.15788743) < 3e-5
+    assert not abs(float(a[0][0]) - 0.15809033) < 1e-6     # the floor answer
+    # mask-free oracle: Poynting z-flux drop across the metal layer
+    def _sz(z, lay):
+        F = res.internal_field(z, nx=1024, layer=lay, incident=(1.0, 0.0))
+        return float(np.mean(np.real(
+            np.asarray(F["Ex"]) * np.conj(np.asarray(F["Hy"]))
+            - np.asarray(F["Ey"]) * np.conj(np.asarray(F["Hx"])))))
+    s0, s1 = _sz(1e-15, 0), _sz(0.05e-6 - 1e-15, 0)
+    a_flux = (s0 - s1) / s0 * (1.0 - float(np.sum(res.efficiencies()[1][0])))
+    assert abs(a_flux - 0.15793005) < 1e-6
+    assert abs(float(a[0][0]) - a_flux) < 1e-4
 
 
 # ===========================================================================

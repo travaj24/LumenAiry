@@ -29,6 +29,7 @@ from ._core import (
     _homogeneous_eigenmodes,
     _interface_smatrix,
     _interface_smatrix_general,
+    _internal_cell,
     _jax_cluster_routed,
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
@@ -66,9 +67,9 @@ from .oned import (
     _resolve_incidence,
 )
 from .twod import (
-    _analytic_convolutions_2d,
     _eps_convolution_2d,
     _harmonic_orders_2d,
+    _internal_analytic_convolution,
     _li_convolutions_2d,
     _li_convolutions_2d_tensor,
 )
@@ -259,6 +260,21 @@ below are MEASURED, not asserted (``tests/unit/test_niche_audit_w8_raster.py``
    The midpoint lattice is kept (it is the natural pixel-footprint centre, and
    what ``raster='area'`` integrates over); :meth:`RCWAStack.plot_geometry`
    renders on the SAME midpoint lattice so the picture matches the generator.
+
+REGISTRATION: THE CELL IS SOLVED WHERE IT IS DECLARED.  ``eps_cell[j, i]`` sits
+at ``(+j Px/Sx, +i Py/Sy)``, a shape at its ``center``, a segment on its
+``[lo, hi)`` -- in the same frame as ``theta`` / ``phi``, the order labels
+``kx_m = kx0 + m lambda/Px`` and the :meth:`RCWAResult.internal_field` grid.
+From v5.5.0 to v5.50.0 every patterned path solved the POINT MIRROR
+``eps(-x, -y)`` instead (the loss-convention conjugation also flips the
+transverse carrier, and the bridge kept the public Toeplitz rule); the lateral
+half of the bridge now lives in ONE place,
+:func:`~lumenairy.elements.rcwa._core._internal_cell` (and its
+``_internal_profiles_1d`` form; analytic shapes take the conjugate of the
+public operator, ``twod._internal_analytic_convolution``).  Cells symmetric about
+the origin (equivalently about ``P/2``) are unaffected bit-for-bit; cells
+symmetric about any other point keep their efficiencies and only their order
+PHASES move.
 
 BOUNDARY PIXELS ARE HARD-ASSIGNED, HALF-OPEN.  A feature occupying the
 period-fraction interval ``[lo, lo + w)`` claims pixel ``j`` iff
@@ -2585,7 +2601,8 @@ class RCWAStack:
         if layer.kind == "uniform":
             return ("uniform", complex(np.conj(layer.data)))
         if layer.kind == "iso":
-            cell_c = xp.conj(xp.asarray(layer.data))
+            # conj + point mirror: the ONE lateral bridge (_core._internal_cell)
+            cell_c = _internal_cell(layer.data, xp)
             EPS = _eps_convolution_2d(cell_c, orders, self.nox, self.noy)
             if getattr(layer, "formulation", "laurent") == "li":
                 e_np = to_numpy(cell_c)
@@ -2599,18 +2616,18 @@ class RCWAStack:
             return ("PQ", P, Q, EPS)
         if layer.kind == "shapes":
             eps_bg, shapes = layer.data
-            shapes_c = [dict(sh, eps=complex(np.conj(_C(sh["eps"]))))
-                        for sh in shapes]
-            EPS_np, _ = _analytic_convolutions_2d(   # [[1/eps]] unused (M10)
-                complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
-                self.noy, self.period_x, self.period_y)
+            # conj of the PUBLIC analytic operator: the shapes form of the
+            # lateral bridge (twod._internal_analytic_convolution)
+            EPS_np = _internal_analytic_convolution(
+                eps_bg, shapes, orders, self.nox, self.noy, self.period_x,
+                self.period_y)
             EPS = xp.asarray(EPS_np)
             P, Q = _scalar_PQ(Kx, Ky, EPS, EPS, None, xp)
             return ("PQ", P, Q, EPS)
         # tensor: in-plane only (OOP cannot fold)
         if _layer_offplane_or_traced(layer.data):
             return None
-        et = xp.conj(xp.asarray(layer.data))
+        et = _internal_cell(layer.data, xp)
 
         def cv(comp):
             return _eps_convolution_2d(comp, orders, self.nox, self.noy)
@@ -2654,8 +2671,8 @@ class RCWAStack:
         pair = getattr(layer, "normal_cells", None)
         if pair is None:
             return _li_convolutions_2d(cell_c, orders, self.nox, self.noy, xp)
-        exx = xp.conj(xp.asarray(pair[0]))
-        eyy = xp.conj(xp.asarray(pair[1]))
+        exx = _internal_cell(pair[0], xp)       # same lateral bridge as the
+        eyy = _internal_cell(pair[1], xp)       # cell itself (_internal_cell)
         Z = xp.zeros_like(exx)
         # symmetrize=False: this call wants the Li-1997 PER-AXIS rule (x-inverse
         # on exx into Cxx, y-inverse on eyy into Cyy), which is what the single
@@ -2684,7 +2701,8 @@ class RCWAStack:
             EPS = eps_u * xp.eye(Kx.shape[0], dtype=_C)
             return W, V, lam, EPS
         if layer.kind == "iso":
-            cell_c = xp.conj(xp.asarray(layer.data))
+            # conj + point mirror: the ONE lateral bridge (_core._internal_cell)
+            cell_c = _internal_cell(layer.data, xp)
             EPS = _eps_convolution_2d(cell_c, orders, self.nox, self.noy)
             if getattr(layer, "formulation", "laurent") == "li":
                 # Li-1997 sequential rule (audit GAP3, v5.14.1): rigorous
@@ -2705,17 +2723,18 @@ class RCWAStack:
         if layer.kind == "shapes":
             # Analytic (host) form factors -> move the convolution to backend.
             eps_bg, shapes = layer.data
-            shapes_c = [dict(s, eps=complex(np.conj(_C(s["eps"])))) for s in shapes]
-            EPS_np, _ = _analytic_convolutions_2d(   # [[1/eps]] unused (M10)
-                complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
-                self.noy, self.period_x, self.period_y)
+            # conj of the PUBLIC analytic operator: the shapes form of the
+            # lateral bridge (twod._internal_analytic_convolution)
+            EPS_np = _internal_analytic_convolution(
+                eps_bg, shapes, orders, self.nox, self.noy, self.period_x,
+                self.period_y)
             EPS = xp.asarray(EPS_np)
             # Direct-rule E_z elimination (v5.14.1 audit F1: the dual-Laurent
             # [[1/eps]] z-rule is the wrong factorization for a z-invariant
             # layer -- E_z is wall-tangential; see rcwa_efficiency_2d_shapes).
             W, V, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
             return W, V, lam, EPS
-        et = xp.conj(xp.asarray(layer.data))
+        et = _internal_cell(layer.data, xp)      # conj + point mirror (bridge)
 
         def cv(comp):
             return _eps_convolution_2d(comp, orders, self.nox, self.noy)
@@ -3299,7 +3318,7 @@ class RCWAStack:
                     Wf_l.append(Wf), Vf_l.append(Vf), lf_l.append(lf)
                     Wb_l.append(Wb), Vb_l.append(Vb), lb_l.append(lb)
                     EPS_l.append(EZZ)
-                    et = xp.conj(xp.asarray(L.data))
+                    et = _internal_cell(L.data, xp)   # as _layer_modes
                     EZX_l.append(_eps_convolution_2d(
                         et[:, :, 2, 0], orders, self.nox, self.noy))
                     EZY_l.append(_eps_convolution_2d(
