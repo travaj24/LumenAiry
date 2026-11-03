@@ -302,6 +302,45 @@ entries (exact piecewise-constant Fourier series), or a
 ``raster='area'`` is a THIRD, opt-in mitigation -- see
 :func:`_raster_cover_1d`.
 
+THE CALLER'S LATTICE DECIDES THE REALISED DUTY (audit L-6, 2026-11-02
+DynaMeta bridge audit).  The solver reads ``eps_cell[j]`` at the NODE
+``x = j P/S`` (point 1); a caller that paints its own cell picks a lattice and
+a membership test, and the quantisation above depends on both.  Realised duty
+of a line of duty 0.5 centred at ``P/2`` (edges at ``P/4``, ``3P/4``):
+
+==========  ======================  ==================  ====================
+``S``       centres ``(j+0.5)/S``   nodes ``j/S``,      nodes ``j/S``,
+            (either test)           closed ``<=``       half-open ``[lo, hi)``
+==========  ======================  ==================  ====================
+128         64/128 = 0.5            65/128 = 0.5078     64/128 = 0.5
+129         65/129 = 0.5039         64/129 = 0.4961     64/129 = 0.4961
+193         97/193 = 0.5026         96/193 = 0.4974     96/193 = 0.4974
+256         128/256 = 0.5           129/256 = 0.5039    128/256 = 0.5
+==========  ======================  ==================  ====================
+
+* Centre painting and node painting give duty errors of OPPOSITE SIGN.
+* An ODD ``S`` puts the edges of a cell-centred feature MID-PIXEL on either
+  lattice: the duty is off by ``1/(2S)`` whatever the membership test.
+* On an ``S`` divisible by 4 with NODES on the edges, a CLOSED test
+  (``|x - c| <= w/2``) claims both edge nodes (65/128); only the house
+  half-open test (BOUNDARY PIXELS above) gives 0.5.  Centre painting has
+  no node on the edges, so its test does not matter there.
+
+MEASURED COST (TE, E along the lines, on the ``add_layer`` L-1 metal fixture:
+lambda 1.31 um, period 600 nm, eps -20+2i, depth 120 nm, n = 1.5 substrate,
+normal incidence; reference ``PMMStack`` degree 64, converged to 1e-11 in TE).
+``dR/d(duty)`` = 1.206, so the 0.00388 duty shift of ``S = 129`` costs
+``R(65/129) - R(0.5)`` = 4.65e-3 (PMM at both duties; the linear estimate is
+4.68e-3).  A centre-painted ``eps_cell`` at
+``n_orders`` 32 errs 4.57e-3 at ``S = 129`` against 1.71e-5 at ``S = 256``
+(and only 7.96e-5 against the PMM value AT the realised duty 65/129: the
+error is the duty, not the solve); at ``n_orders`` 48, 3.08e-3 at ``S = 193``
+against 8.33e-6 at ``S = 384``.  The remedies are the ones above: an ``S`` on
+which the edges are unambiguous for your lattice and test, ``shapes=``, or
+``raster='area'``.  Edges that land on NO lattice point at any affordable
+``S`` (a duty like 0.43) keep an ``O(1/S)`` error that only the last two
+remove.
+
 TWO OPERATORS, TWO CELLS (audit W9, ``raster='harmonic'``).  A subpixel average
 cannot be a single number, because the factorization consumes the cell TWICE
 with opposite rules.  Under ``formulation='li'`` the wall-NORMAL block is the
@@ -1599,6 +1638,29 @@ class RCWAStack:
         the pair for you; see the PIXEL CELL CONTRACT block at the top of this
         module for what it buys (measured: 8x-1115x on the ``'li'`` wall-normal
         polarization).
+
+        CONVERGENCE ON LOSSY-METAL CORNERS (audit L-1, 2026-11-02 DynaMeta
+        bridge audit).  A right-angle corner of a lossy metal carries a field
+        singularity, so EVERY method converges only ALGEBRAICALLY there --
+        ``'li'`` included; no factorization removes it.  Measured on a 1-D
+        lamellar grating (lambda 1.31 um, period 600 nm, eps -20+2i, duty 0.5,
+        depth 120 nm, air over an n = 1.5 substrate, normal incidence, TM =
+        E across the lines; ``'li'`` on an ``eps_cell`` with ``Sx = 8 N`` so
+        the edges sit on pixel boundaries), against the PMM degree limit
+        R = 0.508768: ``'li'`` errs 4.7e-3 / 8.1e-4 / 3.8e-4 / 1.2e-4 / 6.5e-5
+        at ``n_orders`` N = 32 / 128 / 256 / 768 / 1536 (per side), a local
+        rate ~N^-1.1 that is still FALLING (1.11 at N 128-256, 0.99 at
+        512-768, 0.89 at 1024-1536); ``'laurent'`` (analytic ``shapes=``)
+        approaches from ABOVE once N >= 128 (0.51529 / 0.51166 / 0.50996 /
+        0.50945 at N = 128 / 256 / 512 / 768, 6.8e-4 high at 768);
+        :class:`~lumenairy.elements.pmm.PMMStack` converges as degree^-2.2.
+        Because the ``'li'`` rate is pre-asymptotic, a three-point Richardson
+        limit (:func:`~lumenairy.elements.rcwa.rcwa_extrapolate`) DRIFTS with
+        the window: 0.508747 from N = 384-768, 0.508743 from 512-1024,
+        0.508763 from 768-1536 (truth 0.508768).  For a 1-D metallic
+        REFERENCE value use PMM degree extrapolation (its windows agree to
+        1e-7 from degree 64 up); for ``'li'`` report the spread of the last
+        two extrapolation windows as its uncertainty.
         """
         # Uniform ANISOTROPIC entry (audit S1-14 / S5-11): a (3, 3) permittivity
         # tensor passed as ``eps`` is a spatially-uniform tensor layer.  Left in

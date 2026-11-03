@@ -378,7 +378,42 @@ def set_jax_cluster_rule(enabled: bool) -> bool:
     symmetry, to save the rule's compile time and memory (the CHANGELOG's
     cost table).  The setting in force WHEN A JITTED FUNCTION IS
     CALLED applies: it is part of JAX's trace cache key, so a change
-    retraces (see ``jax_cluster_rule_trace_keyed``)."""
+    retraces (see ``jax_cluster_rule_trace_keyed``).
+
+    NEAR A RAYLEIGH ANOMALY ON IS LESS ACCURATE (audit L-10, 2026-11-02
+    DynaMeta bridge audit; the CHANGELOG 5.50 "Limits").  At exactly normal
+    incidence on a mirror-symmetric grating the rule's lift shrinks as an
+    order approaches grazing in a half-space (the half-space eig's consumer
+    ``sqrt(eps - mu)`` has its branch point there), so the theta = 0 angle
+    gradient loses accuracy.  Measured (``PMMStack``, eps 4 / 1, duty 0.5,
+    220 nm, n_sup 1.0 / n_sub 1.5, lambda 1.31 um, degree 8, n_orders 11,
+    period ``(lambda / n_sub) / (1 +- delta)``; worst of R for both
+    incident rows on both sides of the anomaly; |AD at 0| (truth 0)
+    relative to |dR/dtheta| at theta = 1e-2):
+
+    ===========  =======  =======  =======  =======  =======  =======  ===
+    delta        1e-1     1e-3     1e-4     1e-5     1e-6     1e-7     0
+    rule on      1.1e-10  4.9e-10  7.0e-8   9.3e-6   1.2e-3   1.5e-1   NaN
+    ===========  =======  =======  =======  =======  =======  =======  ===
+
+    * EXACTLY ON the anomaly the theta = 0 gradient is NaN (a
+      non-differentiable point of the half-space ``k_z``); OFF returns a
+      FINITE but wrong value there (-1.32 / -6.15, truth 0, against slope
+      scales 0.38 / 5.1).  ``pmm_efficiency_1d`` (not ``PMMStack``)
+      nudges a wavelength within ~1e-9 of a cut-off off it
+      (``WoodNudgeWarning``; its forward R there equals the delta = 1e-7
+      value), so on the anomaly it returns a FINITE but wrong gradient:
+      4.5e-2 (TE) / 3.3 (TM) relative.
+    * At delta <= 1e-6 ON is NOT reliably better than OFF (worse in 1 of
+      the 4 cases at 1e-6 and 3 of 4 at 1e-7); at delta >= 1e-5 it is
+      better in every case (OFF errs 1.2e-7 .. 6.0e-4 relative at 1e-3).
+      For a design within ~1e-5 of an anomaly at normal incidence, check
+      the gradient against a finite difference.
+    * Off-normal gradients are unaffected: AD = FD to <= 1.5e-7 at
+      theta = 1e-2 rad for every delta above, the anomaly included.
+    * Pinned (NaN on the anomaly; rule on below 2e-9 at delta = 1e-3,
+      measured 1.9e-10) by
+      ``tests/unit/test_jax_cluster_rule_near_rayleigh_anomaly.py``."""
     global _JAX_CLUSTER_RULE
     previous = _JAX_CLUSTER_RULE
     _JAX_CLUSTER_RULE = bool(enabled)
@@ -393,7 +428,14 @@ class jax_cluster_rule:
     setting for this THREAD while the scope is active (see
     :func:`set_jax_cluster_rule` for what OFF means).  Scopes nest; one left
     out of order is removed by identity, so it cannot clobber another
-    scope's setting."""
+    scope's setting.
+
+    Near a Rayleigh anomaly at exactly normal incidence the theta = 0 angle
+    gradient loses accuracy with ON and is NaN exactly on the anomaly
+    (audit L-10): see the measured table in :func:`set_jax_cluster_rule`.
+    Switching OFF is no remedy there -- at a relative distance <= 1e-6
+    neither setting is reliably right, and OFF is wrong by O(1) on the
+    anomaly; check such a gradient against a finite difference."""
 
     def __init__(self, enabled: bool) -> None:
         self.enabled = bool(enabled)
