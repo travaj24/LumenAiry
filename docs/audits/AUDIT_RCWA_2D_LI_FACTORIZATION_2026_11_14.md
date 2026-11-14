@@ -364,6 +364,21 @@ does not read the material; the `add_layer` docstring carries the table above an
 `weak`-metal regime, where an explicit `formulation='laurent'` is measured better above
 N of about 14.
 
+**Dispersive layers.**  The rule does not read the material, so a dispersive 2-D layer resolves
+like its concrete twin; a dispersive layer left at `'auto'` is in addition resolved again at
+every wavelength of `solve_vs_wavelength` from its materialised values, by the same function
+(`RCWAStack._auto_at_wavelength`), so a point solve and a sweep point of one physical layer
+run the same rule whatever else the sweep holds (an exact zero at that wavelength: `'laurent'`
+both ways; on a 1-D stack a y-varying cell: `'laurent'` both ways).  The staging rule ran a
+concrete 2-D metal layer under `'li'` and the same layer given as a wavelength function under
+`'laurent'`.
+
+**An independent review recommended shipping 2-D `'auto'` as `'laurent'`** "unless the
+measurements show a rule that is reliably better".  They do, on every rectangle and rasterized
+cell measured at the truncations a 2-D stack affords, with the single `weak`-metal exception
+above about 14 orders documented in the docstring; the recommendation was weighed against
+those tables and not followed.
+
 **No runtime warning** is added anywhere (library users run with warnings as errors, where any new warning on a default path is a failure).
 
 **What moves:** 2-D dielectric layers left at the default (5.50 / staging: Laurent; now: 'li')
