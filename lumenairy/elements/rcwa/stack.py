@@ -478,13 +478,11 @@ def _raster_wants_companions(fn_name, raster, formulation):
     mode is then a no-op rather than a trap, and it can be swept across
     formulations without special-casing (audit W9).  ``formulation`` is the
     RESOLVED one: the builders resolve ``'auto'`` before asking."""
-    f = str(formulation).lower()
-    if f == "fff":
-        f = "li"
-    if f not in ("laurent", "li"):
+    f = _normalize_formulation(fn_name, formulation)
+    if f == "auto":
         raise ValueError(
-            f"{fn_name}: formulation must be 'laurent' or 'li'/'fff' here "
-            f"(resolve 'auto' first), got {formulation!r}.")
+            f"{fn_name}: formulation must be resolved ('laurent' or 'li') "
+            f"before the raster mode is chosen, got {formulation!r}.")
     return raster == "harmonic" and f == "li"
 
 

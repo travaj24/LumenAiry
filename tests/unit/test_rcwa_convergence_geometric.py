@@ -63,8 +63,9 @@ def test_n61_is_not_converged_although_the_additive_check_passed():
     assert rep["n_orders_high"] == {"n_orders": 92}
     assert rep["converged"] is False
     assert any("NOT converged" in str(x.message) for x in w)
-    # measured: relative R change 7.2 % over a x1.508 step -> estimate 14.2 %;
-    # true error at N = 92: 15.5 %.  The estimate is within 2x of the truth.
+    # measured: relative R change 7.2 % over a x1.508 step -> estimate 14.2 %
+    # (0.1421 on Windows/MKL and WSL/OpenBLAS); true error at N = 92: 15.5 %.
+    # The estimate is within 2x of the truth.
     true_err = abs(_r0(res) - R_REF) / R_REF
     assert 0.5 * true_err < rep["err_estimate"] < 2.0 * true_err
     assert rep["factor"] == pytest.approx(92 / 61)
@@ -133,7 +134,8 @@ def test_estimate_flags_the_erratic_window_and_measures_the_exponent():
     assert rep40["n_orders_high"] == {"n_orders": 90}
     res, rep61 = rcwa_convergence(_fix_a(61), estimate=True, warn=False)
     # rungs 61 / 92 / 138: the reflectance's local exponent is 0.57 and its
-    # Richardson estimate 20 % (true error at 138: 10.8 %).  (The reflection
+    # Richardson estimate 20 % (0.5748 / 0.2033 on both builds; true error at
+    # 138: 10.8 %).  (The reflection
     # AMPLITUDE's exponent is 0.45, below the algebraic range, so the window
     # is also flagged erratic -- not asserted: the decision is the point.)
     assert rep61["converged"] is False

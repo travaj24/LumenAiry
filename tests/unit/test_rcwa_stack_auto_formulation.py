@@ -16,7 +16,8 @@ air above, n = 1.447 below, 1300 nm, TM.  Its converged zeroth-order
 reflection ``r_ref = 0.0571572 + 0.1312207i`` comes from a geometrically
 graded ``PMMStack`` (degree 20, 12 elements) and agrees with an independent
 finite-element solve to about 1e-5.  Measured 2026-11-14 (Windows/MKL):
-``'li'`` errs 1.06e-2 at N = 100 against 1.67e-1 for ``'laurent'``.
+``'li'`` errs 1.06e-2 at N = 100 against 1.67e-1 for ``'laurent'``
+(1.0553e-2 on both Windows/MKL and WSL/OpenBLAS).
 """
 import warnings
 
@@ -76,8 +77,8 @@ def test_default_is_li_on_the_metal_strip_and_much_closer():
 
 def test_te_is_unchanged_by_the_default():
     """E_y is tangential to every wall of a 1-D grating, so Li's rule is the
-    direct rule there: TE moves only at round-off (measured 2.0e-13 at
-    N = 50, Windows/MKL and the base release)."""
+    direct rule there: TE moves only at round-off (measured at N = 50:
+    2.0e-13 Windows/MKL, 2.9e-13 WSL/OpenBLAS; bar 1e-11)."""
     Jd = np.asarray(_fix_a(50).solve().jones_reflection())
     Jl = np.asarray(_fix_a(50, "laurent").solve().jones_reflection())
     assert abs(Jd[1, 1] - Jl[1, 1]) < 1e-11
@@ -271,7 +272,8 @@ def test_even_parity_fold_engages_under_the_default(monkeypatch):
     full = st.solve(symmetry=False)
     o, R0, T0 = folded.efficiencies()
     o, R1, T1 = full.efficiencies()
-    # measured 4.0e-13 in r; the suite's fold bar for R / T is 1e-11
+    # measured |dJ| 4.0e-13 (Windows/MKL) / 4.6e-13 (WSL/OpenBLAS), |dR|
+    # 1.4e-13 / 1.2e-13; the suite's fold bar for R / T is 1e-11
     assert np.allclose(R0, R1, atol=1e-11, rtol=0)
     assert np.allclose(T0, T1, atol=1e-11, rtol=0)
     assert np.max(np.abs(np.asarray(folded.jones_reflection())

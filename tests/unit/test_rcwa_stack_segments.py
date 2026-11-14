@@ -114,8 +114,9 @@ def _pm1(o, R):
 
 def test_layout_matches_pmmstack_order_by_order():
     """Measured 2026-11-14 at N = 40 vs PMM degree 40 (itself converged to
-    1.6e-8 against degree 60): |dR| 4.9e-6 (TM) / 3.7e-7 (TE) on the +/-1
-    orders; bar 2e-5.  R_TE(+1) - R_TE(-1) = -1.6e-2, 800x the bar."""
+    1.6e-8 against degree 60): |dR| 4.88e-6 (TM) / 3.67e-7 (TE) on the +/-1
+    orders, identical on Windows/MKL and WSL/OpenBLAS; bar 2e-5.
+    R_TE(+1) - R_TE(-1) = -1.6e-2, 800x the bar."""
     bar = 2e-5
     rp, rm = _pm1(*_lam_rcwa(_SEG))
     pp, pm = _pm1(*_lam_pmm(_SEG))

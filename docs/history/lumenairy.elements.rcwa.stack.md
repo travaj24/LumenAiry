@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 2845fcd17ee47c76d60b89475bc4f88fc6b67cd05eb7c3fde837d93e91cdab8f
-token_sha256: 83f588dc694abe412a92cab37c6dbe62a57d085fb2c9cd68d0e7f664b1bae344
+ast_sha256: efb6c430882b0d12a9849d1ac9252bdd083e9fb5638cbcc848664fd518616b8e
+token_sha256: 046535da096e4e54ab5bb8b5abd6d543d8e803e9499c37fe3eb04caf79af989c
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -17,6 +17,7 @@ re_recorded: 2026-11-03 -- release 5.50.1 merge: Phase D (2-D 'li' rectangles, _
 re_recorded: 2026-11-14 -- rcwa_convergence: geometric truncation step (x1.5 one axis, x1.25 per axis for two), relative per-order and zeroth-order Jones comparison, p = 1 error estimate judged against rtol, opt-in three-solve local exponent (estimate=True); integer bump= keeps the additive step; the comparator lives in rcwa._core._convergence_report
 re_recorded: 2026-11-14 -- RCWAStack formulation='auto' default on add_layer and its builders (_resolve_formulation: 1-D patterned isotropic -> 'li', 2-D -> 'li' only for metallic layers 'li' supports, JAX cells / y-varying 1-D layers / zero eps -> 'laurent'); resolved value in _RCWALayer.formulation, request in formulation_requested; the 'li' contrast test of a concrete cell is taken once at add time (_RCWALayer.li_contrast, _li_cell_contrast) so a concrete 'li' layer traces under jax.jit / grad-wavelength
 re_recorded: 2026-11-14 -- RCWAStack.add_layer(segments=[(width_fraction, eps), ...]): validated like PMMStack segments (fractions > 0, sum to 1 within 1e-6, walls normalized to 0 and the period) and stored as the equivalent full-period_y rectangles over segments[-1] (_add_segments_layer); the G-3 default formulation applies
+re_recorded: 2026-11-14 -- _raster_wants_companions reads the formulation through _normalize_formulation (one definition of the 'fff' alias) and refuses an unresolved 'auto'
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`
