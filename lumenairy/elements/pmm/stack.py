@@ -44,7 +44,6 @@ from ._core import (
     _interface_smatrix_mortar,
     _internal_mirror_1d,
     _is_geometric_spec,
-    _wood_safe_wl_1d,
     _jpmm_concrete_incidence_guard,
     _kz_forward,
     _layer_modes_metric,
@@ -71,6 +70,7 @@ from ._core import (
     _tensor3_dict,
     _tensor_is_passive,
     _uniform_geo_eig,
+    _wood_safe_wl_1d,
 )
 from ._uniform_cascade import (
     UNIFORM_LAYER_LABEL,

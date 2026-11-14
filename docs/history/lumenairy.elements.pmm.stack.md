@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: ca1419504861ebdaacbaa2ef011094f3cdac8a11f9fae3d38f0a1c4a83b42e6b
-token_sha256: 2297233cd228756f366234082a68ec2706d69dc7dcfbd7849512547998278fb8
+ast_sha256: b994e284818cf27944d25b30970eec6e037386ad2ba25962cbff0e35245900f4
+token_sha256: 14cdc22c51d155f3ec2d85ea7280eba85a02a175654884180b25f6f5b0c254b0
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -15,6 +15,7 @@ re_recorded: 2026-11-14 -- small-element guard re-derived after the selector roo
 re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: no per-solve grade state (_grade_scope removed; resolved spec passed down), fixed-point grade, prepared caches keyed by and refusing a changed layout, Chebyshev/uniform small-element bar 3e-6 x wavelength, backstop note derived from geometry
 re_recorded: 2026-11-14 -- 2026-11-14 -- add_layer records traced scalar eps (_iso_scalar) for the JAX twin's uniform-layer fast path
 re_recorded: 2026-11-14 -- 2026-11-14 -- classical solve applies the shared Wood nudge at an exact Rayleigh anomaly (_wood_safe_wl_1d, WoodNudgeWarning); _wood_order_reach
+re_recorded: 2026-11-14 -- 2026-11-14 -- import order (ruff isort) after adding _wood_safe_wl_1d; no behaviour change
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
