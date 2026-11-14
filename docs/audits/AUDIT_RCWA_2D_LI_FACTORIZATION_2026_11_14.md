@@ -338,7 +338,16 @@ the disks and for `mid` / `lowd`.
    normal-vector formulation (`fff_nv`, single-layer functions only) refuses cornered or curved
    metal cells by design (`twod._nv_nonseparable_guard`), so there is no measured curved-wall
    rule to switch to.
-5. **Energy closure** is at round-off for both rules on every cell (lossless trap: it carries
+5. **Two more dielectric cells, found by the pin census.**  A pillar over a y-stripe (eps 6 /
+   4, period 600 nm, 550 nm; two patterned layers with different walls), zeroth-order T for
+   x / y incidence: pure polynomial engine (n_modes 6) 0.38036 / 0.45026; `'li'` (N = 4)
+   0.38004 / 0.45118; `'laurent'` 0.37972 / 0.43063; the Fourier-projected HYBRID 2-D PMM
+   0.37732 / 0.42510.  A conical eps-6 pillar in eps 2 (period 1 um, 1550 nm): per-order
+   amplitudes 4.3e-3 / 4.0e-3 from the pure engine for `'li'` at N = 11 / 15, 1.19e-2 / 8.1e-3
+   for `'laurent'`; the hybrid sits 2.6e-2 from `'li'`.  The hybrid engine shares the direct
+   rule's error, so the two tests that cross-check it against `RCWAStack` now pin `'laurent'`
+   on the RCWA side.
+6. **Energy closure** is at round-off for both rules on every cell (lossless trap: it carries
    no information about which is right).
 
 ## 6. Decision: what `formulation='auto'` resolves to on a 2-D stack
