@@ -440,7 +440,11 @@ def pmm_efficiency_1d(
         is largest where thin layers or a gap concentrate the field at the
         corner; on an isolated layer single-element ``degree`` still competes
         with Chebyshev grading.  Recommended for metal corners:
-        ``grade='geometric'``, 8-12 elements per region, degree 8-10.
+        ``grade='geometric'``, 8-12 elements per region, degree 8-10.  That
+        recipe is for VERTICAL walls: on a slanted wall (the covariant path of
+        :func:`pmm_jones_1d_slanted`) the same strip at a 0.2 rad slant needs
+        degree 16 with 12 geometric elements (degree 8 / 12 / 16 is 1.9e-4 /
+        3.6e-6 / 2.9e-8 off a degree-24 solve; Chebyshev 20 x 8 is 6.2e-6).
     grade : bool, str or tuple, optional
         Element layout inside each region (ridge / groove), used when
         ``elements_per_region > 1``:
