@@ -318,7 +318,9 @@ width ROUNDED to the pixel lattice: ``O(1/Sx)`` geometric quantisation
 see (this is the W7-A defect class in the user-facing pixel cell).  The two
 escapes are (a) raise ``n_x`` / ``Sx`` -- the error is strictly ``O(1/Sx)``;
 (b) use an EXACT-geometry path instead: :meth:`RCWAStack.add_layer` with
-``shapes=`` (analytic form factors, no lattice at all),
+``segments=`` (a 1-D strip grating as ``(width_fraction, eps)`` pairs -- the
+easiest exact route for lines) or ``shapes=`` (analytic form factors, no
+lattice at all),
 :func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d` / the ``segments`` 1-D
 entries (exact piecewise-constant Fourier series), or a
 :class:`~lumenairy.elements.pmm.PMMStack` taper (nodal walls, no raster).
@@ -2028,7 +2030,7 @@ class RCWAStack:
 
     def add_layer(self, thickness, *, eps=None, eps_cell=None,
                   eps_tensor_cell=None, shapes=None, eps_background=None,
-                  formulation="auto", eps_cell_normal=None):
+                  formulation="auto", eps_cell_normal=None, segments=None):
         """Append a layer.  Provide exactly one layer specification:
 
         * ``eps`` (scalar) -- uniform isotropic spacer; a ``(3, 3)`` array is a
@@ -2045,7 +2047,23 @@ class RCWAStack:
           are rejected up front (audit W8).  On a 1-D stack a y-VARYING shape
           list (anything but a full-``period_y`` rectangle) enters only through
           its y-AVERAGE and raises :class:`RCWAYAverageWarning`, exactly as a
-          y-varying ``eps_cell`` does.
+          y-varying ``eps_cell`` does;
+        * ``segments`` -- a lamellar layer of lines along y, as a list of
+          ``(width_fraction, eps)`` laid out left to right from ``x = 0`` in
+          the PUBLIC frame (``segments[0]`` on ``[0, w0 P)``, the next on
+          ``[w0 P, (w0 + w1) P)``, ...): the same layout as
+          ``PMMStack.add_layer(segments=)`` and
+          :func:`~lumenairy.elements.rcwa.rcwa_jones_1d_segments`.  Every
+          fraction must be ``> 0`` and they must sum to 1 within ``1e-6`` (the
+          walls are then normalized to land exactly on ``0`` and the period).
+          It is the EXACT-geometry way to write a strip grating: the layer is
+          stored as the equivalent ``shapes`` layer -- background
+          ``segments[-1]``'s eps, every other segment a rectangle spanning the
+          full ``period_y`` -- so it is solved with analytic form factors and
+          no pixel lattice, and ``layers[i].kind`` reads ``'shapes'``.  One
+          segment is a uniform layer.  Each ``eps`` is a scalar or a
+          ``wl -> value`` callable (dispersive).  Allowed on 2-D stacks too
+          (lines along y).
 
         Permittivities are in the PUBLIC convention (``Im(eps) > 0`` lossy).
 
@@ -2059,8 +2077,13 @@ class RCWAStack:
         anti-aliases them, and a boundary pixel you hard-assign realises the
         feature width QUANTISED to your lattice (``O(1/Sx)``, invisible to
         ``n_orders`` convergence AND to the energy closure).  Escapes: raise
-        ``Sx``; use ``shapes=`` (analytic form factors, no lattice); or let the
-        tapered builders rasterize with ``raster='area'``.
+        ``Sx``; use ``segments=`` (a 1-D strip grating) or ``shapes=``
+        (analytic form factors, no lattice); or let the tapered builders
+        rasterize with ``raster='area'``.  Measured on a resonant metal-strip
+        stack at ``n_orders`` 50 under ``'li'``: a strip whose edge sits on a
+        node of a 400-sample cell realises a 0.75 nm wider strip and moves the
+        zeroth-order reflection by 5.1e-2 from the analytic ``shapes=`` value;
+        6400 samples with the edges between nodes still leave 2.2e-4.
 
         DISPERSIVE materials (audit GAP5, v5.14.1): ``eps``, ``eps_cell``,
         ``eps_tensor_cell``, ``eps_background``, and each shape's ``eps`` may
@@ -2078,7 +2101,7 @@ class RCWAStack:
         ``eps_cell`` with ``eps_cell_normal``           ``'li'``
         1-D stack, ``eps_cell``                         ``'li'``
         1-D stack, ``eps_cell`` varying along y         ``'laurent'``
-        1-D stack, ``shapes`` (y-flat)                  ``'li'``
+        1-D stack, ``shapes``/``segments`` (y-flat)     ``'li'``
         1-D stack, ``shapes`` varying along y           ``'laurent'``
         2-D stack, METALLIC ``eps_cell``                ``'li'``
         2-D stack, METALLIC rectangle ``shapes``        ``'li'``
@@ -2216,6 +2239,15 @@ class RCWAStack:
         # only Fourier harmonic is DC, so it is exactly a homogeneous
         # anisotropic slab).  Kept BEFORE the one-of count so the layer
         # registers as an ``eps_tensor_cell``.
+        if segments is not None:
+            if any(x is not None for x in (eps, eps_cell, eps_tensor_cell,
+                                           shapes, eps_background,
+                                           eps_cell_normal)):
+                raise ValueError(
+                    "add_layer: segments is a complete layer specification; "
+                    "do not combine it with eps, eps_cell, eps_tensor_cell, "
+                    "shapes, eps_background or eps_cell_normal.")
+            return self._add_segments_layer(thickness, segments, formulation)
         if eps is not None and not callable(eps):
             _ea = eps if is_jax_array(eps) else np.asarray(eps)
             if getattr(_ea, "ndim", 0) >= 2:
@@ -2225,7 +2257,7 @@ class RCWAStack:
         if n != 1:
             raise ValueError(
                 "add_layer: provide exactly one of eps, eps_cell, "
-                "eps_tensor_cell, shapes.")
+                "eps_tensor_cell, shapes, segments.")
         if not is_jax_array(thickness):       # traced depth -> skip the guard
             _validate_geometry("add_layer", depth=thickness)
         f_req = _normalize_formulation("add_layer", formulation)
@@ -2396,6 +2428,64 @@ class RCWAStack:
             self._layers.append(_RCWALayer(thickness, "tensor", tcell,
                                            formulation_requested=f_req))
         return self
+
+    def _add_segments_layer(self, thickness, segments, formulation):
+        """``add_layer(segments=...)``: validate the ``(width_fraction, eps)``
+        list and add the equivalent analytic layer -- ``segments[-1]``'s eps as
+        the background and every other segment as a rectangle spanning the
+        full ``period_y``, in the PUBLIC frame (``segments[0]`` on
+        ``[0, w0 P)``).  The rectangles share their edges exactly; the shapes
+        validation accepts touching shapes (its overlap test excludes
+        tangency).  One segment is a uniform layer."""
+        f_req = _normalize_formulation("add_layer", formulation)
+        if isinstance(segments, dict) or not hasattr(segments, "__len__"):
+            raise ValueError(
+                "add_layer: segments must be a LIST of (width_fraction, eps) "
+                f"pairs, got {type(segments).__name__}.")
+        if len(segments) < 1:
+            raise ValueError("add_layer: segments needs at least one region.")
+        widths, epss = [], []
+        for i, seg in enumerate(segments):
+            try:
+                w, e = seg
+                w = float(w)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"add_layer: segments[{i}] must be a (width_fraction, eps) "
+                    f"pair, got {seg!r}.") from None
+            if not callable(e) and np.ndim(e) != 0:
+                raise ValueError(
+                    f"add_layer: segments[{i}] eps must be a scalar or a "
+                    f"wl -> value callable (an isotropic line); got an array of "
+                    f"shape {np.shape(e)}.  Anisotropic lines go in "
+                    f"eps_tensor_cell.")
+            widths.append(w)
+            epss.append(e)
+        w = np.asarray(widths, dtype=float)
+        if not np.all(np.isfinite(w)) or np.any(w <= 0.0):
+            raise ValueError(
+                f"add_layer: every segment width FRACTION must be finite and "
+                f"> 0 (got {list(w)}).")
+        if abs(float(w.sum()) - 1.0) > 1e-6:
+            raise ValueError(
+                f"add_layer: segment width FRACTIONS must sum to 1 within 1e-6 "
+                f"(got {float(w.sum()):.6g}).  They are fractions of the "
+                f"period, not absolute widths.")
+        if len(epss) == 1:
+            e = epss[0]
+            self.add_layer(thickness, eps=e)
+            self._layers[-1].formulation_requested = f_req
+            return self
+        # Walls normalized to land EXACTLY on 0 and the period.
+        edges = np.concatenate([[0.0], np.cumsum(w)])
+        xw = edges / edges[-1]
+        Px, Py = self.period_x, self.period_y
+        shapes = [dict(shape="rectangle", eps=epss[i],
+                       center=(float(0.5 * (xw[i] + xw[i + 1]) * Px), 0.5 * Py),
+                       size=(float((xw[i + 1] - xw[i]) * Px), Py))
+                  for i in range(len(epss) - 1)]
+        return self.add_layer(thickness, shapes=shapes,
+                              eps_background=epss[-1], formulation=f_req)
 
     def add_graded_layer(self, thickness, profile, *, n_slices=8,
                          rule="midpoint", formulation="auto"):

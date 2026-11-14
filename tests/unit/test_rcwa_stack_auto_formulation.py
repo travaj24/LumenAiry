@@ -135,6 +135,7 @@ def test_resolution_table_1d():
     assert _one(_s1(), eps_cell=_LINE) == ("li", "auto")
     assert _one(_s1(), eps_cell=_METAL_LINE) == ("li", "auto")
     assert _one(_s1(), shapes=_STRIPE, eps_background=1.0) == ("li", "auto")
+    assert _one(_s1(), segments=[(0.4, 4.0), (0.6, 1.0)]) == ("li", "auto")
     # y-varying layers of a 1-D stack: the y-average contract keeps 'laurent'
     # (bit-identical to pre-averaging the cell) and still warns
     with pytest.warns(RCWAYAverageWarning):
