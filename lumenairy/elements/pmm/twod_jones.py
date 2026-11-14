@@ -99,6 +99,7 @@ from ._core import (
     _frame_anchor_phase,
     _interface_smatrix,
     _lossy_incidence,
+    _normalize_grade,
     _propagation_smatrix,
     _redheffer_star,
     _stabilize_jones,
@@ -742,6 +743,12 @@ def pmm_jones_2d(
     accurate than this entry's ``'fff_nv'`` and ~250x more than its ``'li'``
     at equal ``n_orders``.
     """
+    # Normalize ``grade`` BEFORE the JAX / NumPy split, so both branches see the
+    # same validated bool: geometric grading is not validated on the 2-D
+    # family and raises NotImplementedError on either backend (the JAX twin
+    # would otherwise read the truthy string as Chebyshev grading).
+    grade = _normalize_grade(grade, period=period_x, where="pmm_jones_2d",
+                             allow_geometric=False)
     if formulation not in ("laurent", "li", "fff_nv", "auto"):
         raise ValueError(
             f"pmm_jones_2d: formulation must be 'laurent', 'li', 'fff_nv' or "
