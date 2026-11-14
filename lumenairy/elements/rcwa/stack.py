@@ -105,7 +105,10 @@ class RCWAYAverageWarning(UserWarning):
     ``sum(R) = 0.244615594382`` -- BIT-identical to explicitly pre-averaging the
     cell along y -- against the y-resolved 2-D stack's ``0.183045443696``, a
     33.6% error, with the energy closure equally clean in both solves so no
-    tripwire can see it.
+    tripwire can see it.  (Bit-identity holds for one factorization on both
+    sides: the default ``formulation='auto'`` keeps a y-VARYING cell of a 1-D
+    stack on ``'laurent'``, while a hand-averaged -- y-INVARIANT -- cell
+    resolves to ``'li'``; pass ``formulation='laurent'`` to compare the two.)
 
     This is a diagnostic, NOT a rejection: the y-average is the documented
     behaviour and an existing pin relies on feeding 2-D-shaped cells to 1-D
@@ -179,8 +182,10 @@ def _warn_if_y_averaged(fn_name, cell, n_orders_y, *, strict_y, stacklevel=3):
         f"n_orders_y), so the {(Sx, Sy)} cell enters only through its "
         f"y-AVERAGED permittivity, but the cell VARIES along y (max per-row "
         f"spread {ysp:.6g}).  The solve returns the y-averaged structure's "
-        f"answer, which is bit-identical to pre-averaging the cell yourself "
-        f"and can be tens of percent from the y-resolved result while the "
+        f"answer -- with formulation='laurent' (the default for such a cell) "
+        f"bit-identical to pre-averaging the cell yourself and solving it "
+        f"with 'laurent' -- which can be tens of percent from the y-resolved "
+        f"result while the "
         f"energy closure stays clean (so no tripwire fires).  This is exact "
         f"and intended for a y-INVARIANT 2-D cell; if the y structure is "
         f"real, build a 2-D stack (pass period_y AND n_orders_y >= 1).",

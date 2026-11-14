@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 00e119b8884c7280e67b3896be5411dabceae8f4dc7661a737cf77c03d88edb4
-token_sha256: cdd17fce89d4908d9817eebf270dfe87c1312433bd3c9a73330f92e45ee76f1e
+ast_sha256: 3b0c0f019fdec8a541d5ceeebf39a3604bc9cad96de06ba74676af9e525b4cf8
+token_sha256: 044f1966b84e2b02206042148dca6e99412ebc88ef8761f3bc3fe8d4861f55ed
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -19,6 +19,7 @@ re_recorded: 2026-11-14 -- RCWAStack formulation='auto' default on add_layer and
 re_recorded: 2026-11-14 -- RCWAStack.add_layer(segments=[(width_fraction, eps), ...]): validated like PMMStack segments (fractions > 0, sum to 1 within 1e-6, walls normalized to 0 and the period) and stored as the equivalent full-period_y rectangles over segments[-1] (_add_segments_layer); the G-3 default formulation applies
 re_recorded: 2026-11-14 -- _raster_wants_companions reads the formulation through _normalize_formulation (one definition of the 'fff' alias) and refuses an unresolved 'auto'
 re_recorded: 2026-11-14 -- RCWAResult.layer_absorption: a layer solved with formulation='li' is attributed the Poynting-flux difference between its faces (exact from the retained modal fields); the Im(eps)|E|^2 volume integral is inconsistent with the inverse-rule E_x (20 % off the absorptance on a metal line in TM).  'laurent' layers keep the volume integral bit for bit
+re_recorded: 2026-11-14 -- RCWAYAverageWarning message: the bit-identity to a hand-averaged cell is stated for formulation='laurent', which 'auto' gives a y-varying cell of a 1-D stack
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`
