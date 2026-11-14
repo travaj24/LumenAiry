@@ -2,6 +2,7 @@
 layers via the div-conforming covariant-metric generator)."""
 from __future__ import annotations
 
+import functools
 import os
 import threading
 import warnings
@@ -26,6 +27,7 @@ from ..rcwa._core import (
 from ._core import (
     _C,
     _COV_MIN_SLANT_RAD,
+    GEOMETRIC_DEFAULT_RATIO,
     _assemble_jones_farfield,
     _build_nodal_metric_segments,
     _build_sem_tensor_segments,
@@ -34,12 +36,14 @@ from ._core import (
     _farfield_order_set,
     _frame_anchor_phase,
     _freeze_cached,
+    _graded_boundaries,
     _guarded_lstsq,
     _half_M_sym_metric,
     _interface_smatrix,
     _interface_smatrix_general_mortar,
     _interface_smatrix_mortar,
     _internal_mirror_1d,
+    _is_geometric_spec,
     _jpmm_concrete_incidence_guard,
     _kz_forward,
     _layer_modes_metric,
@@ -47,6 +51,7 @@ from ._core import (
     _mode_cut_scope,
     _ModeClassificationWarning,
     _n_propagating_orders,
+    _normalize_grade,
     _perlayer_window_grids,
     _pmm_union_grid,
     _propagation_smatrix,
@@ -72,6 +77,7 @@ from ._uniform_cascade import (
     _uniform_iso_eps,
     _uniform_medium_diag,
 )
+from .conical import _refuse_geometric_conical
 
 #: The laterally-uniform-layer fast path (``_uniform_cascade``): uniform
 #: isotropic vertical layers take their modes from the shared geometric eig and
@@ -469,6 +475,102 @@ _SLIVER_OWN_SCALE_RATIO = 100.0
 #: ``min_feature`` explicitly, ~10x above its own collision scale, and check the
 #: answer is stationary in BOTH ``degree`` and ``min_feature``.
 _MIN_FEATURE_DEFAULT_FRAC = 1.0e-3
+
+# ===========================================================================
+# THE SMALL-ELEMENT GUARD
+# ===========================================================================
+# THE DEFECT.  At fixed polynomial degree, a solve whose element grid carries a
+# very small element can return an O(1) wrong answer with no warning.  Measured
+# 2026-11-14 on one metal-strip layer (eps -74+6i, 50 nm, duty 0.47, air above,
+# n = 1.447 below, 1300 nm) with a geometric layout of 12 elements per region
+# whose wall element ``h`` was scanned: periods 200 / 370 / 700 / 1000 / 1300 /
+# 2000 / 2600 nm, theta 0 / 0.15 / 0.3 / 0.5 / 0.7, degrees 6-20, both
+# incident polarizations (each solve returns both rows), 1,398 solves on
+# Windows/MKL (86 wrong) and 720 on WSL/OpenBLAS (62 wrong):
+#
+#   * every wrong answer was SUPER-UNITY on this absorbing structure: max
+#     R + T >= 1.028 (often 2-30), against <= 0.996 for every correct row;
+#   * none occurred at normal incidence; WHICH oblique configurations fail is
+#     a lottery over degree, period and BLAS build (the same configuration
+#     fails at one degree and not at the next), and a failing configuration
+#     returns the SAME wrong number at several ``h`` -- a discrete alternative
+#     branch, not a gradual loss of digits;
+#   * the largest failing ``h`` was 1.6e-5 x wavelength on BOTH builds
+#     (period 700 nm, theta 0.5, degrees 6-20 return one and the same wrong
+#     answer; period 1300 nm, theta 0.15, degree 6); the 716 rows at
+#     ``h >= 2e-5 x wavelength`` were all correct.  In units of the PERIOD the
+#     edge wanders from 1.6e-5 (1300 nm) to 4e-5 (200 nm), so the danger
+#     scale is the wavelength, as the mechanism (the spurious modal
+#     wavenumbers of an element of width ``h`` grow like ``1 / (k0 h)``)
+#     says.
+#
+# A cell the GEOMETRY makes thin (an owned liner, one element per region) fails
+# the same way and further up (garbage at 2e-5 .. 5e-5 x wavelength next to a
+# metal strip at a 1300 nm period, and some sub-unity wrong answers at normal
+# incidence below 4e-6), but it is the caller's geometry, which no layout
+# choice can lift; it stays the territory of the sliver refusal (manufactured
+# cells) and the within-layer warning (owned cells), and this guard does not
+# act on it.
+#
+# So two numbers, both fractions of the WAVELENGTH:
+#
+#: REFUSE (unless ``allow_small_elements=True``) a solve whose LAYOUT made an
+#: element below this -- 1.9x above the largest failing ``h`` measured.  The
+#: default geometric floor never trips it (PMMStack completes it with the
+#: wavelength, see ``_SMALL_ELEMENT_SUGGEST_FRAC``); an explicit floor below it
+#: is refused.
+_SMALL_ELEMENT_FRAC = 3.0e-5
+#: Below THIS, a layout-made element arms the energy backstop in
+#: :func:`_warn_stack_energy`: a provably passive stack that reads super-unity
+#: (beyond ``_SLIVER_TRIGGER_BAR``) is refused instead of returned under a
+#: warning.  6x above the largest failing ``h``; since every measured wrong
+#: answer was super-unity by >= 2.8e-2 and every correct one sub-unity
+#: (<= 0.996), the backstop catches the whole measured failure mode on an
+#: absorbing stack.
+_SMALL_ELEMENT_WATCH_FRAC = 1.0e-4
+#: The geometric floor the refusal suggests, and the WAVELENGTH part of
+#: PMMStack's default geometric floor (see :meth:`PMMStack._effective_grade`):
+#: 2.5x above the largest failing ``h`` measured, 1.33x above the refusal bar.
+_SMALL_ELEMENT_SUGGEST_FRAC = 4.0e-5
+
+
+def _grade_scope(wavelength_of):
+    """Decorator for the public solve entry points: run the call with the
+    stack's WAVELENGTH-RESOLVED grading spec in force (see
+    :meth:`PMMStack._effective_grade`), and restore the stored spec after.
+
+    ``wavelength_of(obj, args, kwargs)`` returns the wavelength the call
+    solves at (the longest one for a sweep), or ``None`` when it is not known
+    or not concrete -- the stored spec then applies unchanged."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(obj, *args, **kwargs):
+            stack = getattr(obj, "_st", obj)
+            try:
+                wl = wavelength_of(obj, args, kwargs)
+            except (TypeError, ValueError, KeyError, IndexError):
+                wl = None
+            prev = stack._grade_solve
+            stack._grade_solve = stack._effective_grade(wl)
+            try:
+                return fn(obj, *args, **kwargs)
+            finally:
+                stack._grade_solve = prev
+        return wrapper
+    return deco
+
+
+def _wl_of_solve(obj, args, kwargs):
+    return None if obj._src is None else obj._src["wl"]
+
+
+def _wl_of_sweep(obj, args, kwargs):
+    w = args[0] if args else kwargs["wavelengths"]
+    return float(np.max(np.asarray(w, dtype=float)))
+
+
+def _wl_of_prepared(obj, args, kwargs):
+    return kwargs["wavelength"]
 
 #: A layer is solved IN A SHEARED FRAME exactly when the cascade routes it to
 #: the metric generator, i.e. ``abs(slant_angle) > 1e-12`` -- the SAME literal
@@ -1440,6 +1542,26 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
             "gain or non-propagating incidence medium slipped past the entry "
             "guards (kz_inc < 0 negates every order).")
     import warnings
+    # SMALL-ELEMENT BACKSTOP: the solve carried an element below
+    # _SMALL_ELEMENT_WATCH_FRAC of the wavelength (recorded by
+    # PMMStack._guard_small_elements), where the measured failure mode is an
+    # O(1) wrong answer.  On a provably passive stack a super-unity total is
+    # then refused rather than returned under a warning.
+    small_note = (getattr(stack, "_small_element_note", None)
+                  if stack is not None else None)
+    if (small_note is not None and worst > 1.0 + _SLIVER_TRIGGER_BAR
+            and _stack_provably_passive(stack)):
+        h, wl_n = small_note
+        raise ValueError(
+            f"PMMStack.solve: energy not conserved (max R+T = {worst:.6g}) on "
+            f"a provably passive stack whose element grid carries an element "
+            f"of {h:.3g} m, {h / wl_n:.3g} of the wavelength -- inside the "
+            f"band (below {_SMALL_ELEMENT_WATCH_FRAC:g} x wavelength) where "
+            f"the modal solve is measured to return O(1) wrong answers.  The "
+            f"result is refused.  Raise the smallest element (an explicit "
+            f"geometric floor of {_SMALL_ELEMENT_SUGGEST_FRAC:g} x wavelength, "
+            f"a larger ratio, fewer elements_per_region) or widen the thin "
+            f"feature.")
     # The arbiter is NOT gated on the super-unity reading: the screen inside it
     # is a deterministic fact about the wall coordinates, whereas a super-unity
     # total is a property of the running BLAS kernel (the same sliver-corrupted
@@ -1763,7 +1885,7 @@ class PMMStack:
                  degree=16, elements_per_region=1, grade=True,
                  far_field_orders=21, n_orders=None, factorization="auto",
                  min_feature=None, layer_grids="shared",
-                 window_halfwidth=1):
+                 window_halfwidth=1, allow_small_elements=False):
         far_field_orders = _resolve_order_count(far_field_orders, n_orders)
         if int(degree) < 2:
             raise ValueError("PMMStack: degree must be >= 2.")
@@ -1803,7 +1925,12 @@ class PMMStack:
                       else _C(n_superstrate))
         self.degree = int(degree)
         self.n_el = int(elements_per_region)
-        self.grade = bool(grade)
+        self._grade_solve = None        # the spec in force during a solve
+        # Normalized grading spec: False / True / ('geometric', ratio,
+        # min_element_m) -- a bool or a hashable tuple, a fixed point of the
+        # normalizer, so the clones and the JAX static topology pass it on
+        # unchanged.  Assignment goes through the same validation (property).
+        self.grade = grade
         self.factorization = factorization
         self.ffo = int(far_field_orders)
         # PHYSICAL wall-snap threshold for the shared union grid (item 3a):
@@ -1922,10 +2049,172 @@ class PMMStack:
         # docs/audits/PMM_M2_WINDOW_CONTRACT_2026_08_04.md and the contract on
         # :func:`~lumenairy.elements.pmm._core._perlayer_window_grids`.
         self.window_halfwidth = _hw
+        # The small-element guard's opt-out (see _guard_small_elements).
+        self.allow_small_elements = bool(allow_small_elements)
+        self._small_element_note = None
         self._layers = []                          # (thickness, segments)
         self._taper_recipes = []                   # (i0, count, method, kwargs)
         self._src = None
         self._modal = None      # per-order amplitudes of the last solve (B)
+
+    @property
+    def grade(self):
+        """The normalized element-grading spec: ``False`` (uniform), ``True``
+        (Chebyshev, the default) or ``('geometric', ratio, min_element_m)``.
+
+        Assigning any accepted form (``'chebyshev'``, ``'geometric'``,
+        ``('geometric', ratio[, min_element_m])``, bool-likes) stores its
+        normalized value; anything else raises ``ValueError``, and a geometric
+        spec with ``elements_per_region < 3`` raises because it would be inert.
+        While a solve runs, this reads the spec that solve uses (see
+        :meth:`_effective_grade`).
+        """
+        return self._grade if self._grade_solve is None else self._grade_solve
+
+    @grade.setter
+    def grade(self, value):
+        spec = _normalize_grade(
+            value, period=self.period, where="PMMStack",
+            elements_per_region=self.n_el)
+        self._grade = spec
+        # a geometric spec whose floor the CALLER did not state: its floor is
+        # completed with the wavelength at solve time (_effective_grade)
+        self._grade_floor_default = bool(
+            _is_geometric_spec(spec)
+            and not (isinstance(value, (tuple, list)) and len(value) == 3))
+
+    def _effective_grade(self, wavelength):
+        """The grading spec a solve at ``wavelength`` uses.
+
+        A geometric spec WITHOUT an explicit floor gets the floor
+        ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period,
+        _SMALL_ELEMENT_SUGGEST_FRAC * wavelength)``: the period-based default
+        of the 1-D family, raised where the wavelength puts it inside the
+        measured small-element failure band (which scales with the
+        wavelength, see ``_SMALL_ELEMENT_FRAC``) -- for periods below
+        0.4 x wavelength.  An explicit floor, a bool spec, or an unknown /
+        traced wavelength returns the stored spec unchanged."""
+        spec = self._grade
+        if not (self._grade_floor_default and _is_geometric_spec(spec)):
+            return spec
+        try:
+            wl = float(wavelength)
+        except (TypeError, ValueError):
+            return spec
+        if not (np.isfinite(wl) and wl > 0.0):
+            return spec
+        floor = _SMALL_ELEMENT_SUGGEST_FRAC * wl
+        if floor <= spec[2]:
+            return spec
+        return (spec[0], spec[1], floor)
+
+    def _solve_grids(self):
+        """The fractional cell widths of every element grid the classical
+        solve of this stack builds: the one shared union grid, or one window
+        grid per layer under ``layer_grids='per-layer'``.  Built with the
+        stack's own ``min_feature`` exactly as the solve builds them (snap
+        warnings silenced: the solve itself reports them)."""
+        segs = [L[1] for L in self._layers]
+        mf = self.min_feature / self.period
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if self.layer_grids == "per-layer":
+                return [np.asarray(w, dtype=float) for w, _r in
+                        _perlayer_window_grids(segs, mf,
+                                               self.window_halfwidth)]
+            uw = _pmm_union_grid(segs, mf, warn=False)[0]
+        return [np.asarray(uw, dtype=float)]
+
+    def _element_cells(self):
+        """``[(h, w_cell, subdivided), ...]`` -- the smallest element and the
+        width (metres) of every cell of every grid this solve builds, and
+        whether the cell is split into more than one element.
+
+        Element sizes follow the solver's own layout rule
+        (:func:`_graded_boundaries` per cell, and the lone-element midpoint
+        split of a one-cell grid in ``_segment_elem_bnds``)."""
+        P = self.period
+        out = []
+        for widths in self._solve_grids():
+            single = len(widths) == 1
+            for w in widths:
+                wc = float(w) * P
+                if wc <= 0.0:
+                    continue
+                if single and self.n_el == 1:
+                    out.append((0.5 * wc, wc, True))
+                elif self.n_el == 1:
+                    out.append((wc, wc, False))
+                else:
+                    h = float(np.min(np.diff(_graded_boundaries(
+                        0.0, wc, self.n_el, self.grade))))
+                    out.append((h, wc, True))
+        return out
+
+    @staticmethod
+    def _layout_made_below(cells, size):
+        """The smallest element below ``size`` that the LAYOUT made --
+        ``(h, w_cell)`` or ``None``.  An element is layout-made when its cell
+        is split into several elements AND the cell itself is at least
+        ``size`` wide, i.e. one element per cell would not have been small.
+        A cell the GEOMETRY makes thinner than ``size`` (a liner, a narrow
+        gap, a near-coincident wall pair), or an unsplit cell, is never
+        counted: no layout choice can lift it, and it is the territory of the
+        sliver refusal (manufactured cells) and the within-layer warning
+        (owned cells)."""
+        best = None
+        for h, wc, split in cells:
+            if split and wc >= size and h < size and (best is None
+                                                      or h < best[0]):
+                best = (h, wc)
+        return best
+
+    def _guard_small_elements(self, wavelength, where):
+        """THE SMALL-ELEMENT GUARD -- raise before solving when an element
+        the LAYOUT made (see :meth:`_layout_made_below`) is below
+        :data:`_SMALL_ELEMENT_FRAC` of the wavelength, unless the caller
+        passed ``allow_small_elements=True``.
+
+        Records ``self._small_element_note`` for :func:`_warn_stack_energy`'s
+        backstop: when a layout-made element is below
+        :data:`_SMALL_ELEMENT_WATCH_FRAC` of the wavelength, a provably
+        passive stack whose answer reads super-unity is refused instead of
+        returned with a warning.  A traced (JAX) wavelength skips the guard
+        (its value cannot be read without severing the trace)."""
+        self._small_element_note = None
+        try:
+            wl = float(wavelength)
+        except (TypeError, ValueError):                 # traced / payload
+            return
+        if not (np.isfinite(wl) and wl > 0.0):
+            return
+        cells = self._element_cells()
+        hit = self._layout_made_below(cells, _SMALL_ELEMENT_FRAC * wl)
+        if hit is not None and not self.allow_small_elements:
+            h, wc = hit
+            raise ValueError(
+                f"{where}: the element layout puts an element of "
+                f"{h:.3g} m ({h / wl:.3g} of the wavelength {wl:.4g} m) inside "
+                f"a {wc:.3g} m cell -- below the measured safe size of "
+                f"{_SMALL_ELEMENT_FRAC:g} x wavelength "
+                f"({_SMALL_ELEMENT_FRAC * wl:.3g} m).  Below that size the "
+                f"modal solve can return an O(1) wrong answer with no warning "
+                f"(R + T > 1 on an absorbing stack, or a plausible-looking "
+                f"wrong value).  The layout is degree {self.degree}, "
+                f"elements_per_region={self.n_el}, grade={self.grade!r}.  "
+                f"Raise the smallest element: for grade='geometric' pass an "
+                f"explicit floor, e.g. grade=('geometric', "
+                f"{GEOMETRIC_DEFAULT_RATIO}, "
+                f"{_SMALL_ELEMENT_SUGGEST_FRAC * wl:.3g}) "
+                f"({_SMALL_ELEMENT_SUGGEST_FRAC:g} x wavelength), or a larger "
+                f"ratio, or fewer elements_per_region.  Pass "
+                f"allow_small_elements=True to PMMStack to solve anyway (an "
+                f"energy check then refuses a super-unity answer on a "
+                f"provably passive stack, but cannot see a sub-unity wrong "
+                f"one).")
+        watch = self._layout_made_below(cells, _SMALL_ELEMENT_WATCH_FRAC * wl)
+        if watch is not None:
+            self._small_element_note = (watch[0], wl)
 
     def _as_tensor(self, eps):
         if is_jax_array(eps):
@@ -2591,7 +2880,8 @@ class PMMStack:
                          factorization=self.factorization,
                          min_feature=self.min_feature,
                          layer_grids=self.layer_grids,
-                         window_halfwidth=self.window_halfwidth)
+                         window_halfwidth=self.window_halfwidth,
+                         allow_small_elements=self.allow_small_elements)
         recipes = sorted(self._taper_recipes, key=lambda r: r[0])
         i = 0
         ri = 0
@@ -2623,7 +2913,8 @@ class PMMStack:
                          factorization=self.factorization,
                          min_feature=float(mf),
                          layer_grids=self.layer_grids,
-                         window_halfwidth=self.window_halfwidth)
+                         window_halfwidth=self.window_halfwidth,
+                         allow_small_elements=self.allow_small_elements)
         clone._layers = list(self._layers)
         return clone
 
@@ -2887,6 +3178,7 @@ class PMMStack:
         _warn_stack_energy(R_eff, T_eff, stack=self)
         return order_x, R_eff, T_eff, jones
 
+    @_grade_scope(_wl_of_solve)
     def solve(self, *, stabilize=None, retain_internal=False):
         """Solve the stack.  Returns ``(orders, R_eff, T_eff, jones_reflection)``
         as :func:`pmm_jones_1d_segments` (``R_eff`` / ``T_eff`` are ``(2, M)``:
@@ -2979,6 +3271,11 @@ class PMMStack:
                 f"PMMStack.solve: unresolved material keys {_unresolved}; "
                 f"pass materials={{...}} via prepare()/solve(materials=...) "
                 f"or use concrete permittivities.")
+        # ---- small-element guard, BEFORE any dispatch -----------------------
+        # Every path below builds its element grids from the same walls,
+        # ``min_feature``, ``degree`` / ``elements_per_region`` / ``grade``,
+        # so one census covers them all (see _guard_small_elements).
+        self._guard_small_elements(self._src["wl"], "PMMStack.solve")
         # ---- native conical (out-of-plane, phi != 0) dispatch --------------
         # Path B phase 4: the O(N) n_y = 0 reduction.  Restricted to all-vertical
         # NumPy scalar / in-plane stacks; the JAX / slant / stabilize /
@@ -3004,6 +3301,7 @@ class PMMStack:
                 raise NotImplementedError(
                     "PMMStack: conical incidence (phi != 0) is not available for "
                     "SLANTED layers; use PMM2DStack with y-invariant cells.")
+            _refuse_geometric_conical(self.grade, "PMMStack.solve (conical)")
             return self._solve_conical(self._src["wl"], self._src["angle"], phi)
 
         # ---- incidence guard, BEFORE any dispatch ---------------------------
@@ -4483,6 +4781,7 @@ class PMMStack:
                 out[key] = out[key] + share * A[i]
         return A, out
 
+    @_grade_scope(_wl_of_sweep)
     def solve_vs_wavelength(self, wavelengths, *, angle=0.0, theta=None,
                             jones=False, max_workers=None, blas_per_worker=1):
         """Diffraction efficiencies across a wavelength sweep on ONE call,
@@ -4610,6 +4909,11 @@ class PMMStack:
                 "(the symmetric cascade); call solve() per wavelength for slanted "
                 "/ out-of-plane stacks.")
 
+        # the guard reads the LONGEST wavelength: the danger scale is a
+        # fraction of the wavelength, so that is where a fixed element is
+        # relatively smallest.
+        self._guard_small_elements(float(np.max(wl)),
+                                   "PMMStack.solve_vs_wavelength")
         if self.layer_grids == "per-layer":
             return self._solve_vs_wavelength_perlayer(
                 wl, angle, jones, max_workers, blas_per_worker,
@@ -5305,6 +5609,7 @@ class _PreparedPMMStack:
                 self._eig_cache.popitem(last=False)
         return modes
 
+    @_grade_scope(_wl_of_prepared)
     def solve(self, *, wavelength, materials=None, angle=0.0, theta=None):
         """Solve at ``wavelength`` with the material keys resolved from
         ``materials`` (values: scalar / ``(3, 3)`` / ``wl -> value``
@@ -5364,6 +5669,7 @@ class _PreparedPMMStack:
         Wsub, Vsub = sub_modes[0], sub_modes[1]
         n_glob = mats_sup["n_glob"]
 
+        st._guard_small_elements(wl, "PMMStack.prepare().solve")
         lmodes = [self._layer_eig(i, materials, k0, kx0, wl, angle, mats_sup)
                   for i in range(len(st._layers))]
         # out-of-plane resolved tensors are not supported on this path
