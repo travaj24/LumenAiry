@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 3b0c0f019fdec8a541d5ceeebf39a3604bc9cad96de06ba74676af9e525b4cf8
-token_sha256: 044f1966b84e2b02206042148dca6e99412ebc88ef8761f3bc3fe8d4861f55ed
+ast_sha256: 8b3008728c052d83484bebdec2111a77dc1966d2ae40c1258e45b67b88263139
+token_sha256: e30cba17ef944218a768508631400d7b926ac9b72cc328b777c601fa285a21dd
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -20,6 +20,7 @@ re_recorded: 2026-11-14 -- RCWAStack.add_layer(segments=[(width_fraction, eps), 
 re_recorded: 2026-11-14 -- _raster_wants_companions reads the formulation through _normalize_formulation (one definition of the 'fff' alias) and refuses an unresolved 'auto'
 re_recorded: 2026-11-14 -- RCWAResult.layer_absorption: a layer solved with formulation='li' is attributed the Poynting-flux difference between its faces (exact from the retained modal fields); the Im(eps)|E|^2 volume integral is inconsistent with the inverse-rule E_x (20 % off the absorptance on a metal line in TM).  'laurent' layers keep the volume integral bit for bit
 re_recorded: 2026-11-14 -- RCWAYAverageWarning message: the bit-identity to a hand-averaged cell is stated for formulation='laurent', which 'auto' gives a y-varying cell of a 1-D stack
+re_recorded: 2026-11-14 -- RCWAStack(asr=...): adaptive spatial resolution for 1-D stacks -- constructor spec (_asr_stack._normalize_asr) and asr property; _solve_once hands the cascade to _asr_stack._asr_solve and feeds its Rayleigh amplitudes through the even-cascade (r, t) slot; internal_field reads the u-harmonic carriers, the u-space incident vector, [[f]]^-1 for H_x / H_z and D_x / eps for E_x; layer_absorption takes every layer's face flux in u under ASR
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`
