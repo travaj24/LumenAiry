@@ -645,4 +645,18 @@ def test_feedback_to_rcwa_stack_tensor_materials():
                           n_superstrate=1.0, n_substrate=1.5, n_orders=8)
     oa, Ra, Ta = sa.set_source(_WL).solve().efficiencies()
     ob, Rb, Tb = sb.set_source(_WL).solve().efficiencies()
-    assert np.max(np.abs(np.asarray(Ra) - np.asarray(Rb))) < 1e-10
+    # Re-pinned 2026-11-14.  The scalar export is an eps_cell layer, which
+    # the RCWAStack default formulation 'auto' resolves to 'li' on this 1-D
+    # stack; the eps*I3 export is a tensor layer, solved with the direct rule
+    # (tensor layers have their own factorization).  So the two exports agree
+    # bit-level only where the factorization cannot enter -- TE (E_y, row 1,
+    # tangential to every wall) -- and the export MECHANICS ("same Fourier
+    # content") are pinned against the scalar cell re-solved with
+    # formulation='laurent'.  Measured TM gap at the default: 2.2e-3.
+    assert sa.layers[0].formulation == "li"
+    assert np.max(np.abs(np.asarray(Ra)[1] - np.asarray(Rb)[1])) < 1e-10
+    sl = la.RCWAStack(_P, n_superstrate=1.0, n_substrate=1.5, n_orders=8)
+    sl.add_layer(sa.layers[0].thickness, eps_cell=sa.layers[0].data,
+                 formulation="laurent")
+    ol, Rl, Tl = sl.set_source(_WL).solve().efficiencies()
+    assert np.max(np.abs(np.asarray(Rl) - np.asarray(Rb))) < 1e-10

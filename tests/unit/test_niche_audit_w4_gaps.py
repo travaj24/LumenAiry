@@ -724,7 +724,12 @@ class TestW43OneDStackYAverage:
             st = _stack()
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', RCWAYAverageWarning)
-                st.add_layer(0.10e-6, eps_cell=c)
+                # ONE explicit formulation for both cells (re-pinned
+                # 2026-11-14): the default 'auto' keeps the y-VARYING cell on
+                # 'laurent' (this contract) but resolves the hand-averaged,
+                # y-INVARIANT cell to 'li', so at the default the two solves
+                # use different factorizations by design.
+                st.add_layer(0.10e-6, eps_cell=c, formulation='laurent')
                 r = st.set_source(0.633e-6, theta=0.1).solve()
             return np.asarray(r._R), np.asarray(r._T)
 
