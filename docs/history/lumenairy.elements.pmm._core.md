@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: bd18ecb9586da741381ed2b24580647d627d12b814fb0ea353986dc1b5d736f2
-token_sha256: 9cc206e3f6cb0f27ad089a349e152f89baf9b5d7186e8abc5328e535fb812931
+ast_sha256: 7d91f517976aaf1bc786c65c2d0f1b3c20195ebc61b6e3c4b0f3fc6dbacd96fb
+token_sha256: f63a6e436f73fe20805ddf5fb7567c89f413983db14bdb8667c5a14c52c7f109
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -14,6 +14,7 @@ re_recorded: 2026-10-03 -- JAX 1-D twin: _jpmm_sem_modes split into _jpmm_sem_pr
 re_recorded: 2026-10-04 -- JAX 1-D, Jones twins routed through rcwa._core._jax_cluster_routed (round 1 explicit split removed); eig called on the pencil / with the S0 lift Gram; forward values byte-identical
 re_recorded: 2026-10-04 -- round 3: the half-space geometric eig carries its Rayleigh-anomaly anchors (eps of the half-spaces) into the cluster rule; symmetric-point docstring note with limits
 re_recorded: 2026-11-03 -- point-mirror fix (v5.50.1): PMM paths solved eps(-x,-y); registration bridges (_internal_mirror_1d full x-mirror for the covariant core, _build_axis internal frame + _internal_slant for the hybrid, _stag_bloch_tau public carrier for the staggered family), slant-convection sign and frame-anchor sign (_frame_anchor_phase) corrected
+re_recorded: 2026-11-14 -- G-1 geometric grading spec: _graded_fractions is the one grading rule (the JAX-topology copy removed), _graded_boundaries delegates to it, new _normalize_grade + GEOMETRIC_DEFAULT_RATIO / GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC, geometric layout with an absolute floor; _sem_modes_uniform gains label=; bool/Chebyshev layouts bit-identical
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`
