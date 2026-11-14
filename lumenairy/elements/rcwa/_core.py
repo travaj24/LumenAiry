@@ -3098,16 +3098,41 @@ def _redheffer_star(SA, SB):
     if _concrete and not bool(A22.any()):
         # D = F = I and A22 == 0 exactly.
         return (A11 + (A12 @ B11) @ A21, A12 @ B12, B21 @ A21, B22)
-    I = xp.eye(n, dtype=_C)
-    D = _guarded_inverse(I - B11 @ A22, "rcwa Redheffer star (I - B11 A22)")
-    F = _guarded_inverse(I - A22 @ B11, "rcwa Redheffer star (I - A22 B11)")
-    AD = A12 @ D
-    BF = B21 @ F
-    C11 = A11 + (AD @ B11) @ A21
-    C12 = AD @ B12
-    C21 = BF @ A21
-    C22 = B22 + (BF @ A22) @ B12
-    return (C11, C12, C21, C22)
+    return _star_from_blocks(SA, SB, xp.eye(n, dtype=_C), _matmul,
+                             _matmul_guarded_inverse)
+
+
+def _matmul(A, B):
+    return A @ B
+
+
+def _matmul_guarded_inverse(A, M, what):
+    """``A @ M^-1`` with ``M^-1`` from :func:`_guarded_inverse` (the dense
+    star's ``A12 D`` / ``B21 F``)."""
+    return A @ _guarded_inverse(M, "rcwa Redheffer star " + what)
+
+
+def _star_from_blocks(SA, SB, one, mm, rdiv):
+    """THE Redheffer star formula, shared by the dense star
+    (:func:`_redheffer_star`'s general branch: ``one`` the identity, ``mm`` the
+    matrix product, ``rdiv(A, M, what) = A @ M^-1`` through the guarded
+    inverse) and the elementwise star of two DIAGONAL S-matrices in the PMM
+    uniform-layer fast path (``one = 1``, ``mm`` the elementwise product,
+    ``rdiv`` elementwise division; ``pmm._uniform_cascade._diag_star``).
+
+    With ``D = (I - B11 A22)^-1`` and ``F = (I - A22 B11)^-1``::
+
+        C11 = A11 + A12 D B11 A21    C12 = A12 D B12
+        C21 = B21 F A21              C22 = B22 + B21 F A22 B12
+
+    The association order (``AD = A12 D`` hoisted, then left-to-right) is
+    fixed here for both callers."""
+    A11, A12, A21, A22 = SA
+    B11, B12, B21, B22 = SB
+    AD = rdiv(A12, one - mm(B11, A22), "(I - B11 A22)")
+    BF = rdiv(B21, one - mm(A22, B11), "(I - A22 B11)")
+    return (A11 + mm(mm(AD, B11), A21), mm(AD, B12), mm(BF, A21),
+            B22 + mm(mm(BF, A22), B12))
 
 
 
@@ -3297,11 +3322,23 @@ def _propagation_star(S, lam, k0_L):
     ~10-zgemm chain against literal identity/zero blocks (audit RCWA-LEV-2:
     463.5 ms -> 7.3 ms at 2N = 722; one of the two stars in every
     single-layer solve and half the stars in every stack solve)."""
+    xp = array_namespace(S[0], lam)
+    return _propagation_scale(S, xp.exp(-lam * k0_L))
+
+
+def _propagation_scale(S, X):
+    """THE propagation star given ``X = exp(-lam k0 L)``: ``S12`` scaled by
+    columns, ``S21`` by rows, ``S22`` by both, ``S11`` unchanged.  Shared by
+    :func:`_propagation_star` (dense ``2N x 2N`` blocks) and the PMM
+    uniform-layer fast path, whose S-matrices are DIAGONAL and stored as their
+    diagonals (1-D blocks; ``pmm._uniform_cascade._diag_propagate``) -- the
+    same products in the same order, elementwise."""
     A11, A12, A21, A22 = S
-    xp = array_namespace(A11, lam)
-    X = xp.exp(-lam * k0_L)
-    return (A11, A12 * X[None, :], X[:, None] * A21,
-            (X[:, None] * A22) * X[None, :])
+    if A12.ndim == 1:                    # diagonal storage
+        Xr = Xc = X
+    else:
+        Xr, Xc = X[None, :], X[:, None]
+    return (A11, A12 * Xr, Xc * A21, (Xc * A22) * Xr)
 
 
 
@@ -6223,6 +6260,8 @@ __all__ = [
     "_interface_smatrix",
     "_propagation_smatrix",
     "_propagation_star",
+    "_propagation_scale",
+    "_star_from_blocks",
     "_propagation_star_general",
     "_modes_to_M",
     "_interface_smatrix_general",

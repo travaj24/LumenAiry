@@ -40,6 +40,10 @@ with ``D_x = -eps / safe[:n]`` (the ``E_x``-type columns) and
 ``0.5 (apb - amb apb^-1 amb)`` simplified), propagation by ``k0 t`` multiplies
 by ``X = exp(-lam k0 t)``, and the Redheffer star of two diagonal S-matrices is
 the elementwise form of :func:`~lumenairy.elements.rcwa._core._redheffer_star`.
+All three are the dense kernels' own formulas, run on the diagonals:
+``_core._interface_from_ab``, ``rcwa._core._star_from_blocks`` and
+``rcwa._core._propagation_scale`` take the array operations as arguments, so
+this module carries no copy of them.
 
 Every function returns ``None`` (the caller then takes the dense path) where the
 elementwise form is not finite -- e.g. ``1 + b = 0`` -- so nothing is ever
@@ -52,9 +56,12 @@ PMMStack cascade).
 """
 from __future__ import annotations
 
+import operator
+
 import numpy as np
 
 from ...backend import is_jax_array
+from ..rcwa._core import _propagation_scale, _star_from_blocks
 from ._core import _interface_from_ab, _safe_lam
 
 __all__ = []                      # private module
@@ -148,26 +155,27 @@ def _diag_interface(Da, Db, xp=np):
 
 
 def _diag_propagate(S, lam, k0_t, xp=np):
-    """``S`` starred with the propagation S-matrix of ``(lam, k0 t)`` (the
-    elementwise :func:`_propagation_star`)."""
-    A11, A12, A21, A22 = S
+    """``S`` starred with the propagation S-matrix of ``(lam, k0 t)``: the
+    dense kernel's own formula (``rcwa._core._propagation_scale``) on the
+    diagonals."""
     if xp is not np:
-        X = xp.exp(-lam * k0_t)
-        return (A11, A12 * X, X * A21, X * A22 * X)
+        return _propagation_scale(S, xp.exp(-lam * k0_t))
     with np.errstate(over="ignore", invalid="ignore"):
         X = np.exp(-lam * k0_t)
-    return (A11, A12 * X, X * A21, X * A22 * X)
+    return _propagation_scale(S, X)
+
+
+def _elementwise_div(A, M, what):
+    return A / M
 
 
 def _diag_star(A, B, xp=np):
-    """Elementwise Redheffer star of two diagonal S-matrices, or ``None`` when
-    a denominator vanishes or the result is not finite (NumPy only)."""
-    A11, A12, A21, A22 = A
-    B11, B12, B21, B22 = B
+    """Elementwise Redheffer star of two diagonal S-matrices -- the dense
+    kernel's own formula (``rcwa._core._star_from_blocks``) with elementwise
+    products and division -- or ``None`` when a denominator vanishes or the
+    result is not finite (NumPy only)."""
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-        D = A12 / (1.0 - B11 * A22)
-        F = B21 / (1.0 - A22 * B11)
-        S = (A11 + D * B11 * A21, D * B12, F * A21, B22 + F * A22 * B12)
+        S = _star_from_blocks(A, B, 1.0, operator.mul, _elementwise_div)
     if xp is not np:
         return S
     if not all(np.all(np.isfinite(x)) for x in S):
