@@ -1,7 +1,7 @@
 """ANALYSIS probe 3: PSF/OTF/MTF vs analytic Airy; Strehl definitions;
    diffraction_limited_peak paraxial-reference bias."""
 import sys, warnings, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from scipy.special import j1
 from lumenairy.analysis.psf_mtf_otf import (compute_psf, compute_otf, compute_mtf,
     mtf_radial, encircled_energy_radius, rayleigh_resolution, fwhm_resolution,

@@ -4,8 +4,8 @@ are the archived library (no pytest, so no rootdir sys.path insertion can shadow
 prints (on_axis, before, after) in urad for frac = 0.5 and 1.0, plus PASS/FAIL of the test's bars."""
 import subprocess, sys, pathlib, os
 
-REPO = pathlib.Path("D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
-S = pathlib.Path("C:/Users/AndrewT/AppData/Local/Temp/claude/D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP/78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e/scratchpad/bisect_trees")
+REPO = pathlib.Path(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..", "..")))
+S = pathlib.Path("C:/Users/AndrewT/AppData/Local/Temp/claude/workspace-Python-Test-Scripts-Metasurface-QWP/78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e/scratchpad/bisect_trees")
 S.mkdir(exist_ok=True)
 TEST = REPO / "tests/unit/test_niche_d7_decentred_fit.py"
 CHILD = r"""

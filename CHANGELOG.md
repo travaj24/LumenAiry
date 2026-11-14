@@ -4,6 +4,29 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.50.2] — 2026-11-13
+
+A housekeeping release.  The library code is unchanged from 5.50.1; only
+records outside the `lumenairy` package change.
+
+### Changed -- private folder names removed from docs, records and scripts
+
+Audit reports, the changelog, recorded validation outputs (JSON and text
+logs) and validation scripts quoted absolute folder paths from the
+development machine.  The private part of each path is now the placeholder
+`<workspace>`.
+
+- **Validation scripts that pointed into this repository** now compute the
+  path from the script's own location
+  (`os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ...)`).
+  They no longer depend on where the repository is checked out.
+- **Scripts that point at design files outside the repository** (Zemax
+  prescriptions and similar) keep the rest of the path behind
+  `<workspace>`.  To run one, set that folder in the script, or set the
+  environment variable where the script reads one (`D121_ROOT`,
+  `SUMAP_CACHE`).
+- **Recorded outputs** keep their numbers; only the quoted paths change.
+
 ## [5.50.1] — 2026-11-03
 
 A correctness release driven by an audit of the DynaMeta-to-Lumenairy bridge
@@ -31199,7 +31222,7 @@ actually unlocks the bottom-area splitter.
 ### Bonus: Free_Space_Optics script audit
 
 A parallel audit ran against the user's
-`d:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\` scripts
+`<workspace>\Python_Test_Scripts\Free_Space_Optics\` scripts
 (46 scripts in `Reverse_Symmetric_ASM/` consuming `lumenairy`).
 Result: ZERO breaking changes from the v5.3.x -> v5.4.x evolution.
 All scripts use current symbols (`apply_real_lens_traced`,

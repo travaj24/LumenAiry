@@ -1,13 +1,13 @@
 # VERIFY-WP-B9 -- independent adversarial re-verification of WP-B9 (ray tracing: renormalise hoist, analytic sphere normal, one-bundle fans, trace_jax prescription cache, `pattern=` pupil sampling, aspheric analytic Jacobian)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B9 is commit 7592af4a (its parent
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B9 is commit 7592af4a (its parent
 is the pre-change library for byte-identity and fail-before probes).  Other Wave-4 engineers may be editing other subsystems concurrently; never touch
 those, and expect their fingerprint checks to be red until they re-record.  You own `lumenairy/raytrace/*` for this pass; `analysis/ghost.py` and
 `elements/_lens_traced.py` consume the tracer and are NOT yours.
 
 You did not write WP-B9.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B9's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B9_RAYTRACE_PERFORMANCE.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B9_RAYTRACE_PERFORMANCE.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B9_REPORT.md`, its changelog, its test file
 `tests/unit/test_audit2609_b9_raytrace_perf.py`, `fixes/WP-A1_REPORT.md` section 6 (the designs), `VERIFY_WP-A1.md` (60-digit closed-form oracles:
 reuse the METHOD) and `WP-A26_REPORT.md` section 2.4 (the exact conic trace).
@@ -34,7 +34,7 @@ reuse the METHOD) and `WP-A26_REPORT.md` section 2.4 (the exact conic trace).
    heights and two aspheric orders; FD with the engineer's step and with a 10x smaller step (the tolerance must be derived from the step);
    `aspheric_coeffs` all zero byte-identical to the conic path; an aspheric term large enough that the Newton intersection needs more iterations.
 7. **Attack the byte-identity claims** against `git archive 7592af4a^ lumenairy` extracted READ-ONLY into
-   `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b9\`
+   `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b9\`
    (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest), and **the pins** (derived envelopes or
    per-build numbers? fail-before real? mutate in memory -- renormalise per surface again, use the generic normal, drop a field from the cache key --
    and confirm the tests go red).

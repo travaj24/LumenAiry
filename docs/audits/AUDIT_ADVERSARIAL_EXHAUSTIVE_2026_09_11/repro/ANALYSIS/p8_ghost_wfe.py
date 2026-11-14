@@ -1,7 +1,7 @@
 """ANALYSIS probe 8: ghost retrace on a plane-parallel plate vs analytic;
    eval_image_plane_wfe sanity on a known singlet."""
 import sys, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as la
 from lumenairy.analysis.ghost import (ghost_analysis, enumerate_ghost_paths,
                                       _path_from_pair, retrace_ghost_path)

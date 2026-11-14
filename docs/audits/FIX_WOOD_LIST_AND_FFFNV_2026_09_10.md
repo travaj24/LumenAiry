@@ -19,7 +19,7 @@ Two independent, bounded tasks:
 Every measurement below was taken with `OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=
 MKL_NUM_THREADS=1` unless a row says otherwise, and every probe asserts
 `lumenairy.__file__` for its arm.  The PRE-FIX arm is the read-only main clone
-at `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`
+at `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`
 (HEAD `fb3fd93`, i.e. the same commit this branch starts from).
 
 Builds used:

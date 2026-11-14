@@ -1,7 +1,7 @@
 """Probe 2: in-glass propagation -- medium wavelength, axial piston,
 evanescent cutoff at the medium k."""
 import sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import numpy as np
 from lumenairy.elements._lens_real import apply_real_lens, _propagate_through_glass
 from lumenairy.propagators.propagation import angular_spectrum_propagate as asm

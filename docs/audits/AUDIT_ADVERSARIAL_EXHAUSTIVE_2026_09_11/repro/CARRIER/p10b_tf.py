@@ -1,6 +1,6 @@
 """Probe 10b: cost of the exact TF build; cheaper equivalents."""
 import sys, time, tracemalloc, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 wl = 1.31e-6; k = 2*np.pi/wl
 N = 2048; dx = 2e-6; z = 5e-3
 

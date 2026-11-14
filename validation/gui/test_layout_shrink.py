@@ -89,7 +89,7 @@ _m3.PYVISTAQT_AVAILABLE = False
 
 def _tx71_path():
     candidates = [
-        r'D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics'
+        r'<workspace>\Python_Test_Scripts\Free_Space_Optics'
         r'\Reverse_Symmetric_ASM\tx4designstudy71\tx4designstudy71.zmx',
     ]
     for c in candidates:

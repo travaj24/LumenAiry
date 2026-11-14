@@ -1,5 +1,5 @@
 import numpy as np, sys, cmath
-sys.path.insert(0, r"D:/Metacept/Neurophos/Free_Space_Optics")
+sys.path.insert(0, r"<workspace>/Free_Space_Optics")
 from lumenairy.elements.coatings import coating_reflectance
 
 def airy(n1,n2,n3,d,wl,th1,pol):

@@ -1,6 +1,6 @@
 # VERIFY-WP-B10 -- independent adversarial re-verification of WP-B10 (traced lens: the disc-orthogonal Zernike fit basis, `fit_basis='zernike'`, opt-in)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B10 is commit f8d5466f (its parent
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B10 is commit f8d5466f (its parent
 is the pre-change library for byte-identity and fail-before probes; the commit also carries the orchestrator's `lens_config.py` / census edits for the
 new `LensNumerics` field).  Other Wave-4 engineers may be editing other subsystems concurrently (`_lens_real.py` has a verifier and a follow-up in it);
 never touch those, and expect their fingerprint checks to be red until they re-record.  You own `lumenairy/elements/_lens_traced.py` (and
@@ -8,7 +8,7 @@ never touch those, and expect their fingerprint checks to be red until they re-r
 
 You did not write WP-B10.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B10's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B10_ZERNIKE_TRACED_FIT_BASIS.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B10_ZERNIKE_TRACED_FIT_BASIS.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B10_REPORT.md`, its changelog, its test file
 `tests/unit/test_audit2609_b10_zernike_fit_basis.py`, `fixes/WP-A26_REPORT.md` sections 2.5-2.6, 3 and 8 (the skirt weights and the three refused
 cures) and `WP-A3_REPORT.md` (the T-findings on the fits).
@@ -25,7 +25,7 @@ cures) and `WP-A3_REPORT.md` (the T-findings on the fits).
    "marginal rays no longer couple into defocus" hold -- measure the defocus coefficient's sensitivity to the marginal-ray weight on both bases.
 3. **Attack the byte-identity of the default.**  `fit_basis='chebyshev'` and the omitted keyword on the d7 / c11 / c12 / c13 / c6 / d1 / a26 / a3
    fixtures against `git archive f8d5466f^ lumenairy` extracted READ-ONLY into
-   `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b10\`
+   `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b10\`
    (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest); the d7 numbers 2.371 / 1.683 urad
    character for character.
 4. **Attack the configuration seam.**  `fit_basis='foo'` refuses with the sec. 2 prefix; `LensNumerics(fit_basis=...)` round-trips and the

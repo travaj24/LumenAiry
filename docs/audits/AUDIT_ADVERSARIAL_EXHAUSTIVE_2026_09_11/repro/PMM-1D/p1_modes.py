@@ -3,7 +3,7 @@ spectrum to the EXACT Botten-1981 transcendental dispersion relation.
 """
 import sys, os
 import numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements.pmm import _core as pc
 
 

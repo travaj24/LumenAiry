@@ -12,7 +12,7 @@ both merged into `wave2/pmm2d` at `9203843`.
 **Where this was done.**  Worktree `C:/tmp/lum_vacc`, branch
 `verify/oop-block-eig`, HEAD `9203843`.  The READ-ONLY comparison arm is the
 main clone
-`D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy` at
+`<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy` at
 `fb3fd93` (5.43.0 plus one backend commit, i.e. WITHOUT the accelerator).
 Every script asserts `lumenairy.__file__` for its own arm before it computes
 anything (`vfix.assert_arm`), and the two-arm scripts were run with the

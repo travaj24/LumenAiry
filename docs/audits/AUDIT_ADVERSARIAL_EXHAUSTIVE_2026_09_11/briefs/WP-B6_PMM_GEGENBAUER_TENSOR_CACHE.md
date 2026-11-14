@@ -1,6 +1,6 @@
 # WP-B6 (Wave 4) -- PMM: the Gegenbauer / ultraspherical basis for the TM wall corner (opt-in), and the PMM-2D k0-free tensor operator cache
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the WP-B3 commit
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the WP-B3 commit
 284daccc or later).  Other Wave-4 engineers are concurrently editing `lumenairy/elements/lenses_maslov.py` + `lumenairy/propagators/asymptotic*.py`,
 `lumenairy/elements/_lens_real.py` + `lens_config.py`, `lumenairy/propagators/carrier.py` + `carrier_field.py`, and `lumenairy/elements/rcwa/*`,
 `eme/*`, `bor/*` (WP-B5); never touch any of those.  You own `lumenairy/elements/pmm/*` only.
@@ -47,7 +47,7 @@ Implementation with the sec. 2 prefix on every new validation; oracles the libra
 one the audit used -- build it from `rcwa_efficiency_1d` + `rcwa_extrapolate`, which you may CALL but not edit); derived envelopes in a new
 `tests/unit/test_audit2609_b6_pmm_basis_and_tensor_cache.py` (S5; no wall-clock assertions -- count the projection builds instead); stated
 fail-befores; byte-identity proofs against `git archive <HEAD>^ lumenairy` extracted READ-ONLY into your scratch directory under
-`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b6\`
+`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b6\`
 (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest).  Re-record every history document you
 touch.  Report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B6_REPORT.md` (summary table: item / status / files:lines / tests /
 oracle / measured before -> after; per-item sections; files touched; tests run; requested changes outside your ownership; deferred) and

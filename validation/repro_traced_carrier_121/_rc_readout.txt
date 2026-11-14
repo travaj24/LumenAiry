@@ -1,4 +1,4 @@
-lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+lumenairy 5.32.0 @ <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
   _lens_traced.py 9717ad88dd959889
   carrier.py 5a1b0d1021969df1
 readout lattice dx_out 0.4 um  n_out 61  window +-12.0 um   RN=1024 rs=4 CLIP=3.0
@@ -27,4 +27,4 @@ readout lattice dx_out 0.4 um  n_out 61  window +-12.0 um   RN=1024 rs=4 CLIP=3.
   oracle EE3  90.0250  EE6  99.9080  FWHM  3.364  centroid (-0.2442,-0.1222) um  peak (-0.3667,-0.1852) um  sha dbed7a1b2f30eebb  [27s]
   chain  EE3  89.9005  EE6  99.6649  FWHM  3.383  centroid (-0.2656,-0.1277) um  peak (-0.3427,-0.1706) um  sha 5e8550468cb6061b  [50s]
 
-saved D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_rc_readout_0.4um_61.npz
+saved <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_rc_readout_0.4um_61.npz

@@ -946,7 +946,7 @@ per-layer pair in S2.4.
 
 This box carries an EDITABLE install of `lumenairy` (a `sys.meta_path` finder
 from `__editable__.lumenairy-3.7.8.pth`) pointing at
-`D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, which
+`<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, which
 is a DIFFERENT checkout (at `9af9376`, with no sliver guard at all).  `python
 <probe>.py` puts the PROBE directory on `sys.path[0]` and does NOT put the
 working directory there, so a probe launched as a plain script from a worktree

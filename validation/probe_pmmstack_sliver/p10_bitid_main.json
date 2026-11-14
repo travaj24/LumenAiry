@@ -17,6 +17,6 @@
  "f16_stabilize_slices": "eaf7cc240e0d1fa6a62182d7b57fc1acfee5ae7592b428776516600ff0d80bfa",
  "f17_internal_field": "620dc9aeecdf1ce58f73ca33599d6c8537d9117c46267b253e0d45420cf09454",
  "f18_layer_absorption": "c863f00f60896e6a22568131e1c5eca1e02dce5a133ad26b9e2b4df127f261ad",
- "_lumenairy": "D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy/lumenairy/__init__.py",
+ "_lumenairy": "<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy/lumenairy/__init__.py",
  "_version": "5.44.0"
 }

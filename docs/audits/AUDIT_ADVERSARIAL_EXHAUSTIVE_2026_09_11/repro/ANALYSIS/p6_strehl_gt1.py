@@ -2,7 +2,7 @@
 for a PERFECT (exact spherical) converging wavefront, because
 diffraction_limited_peak's reference is only paraxial-quadratic."""
 import sys, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.analysis.through_focus import (diffraction_limited_peak,
                                               through_focus_scan, find_best_focus)
 

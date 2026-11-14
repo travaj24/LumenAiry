@@ -1,13 +1,13 @@
 # VERIFY-WP-B8 -- independent adversarial re-verification of WP-B8 (analysis and sources: PSF memory + MFT sampling, encircled-energy profile, Zernike recurrence + DM IF cache, Gori pseudo-modes, two dtype/out= items)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B8 is commit ed40e169 (its parent
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B8 is commit ed40e169 (its parent
 is the pre-change library for byte-identity and fail-before probes).  Other Wave-4 engineers may be editing other subsystems concurrently; never touch
 those, and expect their fingerprint checks to be red until they re-record.  You own `lumenairy/analysis/*`, `lumenairy/sources/*`,
 `lumenairy/elements/polarization.py` for this pass (`propagators/mft.py` is consumed, never edited).
 
 You did not write WP-B8.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B8's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B8_ANALYSIS_SOURCES_PERFORMANCE.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B8_ANALYSIS_SOURCES_PERFORMANCE.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B8_REPORT.md`, its changelog, its test file
 `tests/unit/test_audit2609_b8_analysis_sources.py`, and `fixes/WP-A7_REPORT.md` + `WP-A11_REPORT.md` section 6 (the designs).
 
@@ -34,7 +34,7 @@ its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B8_REPO
    NON-contiguous and Fortran-ordered inputs, aliased `out`, and the JAX/xp path if one exists -- the complex-multiply operand order must be preserved
    exactly.  If the engineer left the item alone, check the reason with numbers.
 6. **Attack the byte-identity claims** against `git archive ed40e169^ lumenairy` extracted READ-ONLY into
-   `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b8\`
+   `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b8\`
    (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest), and **the pins** (derived envelopes or
    per-build numbers? fail-before real? mutate in memory -- drop the chessboard on one axis, shift the MFT centre by half a pixel, break the
    recurrence's seed term -- and confirm the tests go red).

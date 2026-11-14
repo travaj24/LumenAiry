@@ -1,6 +1,6 @@
 """Probe: single-beamlet GBD free-space vs analytic Gaussian (amplitude+phase)."""
 import numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators.gbd import (BeamletBundle, propagate_beamlets_freespace,
                                        reconstruct_field_from_beamlets)
 

@@ -4,7 +4,7 @@ include_linear=False, so any v2-linear content removed by the prefit is
 LOST.  W6-A4 claims the difference is phase-only."""
 import sys
 import numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as lm
 from lumenairy.propagators.asymptotic import (
     fit_canonical_polynomials, propagate_modal_asymptotic)

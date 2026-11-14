@@ -5,7 +5,7 @@ inverting the exact ray landing map x -> x + W(x).  Compares
   remap  = _tangent_facet_remap_screen (R1)   [scored at the landing point]
 """
 import numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements._lens_real import (
     _tangent_facet_screen, _tangent_facet_remap_screen, _facet_axial_momenta)
 from scipy.interpolate import RectBivariateSpline

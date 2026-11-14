@@ -18,7 +18,7 @@ from lumenairy.propagators.carrier_field import (
 assert os.path.normcase(la.__file__).startswith(
     os.path.normcase(r'C:\tmp\lum_au')), la.__file__
 
-EXP = (r'd:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics'
+EXP = (r'<workspace>\Python_Test_Scripts\Free_Space_Optics'
        r'\Reverse_Symmetric_ASM\output_tx_design\design121'
        r'\exp29_121_traced_pipeline_32order_v5.35.1_nfc8192_rs1_legfull')
 SPECS = r'C:\tmp\lum_au\validation\pipeline\specs'

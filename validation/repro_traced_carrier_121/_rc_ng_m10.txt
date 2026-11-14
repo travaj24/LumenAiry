@@ -1,4 +1,4 @@
-lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+lumenairy 5.32.0 @ <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
   _lens_traced.py 9717ad88dd959889
   carrier.py 5a1b0d1021969df1
 
@@ -46,4 +46,4 @@ lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\L
         [warn x2] apply_real_lens_traced Newton inversion: 51461/65536 pixels (78.5%) did not converge to tol=3.321e-07 m within
         [warn x1] _sphere_parab_conversion: the band-limit radius r_safe=2.625 mm = (|R|^3 lambda/dx)^(1/3) at R=-7.712 mm, dx=3
 
-saved D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_rc_ng.npz
+saved <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_rc_ng.npz

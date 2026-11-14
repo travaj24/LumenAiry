@@ -1,6 +1,6 @@
 # PMM-1D audit — the 1-D Polynomial (spectral-element) Modal Method: `_core.py`, `stack.py`, `oned.py`, `conical.py`, `_jax_stack.py`
 
-Tree `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, branch `main`, HEAD `a1ff1e6e`.
+Tree `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, branch `main`, HEAD `a1ff1e6e`.
 Repro scripts + raw outputs: `…/scratchpad/PMM-1D/` (`oracle.py`, `p1*…p15*.py`, `out_*.txt`).
 
 **Caveat on every wall-clock number below**: this machine was running ~19 sibling auditors throughout

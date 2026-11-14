@@ -1,6 +1,6 @@
 # WP-B10 (Wave 4) -- a disc-orthogonal (Zernike) basis for the traced lens's OPL / exit-map fits (audit sec. 15.9), OPT-IN
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the newest commit).  Other
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the newest commit).  Other
 Wave-4 engineers are editing `lumenairy/elements/lenses_maslov.py` + `lumenairy/propagators/asymptotic*.py`, `lumenairy/elements/_lens_real.py` (a
 verifier and a follow-up), `lumenairy/propagators/carrier.py` + `carrier_field.py`, `lumenairy/propagators/system.py`, `lumenairy/elements/rcwa/*`,
 `eme/*`, `bor/*`, `lumenairy/elements/pmm/*`, `lumenairy/analysis/*`, `lumenairy/sources/*`, `lumenairy/raytrace/*`; never touch any of those.
@@ -43,7 +43,7 @@ Implementation with the sec. 2 prefix on every new validation; the d7 analytic F
 d7 file's inline oracle is decentre-invariant; do not import the test, rebuild the method); derived envelopes in a new
 `tests/unit/test_audit2609_b10_zernike_fit_basis.py` (S5; no wall-clock assertions; count arbiter engagements / step-down firings instead); the
 byte-identity of the default basis proved against `git archive <HEAD>^ lumenairy` extracted READ-ONLY into your scratch directory under
-`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b10\`
+`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b10\`
 (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest); a stated fail-before (the coupling of marginal
 rays into defocus on the Chebyshev basis, measured); re-record the history document; report
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B10_REPORT.md` (summary table: item / status / files:lines / tests / oracle / measured

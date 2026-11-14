@@ -20,7 +20,7 @@ Three configurations throughout:
 | **WSL** | `~/lumvenv/bin/python` py3.12.3 | numpy 2.4.6, scipy-openblas | `= 1` |
 
 The PRE-FIX arm is the read-only main clone at
-`D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`
+`<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`
 (HEAD `fb3fd93`).  Every probe takes the lumenairy root its arm must come from
 as `argv[1]` and asserts `lumenairy.__file__` against it.
 

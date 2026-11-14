@@ -103,7 +103,7 @@ gate, bit for bit, on the design (S7.1).
 
 | | |
 |---|---|
-| repo | `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy` |
+| repo | `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy` |
 | branch | `feat/d121-final-closure` |
 | `lumenairy` | 5.32.0 |
 | `_lens_traced.py` BEFORE | `8b13259592233b52` (the C11 hash) |

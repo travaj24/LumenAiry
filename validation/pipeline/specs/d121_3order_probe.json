@@ -8,7 +8,7 @@
  "decompose": {
   "kind": "sumap_cache",
   "params": {
-   "cache_dir": "D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy/validation/repro_traced_carrier_121",
+   "cache_dir": "<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy/validation/repro_traced_carrier_121",
    "orders": [[0, 0], [-2, 0], [-4, -2]],
    "nfc": 8192
   }

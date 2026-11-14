@@ -5,7 +5,7 @@ set -u
 TREE=/mnt/c/tmp/vc3_head
 OUT=/mnt/c/tmp/lum_vc3/validation/probe_verify_c3
 PY=~/lumvenv/bin/python
-D121=/mnt/d/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics
+D121=<workspace>/Python_Test_Scripts/Free_Space_Optics
 N=${N:-1024}
 
 run () {   # $1 = tag, $2 = coretype ('' = unset), $3 = threads

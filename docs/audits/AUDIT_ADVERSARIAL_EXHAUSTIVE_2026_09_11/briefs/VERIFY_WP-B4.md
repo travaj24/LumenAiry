@@ -1,13 +1,13 @@
 # VERIFY-WP-B4 -- independent adversarial re-verification of WP-B4 (carrier chain: Collins / ABCD-Fresnel transport with a Bluestein output pitch, `transport='collins'`)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B4 is commit 185d64cd (its parent
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B4 is commit 185d64cd (its parent
 is the pre-change library for byte-identity and fail-before probes).  Other Wave-4 engineers may be editing other subsystems concurrently (rcwa/eme/bor,
 analysis, sources, raytrace, `_lens_traced`, `lenses_maslov`, `system.py`, the propagator kernels); never touch those, and expect their fingerprint checks
 to be red until they re-record.  You own `lumenairy/propagators/carrier.py` and `carrier_field.py` for this pass.
 
 You did not write WP-B4.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B4's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B4_COLLINS_BLUESTEIN_TRANSPORT.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B4_COLLINS_BLUESTEIN_TRANSPORT.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B4_REPORT.md`, its changelog, its test file
 `tests/unit/test_audit2609_b4_collins_transport.py`, and `fixes/WP-A6_REPORT.md` section 6.1 (the design and the four-part acceptance gate) plus
 `WP-A25_REPORT.md` (the replica regime the new transport is supposed to make unnecessary).
@@ -25,7 +25,7 @@ its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B4_REPO
    margin.  Check both signs of B, the `_multi` K = 2 path, and a decentred (WP-A24 style) carrier.
 3. **Attack the byte-identity of the default.**  `transport='sziklas'` on the WP-A6 / A24 / A25 fixtures and the P2 design battery against
    `git archive 185d64cd^ lumenairy` extracted READ-ONLY into
-   `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b4\`
+   `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b4\`
    (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest).  Include the near-focus bridge fixtures
    (`_near_focus_needs_bridge` true) and `replica_fill='zero'`.
 4. **Attack the cost claim** by counting FFT calls (patch `numpy.fft` / the xp fft in memory) for N, N_out pairs, not by timing; confirm

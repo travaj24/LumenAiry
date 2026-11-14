@@ -1,6 +1,6 @@
 # TR-SIBLINGS audit — traced-lens siblings (`_lens_traced_uniform`, `_lens_traced_multibranch`, `_lens_imap`, `_traced_flags`, `_lens_jax`)
 
-Repo `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, v5.45.0, `main` @ `a1ff1e6e`.
+Repo `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, v5.45.0, `main` @ `a1ff1e6e`.
 All scratch under `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/TR-SIBLINGS/`.
 No repository file was created, modified or deleted.
 

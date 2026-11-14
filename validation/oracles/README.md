@@ -135,7 +135,7 @@ at a time) lives in the session scratchpad, NOT under version control (it drives
 a licensed external tool).  It is a JSON-job CLI run with the py3.13 zospy venv:
 
 ```text
-D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\OPDPy_Lumenairy_Crosscheck\.venv-zemax\Scripts\python.exe \
+<workspace>\Python_Test_Scripts\Free_Space_Optics\OPDPy_Lumenairy_Crosscheck\.venv-zemax\Scripts\python.exe \
     <scratchpad>\zos_oracle.py <job.json> <out_prefix>
 ```
 

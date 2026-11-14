@@ -1,6 +1,6 @@
 # TR-MAIN-2 audit — `_lens_traced.py` 9600–13227 (second half of `apply_real_lens_traced` + multi / segmented / prepared entry points)
 
-Repo: `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, branch main.
+Repo: `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, branch main.
 All repro scripts under
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/TR-MAIN-2/`
 (shared fixture `fixt.py`: 2 mm-aperture biconvex f≈25 mm `_TRM2_GLASS` n=1.5168 singlet, λ=1.31 µm).

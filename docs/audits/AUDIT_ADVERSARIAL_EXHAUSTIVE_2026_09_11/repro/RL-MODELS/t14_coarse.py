@@ -2,7 +2,7 @@
 spanning the WHOLE FIELD EXTENT, then bilinearly upsampled.  So its resolution
 INSIDE the pupil degrades linearly with grid padding."""
 import numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements._lens_real import _build_displaced_cos_grid
 lam=0.55e-6
 s=[dict(radius=+19.6e-3, glass_before='AIR',   glass_after='N-BK7', decenter=(1e-9,0.0)),

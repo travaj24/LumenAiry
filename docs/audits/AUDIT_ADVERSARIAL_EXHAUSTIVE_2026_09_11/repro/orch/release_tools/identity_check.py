@@ -1,7 +1,7 @@
 """identity_check.py -- for every modified lumenairy/**/*.py, compare HEAD vs working tree on the
 docstring-stripped AST (positions ignored).  Independent of the sweep's own applier/checker."""
 import ast, subprocess, sys, pathlib
-REPO = pathlib.Path("D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+REPO = pathlib.Path(__import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..", "..")))
 def strip_docstrings(tree):
     for node in ast.walk(tree):
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):

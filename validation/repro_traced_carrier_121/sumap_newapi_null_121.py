@@ -62,8 +62,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 # artifacts live in another checkout of the same repo.
 CACHE = os.environ.get(
     'SUMAP_CACHE',
-    r'D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy'
-    r'\validation\repro_traced_carrier_121')
+    os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "validation", "repro_traced_carrier_121")))
 
 # -- the probe's configuration of record (PROBE_SUM_AT_APERTURE S1 / S3) ----
 LAM = 1.31e-6

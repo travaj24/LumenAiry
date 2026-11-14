@@ -1,6 +1,6 @@
 # WP-B11 (Wave 4, last) -- the hygiene pass: consolidations and the small deferred items, each gated on bit-identity
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the newest commit; every
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the newest commit; every
 other Wave-4 package and verifier has landed -- read their reports' "deferred" and "requested changes" sections, listed below, because several of
 these items are theirs).  Launch condition: no other engineer is editing the files below.
 

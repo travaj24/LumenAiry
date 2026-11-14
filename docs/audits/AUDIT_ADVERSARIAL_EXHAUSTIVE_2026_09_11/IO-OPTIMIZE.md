@@ -1,6 +1,6 @@
 # IO-OPTIMIZE audit — `lumenairy/io/*` (prescription parsers, storage, codegen) + `lumenairy/optimize/*`
 
-Repo: `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy` (main, v5.45.x).
+Repo: `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy` (main, v5.45.x).
 Env: CPython 3.14, numpy 2.4.6, scipy 1.17.1, jax 0.10.1 (CPU), numba 0.65, h5py 3.16, zarr 3.2.1. pymoo NOT installed.
 All scratch under `…/scratchpad/IO-OPTIMIZE/`. No repo file created, modified or deleted.
 

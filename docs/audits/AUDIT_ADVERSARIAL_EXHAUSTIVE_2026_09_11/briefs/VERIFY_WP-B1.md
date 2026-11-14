@@ -1,6 +1,6 @@
 # VERIFY-WP-B1 -- independent adversarial re-verification of WP-B1 (Maslov S6 proper: the saddle follows the input field's local wavevector)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B1 is commit {HEAD} (its
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B1 is commit {HEAD} (its
 parent is the pre-change library for byte-identity and fail-before probes).  Other Wave-4 engineers are editing `lumenairy/propagators/carrier.py`,
 `lumenairy/elements/rcwa/*`, `eme/*`, `bor/*`, `pmm/*`, `lumenairy/analysis/*`, `lumenairy/sources/*`, `lumenairy/raytrace/*`, `_lens_traced.py`,
 `hf.py`/`hfpi.py`/`rs.py`/`mft.py` concurrently; never touch those, and expect their fingerprint checks to be red until they re-record.  A follow-up
@@ -8,7 +8,7 @@ parent is the pre-change library for byte-identity and fail-before probes).  Oth
 
 You did not write WP-B1.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B1's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B1_MASLOV_S6_INPUT_WAVEVECTOR.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B1_MASLOV_S6_INPUT_WAVEVECTOR.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B1_REPORT.md`, its changelog, its test file
 `tests/unit/test_audit2609_b1_maslov_input_wavevector.py`, and `fixes/WP-A4_REPORT.md` section 6 item 1 (the design; WP-B1 deviated from it in two
 stated places -- judge whether those deviations are right).
@@ -30,7 +30,7 @@ stated places -- judge whether those deviations are right).
    and "hurts" there too.  Check the aliasing blind spot the report names (a tilt past the grid's Nyquist angle reads as smooth): what does the
    user get, and does anything say so?
 4. **Attack the byte-identity claims** (24 rows): repeat a representative subset against `git archive {HEAD}^ lumenairy` extracted READ-ONLY into
-   `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b1\`
+   `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b1\`
    (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest), including `collimated_input=True` on a
    non-collimated input and a numerically-real input with float dirt (`E * (1 + 1e-17j)`).
 5. **Attack the new pins** (25 tests): derived envelopes or per-build numbers?  Fail-before real on the parent?  Mutate the fix in memory (zero the

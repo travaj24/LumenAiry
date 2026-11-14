@@ -33,7 +33,7 @@ import numpy as np  # noqa: E402
 import vfix as F  # noqa: E402
 
 TIP = "C:/tmp/lum_vacc"
-MAIN = "D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+MAIN = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 M_DEG = 6
 NORD = 5

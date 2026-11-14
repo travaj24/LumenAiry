@@ -32,7 +32,7 @@
 Traceback (most recent call last):
   File "docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/PMM-1D\p14_absorption.py", line 72, in <module>
     F = st.internal_field(zs, component="all", pol="x")
-  File "D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\stack.py", line 3726, in internal_field
+  File "<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\stack.py", line 3726, in internal_field
     raise ValueError(
         "PMMStack.internal_field: pol must be 0 or 1.")
 ValueError: PMMStack.internal_field: pol must be 0 or 1.

@@ -12,7 +12,7 @@ evidence, so it is annotated rather than rewritten.
 """
 import sys
 import numpy as np
-sys.path.insert(0, r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy')
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.raytrace import trace, Surface
 from lumenairy.raytrace.surface import RayBundle, RAY_OK
 from lumenairy.raytrace.intersection import (_transfer, _intersect_surface,

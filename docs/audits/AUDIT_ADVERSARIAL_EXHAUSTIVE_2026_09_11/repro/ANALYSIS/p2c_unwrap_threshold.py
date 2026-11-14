@@ -4,8 +4,8 @@ Pupil = flat circular aperture + A waves (PV) of primary coma.  No defocus.
 Sampling: 400 samples across the pupil -> max phase step is tiny.
 """
 import sys, warnings, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Free_Space_Optics" if False else
-                r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, r"<workspace>/Free_Space_Optics" if False else
+                __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.analysis.opd import wave_opd_2d
 from lumenairy.analysis.zernike import zernike_decompose
 

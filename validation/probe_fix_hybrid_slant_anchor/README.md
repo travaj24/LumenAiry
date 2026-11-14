@@ -58,7 +58,7 @@ and the PRE-fix arm, which is the read-only main clone (never the worktree,
 which now carries the fix):
 
 ```
-PYTHONPATH="D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy" \
+PYTHONPATH="<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy" \
   FIXSTAGE=pre FIXTAG=win python -W ignore -u p1_census.py
 python p3_compare.py results/p3_bit_identity_post_fix_win.json \
                      results/p3_bit_identity_pre_base_win.json

@@ -1,6 +1,6 @@
 # VERIFY-{WP} -- independent adversarial re-verification of {WP} ({TITLE})
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD {HEAD}
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD {HEAD}
 (the {WP} commit).  Other Wave-4 engineers may be editing other subsystems concurrently; the files you may touch are listed at the end.
 
 You did not write {WP}.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
@@ -16,7 +16,7 @@ You did not write {WP}.  Your job is to try to break it.  Read `docs/TESTING_STA
    Wave 3: brute-force Rayleigh-Sommerfeld, Newton+Snell tracers, closed-form Fresnel, ABCD Gaussians).  State the oracle's own floor.
 2. **Attack the byte-identity claims.**  Every path the report says did not move: prove it with `np.array_equal` against
    `git archive {HEAD}^ lumenairy` extracted READ-ONLY into your scratch directory
-   (`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_{wp}\`;
+   (`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_{wp}\`;
    import the archived library from a child process whose cwd and PYTHONPATH are the archive -- never through pytest, which puts the
    repository root first -- and assert `lumenairy.__file__` per probe).
 3. **Attack the new pins.**  For every new test: is the envelope DERIVED (oracle, floor, defect scale) or a per-build number?  Does the

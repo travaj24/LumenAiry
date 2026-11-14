@@ -59,7 +59,7 @@ Found by the exp12 consumer (oblique-angle study of the exp10/exp11 LC-QWP out-c
 patterned layer is the switchable **LC** slot, so the bug corrupts exactly the device physics.
 
 All file:line anchors relative to
-`d:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\`.
+`<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\`.
 
 ---
 

@@ -7,7 +7,7 @@ CONVENTIONS.md / world.py claim:
 """
 import sys
 import numpy as np
-sys.path.insert(0, r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy')
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.raytrace.surface import Surface, RayBundle
 from lumenairy.raytrace.intersection import _apply_coord_break
 from lumenairy.raytrace.world import _apply_coord_break as world_cb, _rot_x, _rot_y, _rot_z
@@ -100,6 +100,6 @@ print('=' * 72)
 import subprocess
 out = subprocess.run(
     ['grep', '-n', 'tilt', '-A3',
-     r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy/lumenairy/ui/model.py'],
+     __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..", "lumenairy", "ui", "model.py"))],
     capture_output=True, text=True)
 print(out.stdout[:3000] if out.stdout else '(ui/model.py: no tilt hits / file absent)')

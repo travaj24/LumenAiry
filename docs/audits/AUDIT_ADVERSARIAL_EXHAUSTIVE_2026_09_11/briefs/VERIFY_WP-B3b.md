@@ -1,6 +1,6 @@
 # VERIFY-WP-B3b -- independent adversarial re-verification of WP-B3b (the K6 call sites: the chain's Fresnel leg onto the chain grid; the SAS and in-glass resample-back legs gated on window against period)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B3b is commit 908c02d6 (its
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B3b is commit 908c02d6 (its
 parent 908c02d6^ is the pre-change library for byte-identity and fail-before probes).  Other engineers and verifiers are concurrently editing
 `analysis/*`, `sources/*`, `lenses_maslov.py`, `carrier.py`, `raytrace/*`, `rcwa/*`, `_lens_traced.py` and the REMAP functions of `_lens_real.py`
 (VERIFY-B2); never touch those, and expect their fingerprint checks to be red until they re-record.  You own `lumenairy/propagators/system.py`, the
@@ -9,7 +9,7 @@ docstring in `lumenairy/propagators/mft.py`.
 
 You did not write WP-B3b.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B3b's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B3b_RESAMPLE_CALL_SITES.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B3b_RESAMPLE_CALL_SITES.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B3b_REPORT.md`, its changelog, its test file
 `tests/unit/test_audit2609_b3b_resample_call_sites.py`, and `fixes/WP-B3_REPORT.md` sec. 5 + `fixes/VERIFY_WP-B3.md` sec. 5 (the designs and the
 gate correction).  This package MOVES A DEFAULT (the Fresnel chain leg's numbers), so the correctness of the new numbers is the whole question.
@@ -27,7 +27,7 @@ gate correction).  This package MOVES A DEFAULT (the Fresnel chain leg's numbers
    gate's choice was the better one.  Then the in-glass legs: a glass whose index makes `dx_new/dx` cross 1 inside a thickness sweep; confirm
    both directions are exercised and byte-identical to 908c02d6^ where the spline is selected.
 3. **Attack the byte-identity claims** (33 arrays) against `git archive 908c02d6^ lumenairy` extracted READ-ONLY into
-   `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b3b\`
+   `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b3b\`
    (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest), including `method='asm'` chains with
    tilted elements, `propagate_through_system_jax`, `apply_real_lens(wave_propagator='rs'|'asm')`, and every guard text.
 4. **Attack the pins** (39 tests): derived envelopes or per-build numbers?  Fail-before real?  Mutate in memory (drop the per-axis `min`; use

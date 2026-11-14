@@ -7,7 +7,7 @@ the pure sphere (Spencer&Murty / Welford form).
 """
 import sys, os
 import numpy as np
-sys.path.insert(0, r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy')
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 
 from lumenairy.raytrace.surface import Surface, RayBundle
 from lumenairy.raytrace.intersection import _intersect_surface

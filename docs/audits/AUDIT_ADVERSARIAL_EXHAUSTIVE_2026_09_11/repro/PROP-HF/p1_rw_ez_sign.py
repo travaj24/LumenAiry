@@ -23,7 +23,7 @@ with phi_ray = pi:  e_z = -sin t * cos(pi) = +sin t.
 import sys
 import numpy as np
 
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators.vector_diffraction import richards_wolf_focus  # noqa: E402
 
 lam = 633e-9

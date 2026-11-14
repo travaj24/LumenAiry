@@ -1,6 +1,6 @@
 # WP-B5 (Wave 4) -- RCWA / EME / BOR: the H4 performance items WP-A14 deferred (Toeplitz solves, the two-interface closed form) and the off-plane `fff_nv` symmetrisation (H3)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the WP-B3 commit
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the WP-B3 commit
 284daccc or later).  Other Wave-4 engineers are concurrently editing `lumenairy/elements/lenses_maslov.py` + `lumenairy/propagators/asymptotic*.py`,
 `lumenairy/elements/_lens_real.py` + `lens_config.py`, `lumenairy/propagators/carrier.py` + `carrier_field.py`, and (soon) `lumenairy/elements/pmm/*`;
 never touch any of those.  You own the RCWA, EME and BOR packages only.
@@ -39,7 +39,7 @@ change) on a ROTATED-director uniaxial cell, plus the reflection-symmetry proper
 before/after residuals and the in-plane path's byte-identity.
 
 Everything whose default did not move must be proved byte-identical against the pre-change modules (`git archive <HEAD>^ lumenairy` extracted
-READ-ONLY into your scratch directory under `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b5\`,
+READ-ONLY into your scratch directory under `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b5\`,
 imported from a child process whose cwd and PYTHONPATH are the archive -- never through pytest -- with `lumenairy.__file__` asserted).
 
 ## Deliverable

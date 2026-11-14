@@ -1,7 +1,7 @@
 """Does seidel_correction=True inject a spurious defocus because the 1-D fan's
 ray OPL is read at the last-surface SAG instead of the exit VERTEX plane?"""
 import warnings, numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as la
 from lumenairy.elements import apply_real_lens
 

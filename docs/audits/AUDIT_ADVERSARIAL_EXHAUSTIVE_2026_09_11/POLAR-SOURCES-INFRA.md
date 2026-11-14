@@ -1,6 +1,6 @@
 # POLAR-SOURCES-INFRA audit — polarization / Berreman / coatings / sources / algebra / top-level infrastructure
 
-Repo: `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy` (v5.45.x, branch main).
+Repo: `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy` (v5.45.x, branch main).
 All probes under `…/scratchpad/POLAR-SOURCES-INFRA/` (`p1_jones.py` … `p12_final.py`). No repo file was created, modified or deleted.
 
 ## Scope read

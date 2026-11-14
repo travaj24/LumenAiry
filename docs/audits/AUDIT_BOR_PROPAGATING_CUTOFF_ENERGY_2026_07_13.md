@@ -78,7 +78,7 @@ is far more aggressive than the old absolute threshold was at other scales, and 
 saw the difference (§4).
 
 All file:line anchors relative to
-`d:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\`.
+`<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\`.
 
 ---
 

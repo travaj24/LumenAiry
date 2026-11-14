@@ -1,7 +1,7 @@
 """A tilted FLAT refracting face must deviate the beam by ~(n-1)*theta (thin prism).
 Compare field-frame (default) vs surface_frame=True."""
 import warnings, numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements import apply_real_lens
 from lumenairy.glass import get_glass_index
 wl = 1.0e-6; N = 512; dx = 10e-6; k0 = 2*np.pi/wl

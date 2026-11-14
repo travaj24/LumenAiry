@@ -10,14 +10,14 @@ import ast, re, sys, warnings
 import numpy as np
 
 warnings.filterwarnings('ignore')
-sys.path.insert(0, r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy")
-sys.path.insert(0, r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..")))
+sys.path.insert(0, r"<workspace>\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM")
 import lumenairy as la
 from lumenairy import GLASS_REGISTRY, GLASS_VALIDITY, SELLMEIER_COEFFICIENTS, get_glass_index
 
-RUNNER = (r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics"
+RUNNER = (r"<workspace>\Python_Test_Scripts\Free_Space_Optics"
           r"\Reverse_Symmetric_ASM\run_poc_119_120_v518.py")
-ZMX = (r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics"
+ZMX = (r"<workspace>\Python_Test_Scripts\Free_Space_Optics"
        r"\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx")
 lam = 1.31e-6
 k0 = 2*np.pi/lam

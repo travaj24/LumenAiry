@@ -1,13 +1,13 @@
 # VERIFY-WP-B6 -- independent adversarial re-verification of WP-B6 (PMM: the Gegenbauer-basis negative result, and the PMM-2D k0-free tensor operator cache)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B6 is commit {HEAD} (its parent
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B6 is commit {HEAD} (its parent
 is the pre-change library for byte-identity and fail-before probes).  Other Wave-4 engineers are editing the carrier, rcwa/eme/bor, analysis, sources,
 raytrace, `_lens_traced`, `lenses_maslov` and propagator-kernel files concurrently; never touch those, and expect their fingerprint checks to be red
 until they re-record.  You own `lumenairy/elements/pmm/*` for this pass.
 
 You did not write WP-B6.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B6's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B6_PMM_GEGENBAUER_TENSOR_CACHE.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B6_PMM_GEGENBAUER_TENSOR_CACHE.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B6_REPORT.md`, its changelog, its test file
 `tests/unit/test_audit2609_b6_pmm_basis_and_tensor_cache.py`, and `fixes/WP-A12_REPORT.md` section 6 item 3 + `WP-A13_REPORT.md` section 6.1 (the
 designs), plus the audit's PMM-1D partition report ("Alternative algorithms" (c), which WP-B6 says cannot work as stated).
@@ -24,7 +24,7 @@ designs), plus the audit's PMM-1D partition report ("Alternative algorithms" (c)
    regression and the closure loss for lambda != 1/2, (d) that the local convergence rate never leaves the algebraic regime.  If the audit's
    claim ("recovers exponential convergence") holds anywhere in the family on your fixture, say so with the table -- that would reopen item 1.
 2. **Attack the tensor cache (item 2).**  Repeat the bit-identity comparison against `git archive {HEAD}^ lumenairy` extracted READ-ONLY into
-   `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b6\`
+   `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b6\`
    (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest) on cells the engineer did not use:
    a crossed cell with an anisotropic (3x3) tile at oblique incidence and non-zero phi, `fff_nv`, circular truncation, an out-of-plane tile, a
    slanted layer, `symmetry='auto'` on a symmetric cell, and a wavelength AND angle sweep through `PMM2DStackHybrid`.  Then attack the cache

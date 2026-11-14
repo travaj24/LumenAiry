@@ -3,7 +3,7 @@ JAX parity with the NumPy trace (x64 on/off), jax.grad of the exit OPL.
 """
 import os, sys
 import numpy as np
-sys.path.insert(0, r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy')
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 X64 = os.environ.get('LUM_X64', '1') == '1'
 if X64:
     os.environ['JAX_ENABLE_X64'] = '1'

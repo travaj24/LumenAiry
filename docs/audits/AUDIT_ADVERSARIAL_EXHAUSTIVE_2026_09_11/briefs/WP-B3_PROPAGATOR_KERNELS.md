@@ -1,6 +1,6 @@
 # WP-B3 (Wave 4) -- propagator kernels: the HFPI walk's output plane, the Sobol sampler, the Shen-Wang pixel-integrated RS kernel, the band-limited (chirp-Z) resampler
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD 81d5b586
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD 81d5b586
 (= release 5.46.0, Wave 3 closed).  Two other Wave-4 engineers are working concurrently on `lumenairy/elements/lenses_maslov.py` +
 `lumenairy/propagators/asymptotic*.py` (WP-B1) and on `lumenairy/elements/_lens_real.py` + `lumenairy/elements/lens_config.py` (WP-B2);
 never touch those files.

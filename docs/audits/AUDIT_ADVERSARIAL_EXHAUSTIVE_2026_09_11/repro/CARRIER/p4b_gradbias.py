@@ -1,6 +1,6 @@
 """Probe 4b: is the 'gradient' estimator bias really only sin(h)/h?"""
 import sys, warnings, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators.carrier import carrier_referenced_fit_radius
 wl = 1.31e-6; k = 2*np.pi/wl
 w = 100e-6

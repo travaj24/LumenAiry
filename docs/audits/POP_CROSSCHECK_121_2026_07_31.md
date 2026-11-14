@@ -69,7 +69,7 @@ mode. `zos.version` = **23.1.0**, `LicenseStatus` = **PremiumEdition**.
 Connected on first attempt; no licence or headless obstruction.
 
 **Design file** (unmodified on disk; all edits are in-memory only):
-`D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx`
+`<workspace>\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx`
 
 **Isolating a diffraction order.** The file carries the DOE order in
 **parameter 2 of the two DGRATING surfaces**, driven by the multi-configuration

@@ -29,8 +29,7 @@ sys.path.insert(0, os.path.join(_TREE, 'validation',
 os.environ['LUMENAIRY_ROOT'] = _TREE
 os.environ.setdefault(
     'D121_ROOT',
-    'D:' + os.sep + os.path.join('Metacept', 'Neurophos',
-                                 'Python_Test_Scripts', 'Free_Space_Optics'))
+    os.path.join('<workspace>', 'Python_Test_Scripts', 'Free_Space_Optics'))
 
 LAM = 1.31e-6
 W0 = 4e-6

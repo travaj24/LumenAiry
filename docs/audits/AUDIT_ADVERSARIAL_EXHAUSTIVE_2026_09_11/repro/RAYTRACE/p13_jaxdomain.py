@@ -4,7 +4,7 @@ that the trace_jax eager jit cache is actually hit."""
 import os, sys, time
 os.environ['JAX_ENABLE_X64'] = '1'
 import numpy as np
-sys.path.insert(0, r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy')
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.raytrace import trace, surfaces_from_prescription
 from lumenairy.raytrace.trace import _make_bundle
 import jax.numpy as jnp

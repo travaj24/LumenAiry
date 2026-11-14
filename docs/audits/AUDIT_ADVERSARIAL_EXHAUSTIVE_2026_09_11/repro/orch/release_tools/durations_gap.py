@@ -1,6 +1,6 @@
 """Which collected test ids lack a .test_durations entry, split into tracked vs untracked test files."""
 import json, subprocess, sys, collections, pathlib
-REPO = pathlib.Path(r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+REPO = pathlib.Path(__import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..", "..")))
 out = subprocess.run([sys.executable, "-m", "pytest", "tests/unit", "--collect-only", "-q", "-p", "no:cacheprovider"],
                      cwd=REPO, capture_output=True, text=True)
 ids = [l.strip() for l in out.stdout.splitlines() if "::" in l]

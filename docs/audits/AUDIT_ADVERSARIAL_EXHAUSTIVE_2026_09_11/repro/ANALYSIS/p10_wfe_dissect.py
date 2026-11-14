@@ -1,7 +1,7 @@
 """ANALYSIS probe 10: dissect eval_image_plane_wfe against an independent
 transverse-ray-aberration oracle."""
 import sys, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as la
 from lumenairy.analysis.image_plane_wfe import eval_image_plane_wfe
 from lumenairy.raytrace import surfaces_from_prescription, system_abcd, trace

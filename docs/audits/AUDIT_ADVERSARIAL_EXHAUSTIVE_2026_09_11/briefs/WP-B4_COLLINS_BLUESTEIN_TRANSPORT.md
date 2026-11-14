@@ -1,6 +1,6 @@
 # WP-B4 (Wave 4) -- carrier chain: Collins / ABCD-Fresnel transport with a freely chosen (Bluestein) output pitch, behind `transport='collins'`
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD 81d5b586
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD 81d5b586
 (= release 5.46.0, Wave 3 closed).  Three other Wave-4 engineers are working concurrently: WP-B1 on `lumenairy/elements/lenses_maslov.py`
 + `lumenairy/propagators/asymptotic*.py`, WP-B2 on `lumenairy/elements/_lens_real.py` + `lumenairy/elements/lens_config.py`, WP-B3 on
 `lumenairy/propagators/hf.py`, `hfpi.py`, `rs.py`, `mft.py`.  Never touch those files.  You CONSUME `mft.py`'s `_bluestein_centred_2d` and

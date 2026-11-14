@@ -1,6 +1,6 @@
 # VERIFY-WP-B7 -- independent adversarial re-verification of WP-B7 (the asymptotic family: FGA routing, Y4 performance, Y5 structure, the uniform asymptotics, GBD kernel clipping, the JAX thin-screen displacement error, the S6 fallback statistic, the pupil-chart sizing)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B7 is commit f64444ec (its parent
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B7 is commit f64444ec (its parent
 is the pre-change library for byte-identity and fail-before probes).  You own `lumenairy/elements/lenses_maslov.py`, `lenses_gbd.py`,
 `_lens_jax.py` (the Maslov screen only), `lumenairy/propagators/asymptotic*.py`, `fga.py`, `gbd.py` and their `docs/history/` documents for this
 pass; nothing else.  WP-B11b is editing CONCURRENTLY `lumenairy/propagators/sas.py`, `lumenairy/elements/lens_config.py`, `doe.py`, `_lens_real.py`,
@@ -11,7 +11,7 @@ Maslov / JAX warning `stacklevel` sites); do not pre-empt them.
 
 You did not write WP-B7.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B7's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B7_ASYMPTOTIC_FGA_GBD.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B7_ASYMPTOTIC_FGA_GBD.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B7_REPORT.md`, its changelog, its test file
 `tests/unit/test_audit2609_b7_asymptotic.py`, and `fixes/VERIFY_WP-B1.md` sections 4, 6 and 7 (the S6 fallback measurements and the JAX
 thin-screen finding WP-B7 items 9-11 answer) plus `fixes/WP-A4_REPORT.md` section 6 (the Y4 / Y5 / FGA designs).

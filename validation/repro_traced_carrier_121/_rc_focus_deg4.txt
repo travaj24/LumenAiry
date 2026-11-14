@@ -1,5 +1,5 @@
 [rc_with_gate] GATE=shipped  RESID_DEG=4  DEC_ORDER=10  _DECENTRE_GATE_W_FRAC=0.05  _DECENTRE_GATE_PIXELS=0.5  C6=True  C9=True
-[rc_with_gate] lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+[rc_with_gate] lumenairy 5.32.0 @ <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
 [rc_with_gate] _lens_traced c706a5cc0a8c672f  carrier 5a1b0d1021969df1
 config: N=2048 rs=4 nfc=8192 wf=4.0 nout=2048 chain_kwargs={}  (pure library defaults)
 chain done 365s

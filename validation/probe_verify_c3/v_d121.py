@@ -227,9 +227,7 @@ def main():
     rec['LUMENAIRY_ROOT'] = _TREE
     os.environ.setdefault(
         'D121_ROOT',
-        'D:' + os.sep + os.path.join(
-            'Metacept', 'Neurophos', 'Python_Test_Scripts',
-            'Free_Space_Optics'))
+        os.path.join('<workspace>', 'Python_Test_Scripts', 'Free_Space_Optics'))
     import _d121_common as D  # noqa: E402
     # THE TRAP: _d121_common inserts <D121_ROOT>/Lumenairy at sys.path[0].
     # lumenairy is already imported, so the anchor must STILL hold -- re-read.

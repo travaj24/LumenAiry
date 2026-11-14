@@ -1,5 +1,5 @@
 import sys, time, tracemalloc
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import numpy as np
 from lumenairy.elements.lenses import surface_sag_general as sg
 N = 2048

@@ -43,7 +43,7 @@ wsl.exe -e bash -lc "cd /mnt/c/tmp/lum_vslant/validation/probe_verify_slant && \
   OPENBLAS_NUM_THREADS=1 ~/lumvenv/bin/python -W ignore -u v9_durability.py"
 
 # the WITHOUT arm, against the main clone at 2efc7a2 (READ-ONLY)
-PYTHONPATH="D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy" \
+PYTHONPATH="<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy" \
   python v1_without_identity.py && python v1_compare.py
 ```
 

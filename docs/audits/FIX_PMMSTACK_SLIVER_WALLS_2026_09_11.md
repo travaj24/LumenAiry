@@ -319,7 +319,7 @@ of every returned array (sha256 over dtype, shape and buffer) and asserts which
 `lumenairy` it imported.
 
 The reference is the **READ-ONLY main clone** at
-`D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`
+`<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`
 (HEAD `5adf571`, version 5.44.0). Its `lumenairy/elements/pmm/{stack,_core,
 conical,oned,_jax_stack,twod}.py` are **byte-identical** to this branch's base
 `3034bcb` (verified with `diff --strip-trailing-cr`), so it is a valid

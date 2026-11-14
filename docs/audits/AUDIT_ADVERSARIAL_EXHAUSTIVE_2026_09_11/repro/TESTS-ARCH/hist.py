@@ -1,7 +1,7 @@
 """Quantify 'audit-trail' history comments vs code-describing comments."""
 import os, re, io, tokenize, collections
 
-ROOT = r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 FILES = ["lumenairy/elements/_lens_real.py", "lumenairy/elements/_lens_traced.py",
          "lumenairy/propagators/carrier.py", "lumenairy/elements/_lens_imap.py",
          "lumenairy/elements/lenses_maslov.py", "lumenairy/propagators/fft_infra.py"]

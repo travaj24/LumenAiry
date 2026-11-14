@@ -1,5 +1,5 @@
 import sys, numpy as np, warnings
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"); sys.path.insert(0,".")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", ".."))); sys.path.insert(0,".")
 warnings.simplefilter("ignore")
 np.set_printoptions(precision=10, linewidth=240)
 from lumenairy.elements.pmm import PMM2DStackHybrid, pmm_efficiency_2d_cell

@@ -1,6 +1,6 @@
 # WP-B9 (Wave 4) -- ray tracing: the performance and completeness items WP-A1 deferred
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD 284daccc or later).  Other
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD 284daccc or later).  Other
 Wave-4 engineers are concurrently editing `lumenairy/elements/lenses_maslov.py` + `lumenairy/propagators/asymptotic*.py`, `lumenairy/elements/_lens_real.py`
 + `lens_config.py`, `lumenairy/propagators/carrier.py` + `carrier_field.py`, `lumenairy/propagators/hf.py`, `hfpi.py`, `rs.py`, `mft.py`,
 `lumenairy/elements/rcwa/*`, `eme/*`, `bor/*`, `lumenairy/elements/pmm/*`, `lumenairy/analysis/*`, `lumenairy/sources/*`; never touch any of those.
@@ -45,7 +45,7 @@ Item 7 of the report (polarisation ray tracing) stays out of scope; say so.
 Implementation with the sec. 2 prefix on every new validation; oracles the library did not produce (closed-form sphere/conic normals, the exact
 conic trace, FD Jacobians); derived envelopes in a new `tests/unit/test_audit2609_b9_raytrace_perf.py` (S5; no wall-clock assertions -- count
 `trace()` calls, sqrt/divide operations or cache hits instead); stated fail-befores; byte-identity proofs against `git archive <HEAD>^ lumenairy`
-extracted READ-ONLY into your scratch directory under `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b9\`
+extracted READ-ONLY into your scratch directory under `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b9\`
 (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest); wall-clock medians of interleaved runs
 reported.  Re-record every history document you touch.  Report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B9_REPORT.md`
 (summary table: item / status / files:lines / tests / oracle / measured before -> after; per-item sections; files touched; tests run; requested

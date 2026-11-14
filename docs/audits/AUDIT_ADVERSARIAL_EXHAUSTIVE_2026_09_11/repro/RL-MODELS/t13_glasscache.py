@@ -2,7 +2,7 @@
 a user-supplied GLASS_REGISTRY entry is re-pointed under the same NAME --
 the key stores str(glass_name) only."""
 import numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.glass import GLASS_REGISTRY, get_glass_index
 import lumenairy.elements._lens_real as LR
 from lumenairy.elements._lens_real import apply_real_lens, _get_displaced_cos_luts

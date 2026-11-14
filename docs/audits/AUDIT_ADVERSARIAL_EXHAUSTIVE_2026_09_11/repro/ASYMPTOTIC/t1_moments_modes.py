@@ -1,7 +1,7 @@
 """T1: Wick moments vs brute-force; LG/HG orthonormality Gram."""
 import sys, math
 import numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators.asymptotic import (
     gaussian_moment_2d, gaussian_moment_table_2d, lg_polynomial, hg_polynomial,
     evaluate_lg_mode, evaluate_hg_mode, decompose_lg, decompose_hg,

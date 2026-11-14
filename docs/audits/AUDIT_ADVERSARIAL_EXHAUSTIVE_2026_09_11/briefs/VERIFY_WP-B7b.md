@@ -1,6 +1,6 @@
 # VERIFY-WP-B7b -- independent adversarial re-verification of WP-B7b (the caustic routing to `phase_screen` for a single-valued field inside the aberration envelope, the `caustic='uniform'` fold envelope + warning, the FGA analytic-Jacobian predicate)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B7b is commit 9cf94fa5 (its parent
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B7b is commit 9cf94fa5 (its parent
 `ea374607` is the pre-change library).  You own `lumenairy/propagators/fga.py`, `lumenairy/elements/_lens_traced_uniform.py`, the test files WP-B7b
 changed (`tests/unit/test_audit2609_a4_fga_s10.py`, `tests/unit/test_fga_h4_h5.py`), `tests/unit/test_audit2609_b7b_caustic_routing.py` and your two
 report files; nothing else.  Neither owned module has a `docs/history/` document (`scripts/record_history_fingerprints.py <path> --check` says so), so

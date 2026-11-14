@@ -6,7 +6,7 @@ full field, and the SAME element call, so only the carrier transport / hand-off
 bookkeeping differs.
 """
 import sys, warnings, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as la
 from lumenairy.propagators.carrier import (
     propagate_traced_carrier_chain, carrier_referenced_reconstruct,

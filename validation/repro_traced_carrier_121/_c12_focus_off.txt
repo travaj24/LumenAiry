@@ -1,6 +1,6 @@
 [c12_with_predictor] DECENTRED_FIT_PREDICTOR=False  DECENTRED_FIT_ARBITER=False  score_floor=0.0  spectrum_order=14
 [c12_with_predictor] RESID_DEG=6  _DECENTRE_GATE_W_FRAC=0.05
-[c12_with_predictor] lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+[c12_with_predictor] lumenairy 5.32.0 @ <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
 [c12_with_predictor] _lens_traced d0d8da8d494e95f7  carrier 5a1b0d1021969df1
 config: N=2048 rs=4 nfc=8192 wf=4.0 nout=2048 chain_kwargs={}  (pure library defaults)
 chain done 364s

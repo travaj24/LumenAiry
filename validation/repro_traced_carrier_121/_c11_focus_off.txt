@@ -1,5 +1,5 @@
 [c11_with_arbiter] DECENTRED_FIT_ARBITER=False  RESID_DEG=6  _DECENTRE_GATE_W_FRAC=0.05
-[c11_with_arbiter] lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+[c11_with_arbiter] lumenairy 5.32.0 @ <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
 [c11_with_arbiter] _lens_traced 83a848749bfddba7  carrier 5a1b0d1021969df1
 config: N=2048 rs=4 nfc=8192 wf=4.0 nout=2048 chain_kwargs={}  (pure library defaults)
 chain done 556s

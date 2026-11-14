@@ -1,6 +1,6 @@
 """ANALYSIS probe 2: opd.py -- unwrap validity, reference sphere, sampling rule."""
 import sys, warnings, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.analysis.opd import (wave_opd_1d, wave_opd_2d, check_opd_sampling,
                                     depth_of_focus, opd_pv_rms, remove_wavefront_modes)
 

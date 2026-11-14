@@ -30,7 +30,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 # design's OWN per-order table on the other BLAS build, and this one literal
 # was the only thing that stopped it (2026-08-03).
 _ROOT = os.environ.get(
-    'D121_ROOT', r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics")
+    'D121_ROOT', r"<workspace>\Python_Test_Scripts\Free_Space_Optics")
 sys.path.insert(0, os.path.join(_ROOT, "Lumenairy"))
 sys.path.insert(0, os.path.join(_ROOT, "Reverse_Symmetric_ASM"))
 
