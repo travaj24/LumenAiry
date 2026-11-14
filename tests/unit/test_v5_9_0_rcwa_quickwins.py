@@ -99,16 +99,33 @@ def test_convergence_flags_underresolved_and_warns():
     assert report["converged"] is False
     assert report["delta"] > 1e-3
     assert any("NOT converged" in str(x.message) for x in w)
-    # the RETURNED result is the higher-resolution solve
-    assert report["n_orders_high"] == {"n_orders": 8}
+    # the RETURNED result is the higher-resolution solve.  The default step is
+    # GEOMETRIC (N -> max(N + 1, ceil(1.5 N))), so 4 -> 6; the additive step of
+    # earlier releases (4 -> 8) is the explicit bump=4 below.  Re-measured
+    # 2026-11-14: default err_estimate 0.41 (relative change 0.20 over a x1.5
+    # step), true zeroth-order error at N = 6 ~3e-2 against N = 400.
+    assert report["n_orders_high"] == {"n_orders": 6}
+    assert report["err_estimate"] > 1e-2
     assert len(result) == 3                                # (orders, R, T)
+    # legacy additive step: same high truncation and absolute delta as before
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _res, legacy = rcwa_convergence(rcwa_efficiency_1d, n_orders=4,
+                                        bump=4, **METAL)
+    assert legacy["n_orders_high"] == {"n_orders": 8}
+    assert legacy["delta"] > 1e-3
+    assert legacy["converged"] is False
 
 
 def test_convergence_passes_when_resolved():
     result, report = rcwa_convergence(rcwa_efficiency_1d, n_orders=30,
                                       warn=False, **METAL)
+    # Re-measured under the relative / geometric rule (2026-11-14): 30 -> 45,
+    # err_estimate 1.2e-3 (true largest relative per-order error at N = 45
+    # about 2.5e-3 against N = 400), well inside rtol = 1e-2.
     assert report["converged"] is True
     assert report["delta"] < 1e-3
+    assert report["err_estimate"] < 1e-2
 
 
 def test_convergence_supports_2d_order_params():

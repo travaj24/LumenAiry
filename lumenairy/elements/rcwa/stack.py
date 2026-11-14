@@ -17,11 +17,17 @@ from ...backend import (
 )
 from ._core import (
     _C,
+    _CONV_FACTOR_1AXIS,
+    _CONV_FACTOR_2AXIS,
     _blas_limit,
     _blas_threads_quiet,
     _cached_homogeneous_eigenmodes,
     _cell_lossless,
     _check_energy,
+    _convergence_args,
+    _convergence_report,
+    _convergence_step,
+    _convergence_warn,
     _EnergyError,
     _forward_flux_kz,
     _grazing_safe_wavelength,
@@ -33,7 +39,6 @@ from ._core import (
     _jax_cluster_routed,
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
-    _max_aligned_delta,
     _modes_to_M,
     _order_key,
     _passive_media,
@@ -623,18 +628,66 @@ def _layer_offplane_or_traced(data):
     return False
 
 
-def rcwa_convergence(solver, *, order_params=("n_orders",), bump=4, atol=1e-3,
+def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
+                     bump=None, rtol=1e-2, atol=None, estimate=False,
                      warn=True, **kwargs):
     """Run an RCWA ``solver`` at the requested harmonic count AND a higher one,
     and report whether the answer has converged in the retained order count.
 
     A too-low truncation can manufacture a *plausible but wrong* result -- most
     dangerously a spurious deep reflection null at a sharp / high-Q resonance --
-    so this solves twice (each name in ``order_params`` bumped by ``bump``) and
-    compares the per-order efficiencies, warning if the largest change exceeds
-    ``atol``.  Cheap insurance (one extra solve) against silently
-    under-resolved physics; for a converged *value* (not just a check) see
-    :func:`rcwa_extrapolate`.
+    so this solves again at a GEOMETRICALLY higher truncation, compares the
+    per-order efficiencies (and the zeroth-order complex amplitudes) RELATIVE
+    to their size, and turns the change into an ERROR ESTIMATE for the top
+    solve.  One extra solve by default; for a converged *value* (not just a
+    check) see :func:`rcwa_extrapolate`.
+
+    HOW THE VERDICT IS FORMED.  The truncation ``N`` (per axis) goes to
+    ``N_hi = max(N + 1, ceil(f N))``.  Each order's efficiency change is taken
+    relative to ``max(R_m(hi), 1e-3 sum R(hi))`` (T likewise; the floor keeps a
+    negligible order from dominating), each zeroth-order Jones element's change
+    relative to ``max(|J(hi)|, sqrt(1e-3 sum R(hi)))``.  The largest of these,
+    ``d``, becomes the error estimate ``err = d / (f - 1)`` with
+    ``f = N_hi / N``: the error of the top solve if the result converges
+    ALGEBRAICALLY as ``1/N`` (p = 1).  That is the conservative choice:
+    metal corners converge at p ~ 1.1, a smooth (dielectric, graded) profile
+    exponentially -- for which the estimate overstates the error, harmlessly.
+    ``converged = err <= rtol`` (and the absolute change ``<= atol`` when
+    ``atol`` is given).
+
+    WHY NOT A SMALL ADDITIVE STEP.  A Fourier-truncated solve of a sharp metal
+    edge converges algebraically and, on a resonant stack, oscillates from one
+    ``N`` to the next.  An additive step of 4 orders at ``N`` ~ 60 is a 6 %
+    change of ``N``, so it changes the answer by a small fraction of its error,
+    and an ABSOLUTE efficiency tolerance says nothing about a low-reflectance
+    state.  Measured on a resonant metal-strip stack (a 175 nm strip,
+    eps -74+6i, on a 21 nm spacer over a metal mirror; period 370 nm, 1300 nm,
+    TM, ``'li'``; reference reflectance 0.02049): the additive check
+    (``bump=4``, ``atol=1e-3``) called ``N = 61`` converged (change 3.8e-4)
+    with the reflectance 23.5 % wrong, and ``N = 100`` converged with it
+    11.7 % wrong.  The default here steps ``61 -> 92`` (reflectance 0.016051 ->
+    0.017301, a 7.2 % change), estimates a 14 % error (true error at 92:
+    15.5 %) and reports NOT converged; over N = 40 ... 207 on that stack the
+    one-step estimate tracks the true error within 0.6x - 1.6x.
+
+    ``estimate=True`` adds a THIRD solve one more step up (``N, fN, f^2 N``)
+    and replaces the p = 1 bound by a Richardson estimate with each quantity's
+    own LOCAL EXPONENT, ``p`` from ``(s2 - s1)/(s3 - s2)`` under the model
+    ``s(N) = L + C N^-p``; the error of the top solve is
+    ``|s3 - s2| / (f^p - 1)``.  The sequence is ERRATIC -- and the result NOT
+    converged -- when the two successive changes of a quantity point in
+    opposite directions or ``p`` falls outside ``[0.5, 4]``: such a sequence is
+    not in its asymptotic range and no extrapolation of it can be trusted.  A
+    quantity whose conservative p = 1 bound is already inside ``rtol`` on both
+    steps is not judged.  On the metal-strip stack above, ``N = 40`` (rungs
+    40 / 60 / 90, reflectance 0.016606 / 0.015668 / 0.017272) is erratic; at
+    ``N = 61`` (61 / 92 / 138) the reflectance's local exponent is 0.57 and
+    its Richardson estimate 20 % (true error at 138: 10.8 %), while the
+    reflection amplitude's exponent, 0.45, marks the window erratic as well:
+    not converged either way.  COST: the extra solves are at up to
+    ``f^2 = 2.25x`` the harmonics per axis; on a 2-D stack (``f = 1.25`` per
+    axis) that is 1.56x and 2.4x the retained harmonic count, i.e. about
+    3.8x and 14x the base solve's eigen-cost.
 
     Parameters
     ----------
@@ -642,21 +695,39 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), bump=4, atol=1e-3,
         An RCWA efficiency entry point returning ``(orders, R, T, ...)`` --
         e.g. :func:`rcwa_efficiency_1d`, :func:`rcwa_efficiency_2d`,
         :func:`rcwa_jones_1d` -- OR a configured :class:`RCWAStack` (with its
-        source + layers already set).  For a stack the truncation it is bumped
-        is its ``n_orders`` (and ``n_orders_y`` for a 2-D stack); ``kwargs`` /
-        ``order_params`` are ignored and the two ``RCWAResult`` solves are
-        compared on their per-order efficiencies (the HIGHER-resolution
-        ``RCWAResult`` is returned).
+        source + layers already set).  For a stack the truncation that is
+        raised is its ``n_orders`` (and ``n_orders_y`` for a 2-D stack, and
+        restored afterwards); ``kwargs`` / ``order_params`` are ignored and the
+        solves are compared on their per-order efficiencies and their
+        zeroth-order ``jones_reflection()`` / ``jones_transmission()``.  For a
+        callable, complex arrays returned after ``(orders, R, T)`` (e.g. the
+        Jones reflection / transmission of :func:`rcwa_jones_1d`) are compared
+        as amplitudes, the first against the reflected, the second against
+        the transmitted power.
     order_params : tuple of str, optional
-        The harmonic-count keyword(s) to bump (callable ``solver`` only).
+        The harmonic-count keyword(s) to raise (callable ``solver`` only).
         ``("n_orders",)`` (default) for the 1-D / Jones-1-D solvers;
         ``("n_orders_x", "n_orders_y")`` for 2-D.
+    factor : float, optional
+        Geometric step per axis, ``> 1``.  Default 1.5 for one order axis and
+        1.25 per axis for two (a 2-D stack, or two ``order_params``), so the
+        retained harmonic count grows about 1.5x in both cases.
     bump : int, optional
-        Increment added to each order parameter for the high-resolution solve
-        (default 4).
+        The ADDITIVE step instead (each order parameter ``+ bump``); the solve
+        it compares against is then exactly the one earlier releases used
+        (their default was ``bump=4``).  The verdict still follows ``rtol`` /
+        ``atol`` above, with ``f = N_hi / N``.  Mutually exclusive with
+        ``factor``.
+    rtol : float, optional
+        Tolerance on the estimated RELATIVE error of the top solve (default
+        ``1e-2``).
     atol : float, optional
-        Convergence tolerance on the largest per-order efficiency change
-        (default ``1e-3``).
+        Additionally require the largest absolute per-order efficiency change
+        to be ``<= atol`` (the test earlier releases applied alone, with
+        ``1e-3``).  Default ``None``: not applied.
+    estimate : bool, optional
+        Third solve and per-quantity local exponent (see above).  Default
+        ``False``.
     warn : bool, optional
         Emit a ``UserWarning`` when not converged (default ``True``).
     **kwargs
@@ -666,48 +737,68 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), bump=4, atol=1e-3,
     Returns
     -------
     result : tuple or RCWAResult
-        The HIGHER-resolution solve (the more trustworthy of the two) -- the
-        ``solver(**kwargs_bumped)`` tuple for a callable, or the bumped
-        :class:`RCWAResult` for a stack.
+        The HIGHEST-resolution solve (the most trustworthy) -- the solver's
+        tuple for a callable, or the :class:`RCWAResult` for a stack.
     report : dict
-        ``converged`` (bool), ``delta`` (max per-order efficiency change),
-        ``delta_sum_R`` / ``delta_sum_T`` (change in total R / T),
-        ``n_orders_low`` / ``n_orders_high`` (the two truncations).
+        ``converged`` (bool); ``delta`` (largest absolute per-order efficiency
+        change of the top step); ``delta_sum_R`` / ``delta_sum_T`` (change in
+        total R / T); ``n_orders_low`` / ``n_orders_high`` (the lowest and
+        highest truncations); ``delta_rel`` (largest relative per-order
+        change); ``delta_amp`` (largest relative zeroth-order amplitude
+        change; 0 when the solver returns none); ``err_estimate`` (the
+        estimated relative error of the returned solve); ``factor`` (the top
+        step's truncation ratio ``N_hi / N``, the smallest over the axes).
+        With ``estimate=True`` also ``exponent`` (the local exponent of the
+        quantity with the largest estimate, ``None`` when every quantity is
+        inside ``rtol``), ``erratic`` (bool) and ``n_orders_mid``.
     """
     if isinstance(solver, RCWAStack):
-        return _rcwa_convergence_stack(solver, bump=bump, atol=atol, warn=warn)
+        return _rcwa_convergence_stack(solver, factor=factor, bump=bump,
+                                       rtol=rtol, atol=atol,
+                                       estimate=estimate, warn=warn)
+    _convergence_args("rcwa_convergence", factor, bump, rtol, atol)
     for p in order_params:
         if p not in kwargs:
             raise ValueError(
                 f"rcwa_convergence: order parameter {p!r} not found in kwargs; "
                 f"pass it (and set order_params to the solver's harmonic-count "
                 f"argument names).")
-    low = solver(**kwargs)
-    hi_kwargs = dict(kwargs)
-    for p in order_params:
-        hi_kwargs[p] = int(kwargs[p]) + int(bump)
-    high = solver(**hi_kwargs)
+    params = tuple(order_params)
+    if bump is None and factor is None:
+        factor = (_CONV_FACTOR_1AXIS if len(params) == 1
+                  else _CONV_FACTOR_2AXIS)
+    levels = [{p: int(kwargs[p]) for p in params}]
+    for _ in range(2 if estimate else 1):
+        levels.append({p: _convergence_step(
+            n, factor=factor, bump=bump, keep_zero=len(params) > 1 and k > 0)
+            for k, (p, n) in enumerate(levels[-1].items())})
+    outs = []
+    for lev in levels:
+        kw = dict(kwargs)
+        kw.update(lev)
+        outs.append(solver(**kw))
 
-    o_lo, R_lo, T_lo = low[0], low[1], low[2]
-    o_hi, R_hi, T_hi = high[0], high[1], high[2]
-    delta = max(_max_aligned_delta(o_lo, R_lo, o_hi, R_hi),
-                _max_aligned_delta(o_lo, T_lo, o_hi, T_hi))
-    dsR = abs(float(np.sum(to_numpy(R_lo))) - float(np.sum(to_numpy(R_hi))))
-    dsT = abs(float(np.sum(to_numpy(T_lo))) - float(np.sum(to_numpy(T_hi))))
-    converged = delta <= atol
-    report = dict(converged=converged, delta=delta, delta_sum_R=dsR,
-                  delta_sum_T=dsT,
-                  n_orders_low={p: int(kwargs[p]) for p in order_params},
-                  n_orders_high={p: int(hi_kwargs[p]) for p in order_params})
-    if warn and not converged:
-        import warnings
-        warnings.warn(
-            f"rcwa_convergence: NOT converged at {report['n_orders_low']} -- the "
-            f"per-order efficiency changed by {delta:.2e} (> atol={atol:.1e}) "
-            f"going to {report['n_orders_high']}; the lower-order result may be "
-            f"unreliable (a too-low truncation can fabricate a spurious "
-            f"resonance/null). Increase the order count.", stacklevel=2)
-    return high, report
+    def _rung(out):
+        amps = []
+        for x in tuple(out)[3:]:
+            try:
+                a = np.asarray(to_numpy(x))
+            except Exception:
+                continue
+            if np.iscomplexobj(a) and a.size and len(amps) < 2:
+                amps.append(("R" if not amps else "T", a))
+        return (out[0], out[1], out[2], amps)
+
+    report = _convergence_report(
+        [_rung(o) for o in outs],
+        [tuple(lev[p] for p in params) for lev in levels],
+        rtol=rtol, atol=atol)
+    report.update(n_orders_low=levels[0], n_orders_high=levels[-1])
+    if estimate:
+        report["n_orders_mid"] = levels[1]
+    if warn and not report["converged"]:
+        _convergence_warn(report, rtol, atol, stacklevel=3)
+    return outs[-1], report
 
 
 
