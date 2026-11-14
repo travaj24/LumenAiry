@@ -117,12 +117,12 @@ from lumenairy.elements.pmm import stack as ps  # noqa: E402
 @pytest.fixture(autouse=True, scope="module")
 def _pre_fix_selector():
     from lumenairy.elements.pmm import _core as _sel
-    was = _sel.PMM_EIG_ROUNDOFF_BAR
-    _sel.PMM_EIG_ROUNDOFF_BAR = False
+    was = _sel._PMM_EIG_ROUNDOFF_BAR
+    _sel._PMM_EIG_ROUNDOFF_BAR = False
     try:
         yield
     finally:
-        _sel.PMM_EIG_ROUNDOFF_BAR = was
+        _sel._PMM_EIG_ROUNDOFF_BAR = was
 
 
 @contextlib.contextmanager

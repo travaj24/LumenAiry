@@ -473,7 +473,8 @@ def pmm_efficiency_1d(
         degrees 6-20, both BLAS builds): the spectrally converging TE channel,
         which a correct layout cannot move, deviates by at most 4e-7 at
         ``h = 1.25e-5 * wavelength`` (the wavelength part of the default
-        floor), 1.5e-6 at 8e-6, 3.8e-6 at 4e-6 and 2.7e-5 at 2e-6.  (Before
+        floor; in a multilayer ``PMMStack`` the same floor carries about
+        1e-6), 1.5e-6 at 8e-6, 3.8e-6 at 4e-6 and 2.7e-5 at 2e-6.  (Before
         2026-11-14 a mode-selector defect also made such solves fail
         outright, with ``R + T > 1``; that is fixed.)  When the requested
         ratio would put an element below the floor the ratio is raised until

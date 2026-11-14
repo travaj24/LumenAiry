@@ -146,8 +146,9 @@ def _conical_modes(mats, k0, kx0, ky0, eps_row, grade):
     ``M = -(P @ Q)`` is not used: it loses the resolved modes' accuracy on
     small elements.  Where a structured solve is not defined (a singular
     classical basis, ``eps == kyn^2``) a Chebyshev / uniform layout falls back
-    to that dense eig -- its accuracy there is the measured pre-2026-11-14 one
-    -- and a geometric layout, whose small elements it cannot carry, raises."""
+    to that dense eig (adequate on such layouts, whose elements are not
+    small) and a geometric layout, whose small elements it cannot carry,
+    raises."""
     from ._core import (
         _sem_modes_conical,
         _sem_modes_tensor,

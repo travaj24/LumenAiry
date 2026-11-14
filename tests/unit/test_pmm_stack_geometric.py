@@ -51,12 +51,13 @@ def _J(st):
 # --------------------------------------------------------------------------- #
 def test_grade_is_normalized_and_validated():
     st = PMMStack(P, elements_per_region=12, grade="geometric")
-    assert st.grade == ("geometric", C.GEOMETRIC_DEFAULT_RATIO,
-                        C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P)
+    # the DEFAULT floor is stored unresolved (None): each solve resolves it
+    # from its own wavelength, and the stored spec is a fixed point
+    assert st.grade == ("geometric", C.GEOMETRIC_DEFAULT_RATIO, None)
     assert PMMStack(P, grade="chebyshev").grade is True
     assert PMMStack(P, grade=0).grade is False
     st2 = PMMStack(P, elements_per_region=4, grade=("geometric", 0.2))
-    assert st2.grade == ("geometric", 0.2, C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P)
+    assert st2.grade == ("geometric", 0.2, None)
     spec = ("geometric", 0.25, 2e-11)
     assert PMMStack(P, elements_per_region=4, grade=spec).grade == spec
     with pytest.raises(ValueError, match="unknown grade"):
@@ -314,11 +315,13 @@ def test_default_geometric_floor_follows_the_wavelength():
     explicit floor is kept."""
     st = _fixture(8, 12, "geometric")
     stored = st.grade
-    assert stored[2] == C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P    # 11.1 pm
+    assert stored[2] is None                          # the default floor
     assert st._effective_grade(WL) == ("geometric", stored[1],
                                        S._SMALL_ELEMENT_SUGGEST_FRAC * WL)
-    assert st._effective_grade(100e-9) == stored          # period part wins
-    assert st._effective_grade(None) == stored
+    assert st._effective_grade(100e-9) == (                # period part wins
+        "geometric", stored[1], C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P)
+    with pytest.raises(ValueError, match="concrete positive number"):
+        st._effective_grade(None)                     # no wavelength: refused
     seen = []
     orig = S._build_sem_tensor_segments
 
@@ -382,9 +385,12 @@ def test_opt_out_solves_and_the_backstop_refuses_super_unity():
     T = np.array([[0.4, 0.0], [0.3, 0.0]])            # max R+T = 1.1
     with pytest.raises(ValueError, match="energy not conserved"):
         S._warn_stack_energy(R, T, stack=st)
-    st._small_element_note = None                     # not armed -> a warning
+    # not armed (the note is derived from the geometry: a stack without a
+    # small layout-made element) -> a warning
+    st_ok = _fixture(6, 3, True)
+    assert st_ok._small_element_watch(WL) is None
     with pytest.warns(UserWarning, match="energy not conserved"):
-        S._warn_stack_energy(R, T, stack=st)
+        S._warn_stack_energy(R, T, stack=st_ok)
 
 
 #: Configurations that returned O(1) wrong, super-unity answers on the

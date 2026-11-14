@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 24fd62d5e7c9407e78e7876cc11e9473bcc3693c2c35041d6ff94e73a12b0ac5
-token_sha256: 61df1311c5866af69b9cdacf632e9a9f59252d00e64d7bdb6894444ff0123ea7
+ast_sha256: 6923c627e69e242ed007875beacb2c108c96c3a6df64c1927e8915000c32a663
+token_sha256: 2103190e7f8cae236c16ab2bb28f06f18c47040562858c4c1a941bb31d95b5df
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -19,6 +19,7 @@ re_recorded: 2026-11-14 -- small-element wrong-branch root cause: _growth_mask (
 re_recorded: 2026-11-14 -- geometric default floor max(3e-5 x period, 1.25e-5 x wavelength) via _geometric_default_floor; _normalize_grade(wavelength=) completes it; superseded floor rationale moved to this document
 re_recorded: 2026-11-14 -- PMM_EIG_ROUNDOFF_BAR: fail-before switch of the _growth_mask round-off term (False restores the historical growth test bit for bit); the sliver-guard tests use it to reproduce the population they guard
 re_recorded: 2026-11-14 -- 2026-11-14 -- structured conical modal solves (_sem_modes_uniform_conical, _sem_modes_conical, _conical_khat, _conical_dpq) and the shared forward selector _select_forward_modes (_sem_modes_uniform unchanged bit for bit)
+re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: deferred default floor in _normalize_grade (defer_floor), narrowed wavelength handling in _geometric_default_floor, private _PMM_EIG_ROUNDOFF_BAR, shared _LAM_CLAMP/_safe_lam and _interface_from_ab
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`
@@ -552,3 +553,27 @@ of phi.  Two ideas were measured and rejected on the way:
 What shipped is in the block comment above `_conical_khat`.  `_sem_modes_uniform`
 now ends in the shared `_select_forward_modes` (the same operations, so its
 output is unchanged bit for bit).
+
+### 2026-11-14 -- review follow-ups in the grading and selector code (A5, A8, A11, A13, B1)
+
+* `_geometric_default_floor` caught `Exception` around the wavelength
+  conversion and silently dropped the wavelength part of the floor for a bad
+  value (a layout change).  Now a traced value (`TypeError`) keeps the period
+  part, and a non-numeric / non-finite / non-positive wavelength raises.
+* `_normalize_grade(..., defer_floor=True)` returns
+  `('geometric', ratio, None)` for the default floor (PMMStack resolves it per
+  solve); grid builders refuse an unresolved floor.
+* The round-off claim of the default floor's wavelength part is restated
+  (about 4e-7 on one layer, about 1e-6 in a stack).
+* The selector switch was `PMM_EIG_ROUNDOFF_BAR` (public, re-exported by
+  `from ._core import *`, where the re-exported copy did nothing): now
+  `_PMM_EIG_ROUNDOFF_BAR`, not in `__all__`.
+* `_LAM_CLAMP` / `_safe_lam` replace the inline `1e-12` clamp literals of the
+  1-D modal solves (and the fast path's own copy); `_interface_from_ab` is the
+  one interface formula of the dense and the elementwise (uniform fast path)
+  mode-match.  The Redheffer and propagation stars of the fast path stay
+  elementwise copies of `rcwa._core`'s: those dense kernels are not owned by
+  this module.
+* The growth-mask comment claimed the growth a near-cut-off mode could carry
+  is at round-off level; it is bounded by `exp(sqrt(d) k0 t)`, up to 1.5 over
+  10 um at the default floor.

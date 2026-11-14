@@ -44,6 +44,7 @@ from ._core import (
     _mass_flux_threshold,
     _pmm_union_grid,
     _require_concrete_wavelength,
+    _safe_lam,
     _segment_elem_bnds,
 )
 
@@ -177,7 +178,7 @@ def _jstack_modes_uniform(S0, mu, w, jnp, eps):
     QW = jnp.block([[Zn, w * q2[None, :]], [-eps * w, Zn]])
     # --- the _jpmm_sem_modes_tensor forward selector, verbatim policy -------
     lam0 = -1j * q
-    safe0 = jnp.where(jnp.abs(lam0) < 1e-12, 1e-12, lam0)
+    safe0 = _safe_lam(lam0, jnp)
     V0 = QW * (1.0 / safe0)[None, :]
     SVt = S0 @ jnp.conj(V0[:n])             # S0 conj(Hx)
     SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
@@ -189,7 +190,7 @@ def _jstack_modes_uniform(S0, mu, w, jnp, eps):
                                 _jeps_is_passive(eps, jnp))
     q = jnp.where(flip, -q, q)
     lam = -1j * q
-    safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
+    safe = _safe_lam(lam, jnp)
     V2 = QW * (1.0 / safe)[None, :]
     return W2, V2, lam, q
 
@@ -242,10 +243,11 @@ def _grazing_guard_concrete(n_sup, angle):
             "Reduce the incidence angle below grazing.")
 
 
-def _pmm_stack_solve_jax(stack):
+def _pmm_stack_solve_jax(stack, grade):
     """The JAX twin of the all-vertical in-plane branch of
     :meth:`PMMStack.solve`.  Consumes the stack's stored (possibly traced)
-    layers / half-spaces / source and returns ``(orders, R(2,N), T(2,N),
+    layers / half-spaces / source -- and ``grade``, the grading spec the
+    caller resolved for this solve -- and returns ``(orders, R(2,N), T(2,N),
     jones(2,2))`` as jnp arrays.  All gating (slant / OOP / stabilize /
     retain_internal / dispersive) happens in the dispatcher."""
     import jax.numpy as jnp
@@ -278,7 +280,7 @@ def _pmm_stack_solve_jax(stack):
     uwidths, layer_eps_u = _pmm_union_grid(
         [L[1] for L in stack._layers], stack.min_feature / stack.period)
     static = _jstack_static(stack.period, uwidths, stack.degree, stack.n_el,
-                            stack.grade)
+                            grade)
 
     # ---- CONCRETE order set (mirrors the NumPy stack's n_max policy: max
     # over BOTH in-plane diagonal components of every cell + the half-space
@@ -459,7 +461,7 @@ def _pmm_stack_solve_jax(stack):
     R_eff, T_eff, jones = _jax_cluster_routed(_solve)
     return jnp.asarray(orders), R_eff, T_eff, jones
 
-def _pmm_stack_solve_jax_perlayer(stack):
+def _pmm_stack_solve_jax_perlayer(stack, grade):
     """The JAX twin of the PER-LAYER all-vertical in-plane branch (audit R-6).
 
     Geometry is CONCRETE and frozen exactly as in the NumPy per-layer path:
@@ -507,13 +509,13 @@ def _pmm_stack_solve_jax_perlayer(stack):
         stack.window_halfwidth)
     wkeys = [w.tobytes() for w, _r in grid_of]
     statics = [_jstack_static(stack.period, w_i, stack.degree, stack.n_el,
-                              stack.grade) for w_i, _r in grid_of]
+                              grade) for w_i, _r in grid_of]
     # geometry-only NumPy mats per grid (masses / cross-masses / projectors
     # ignore eps entirely)
     _eye3 = np.eye(3)
     geo_mats = [_build_sem_tensor_segments(
         stack.period, w_i, [_tensor3_dict(_eye3)] * len(w_i),
-        stack.degree, stack.n_el, stack.grade) for w_i, _r in grid_of]
+        stack.degree, stack.n_el, grade) for w_i, _r in grid_of]
     # M3 / N-3 items 1 + 3: the 1-D blocks are stored (and CACHED across
     # traces by ``_sem_*_cached``) and applied SEPARABLY -- the twin no longer
     # materialises four ``kron(I_2, .)`` operators per mortar, which were 4x

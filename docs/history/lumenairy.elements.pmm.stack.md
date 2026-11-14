@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: a51caf6ebe62ebd0428f9878622f3e59be9d7d50d92211d994f32595b5552793
-token_sha256: fb1247baabbcc0d54355e01021643bcda7122640fcfa457fb8eac3c3f43b9e41
+ast_sha256: 2eac0e92c0c8fa64e6db24008def7844e3aaa3d12a5a143cdebbb048954c6e18
+token_sha256: 86699a82c38d8afe164f1c2595ec3f5d8786e0bcd3100d8a0bf51c0289edde60
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -12,6 +12,7 @@ re_recorded: 2026-11-14 -- G-2: laterally uniform isotropic layers solved from t
 re_recorded: 2026-11-14 -- G-1 wiring (grade through _normalize_grade, validated property, geometric refused at conical incidence), small-element guard + energy backstop, wavelength-completed default geometric floor
 re_recorded: 2026-11-14 -- prepare().solve cascades with the same uniform-run collapse as solve(), restoring prepared == rebuilt bit identity
 re_recorded: 2026-11-14 -- small-element guard re-derived after the selector root-cause fix: refusal 3e-5 -> 1e-5 x wavelength (measured round-off can exceed 1e-6 below it), opted-out solves below it warn, default geometric floor from _core._geometric_default_floor; pre-fix guard block moved to this document
+re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: no per-solve grade state (_grade_scope removed; resolved spec passed down), fixed-point grade, prepared caches keyed by and refusing a changed layout, Chebyshev/uniform small-element bar 3e-6 x wavelength, backstop note derived from geometry
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
@@ -551,3 +552,34 @@ _SMALL_ELEMENT_WATCH_FRAC = 1.0e-4
 #: 2.5x above the largest failing ``h`` measured, 1.33x above the refusal bar.
 _SMALL_ELEMENT_SUGGEST_FRAC = 4.0e-5
 ```
+
+### 2026-11-14 -- layout state: no per-solve state on the stack; fixed-point `grade`; prepared caches keyed by the layout; guard scope (review A1-A4, A8, A10, A12, B2)
+
+* `_grade_scope` (a decorator that wrote each solve's wavelength-resolved
+  grading spec onto the stack as `_grade_solve` and restored it on exit) is
+  gone.  Two overlapping prepared solves at different wavelengths read each
+  other's layout (both answers 2.5e-2 off; the prepared cache kept the wrong
+  modes).  Each entry point now resolves the spec (`_effective_grade`) and
+  passes it down; the small-element guard returns it; the energy backstop
+  derives its note from the geometry (`_small_element_watch`).
+* `grade` stores the request: a default geometric floor is
+  `('geometric', ratio, None)`.  The former stored tuple carried the period
+  part of the default floor as an explicit floor, so `PMMStack(...,
+  grade=st.grade)` / `st.grade = st.grade` dropped the wavelength part and
+  raised the small-element error at 370 nm / 1300 nm.  A traced or missing
+  wavelength with a default floor now raises (it silently used the period part,
+  a layout the NumPy solve at the same wavelength does not build).
+* Prepared caches carry `(degree, n_el, resolved grade)` in both keys, and a
+  prepared solve after any layout attribute changed is refused (`st.grade =
+  True` after `prepare()` returned an answer 1.055 off both references).
+* The small-element refusal for Chebyshev / uniform layouts moved from
+  1e-5 to 3e-6 of the wavelength (`_SMALL_ELEMENT_FRAC_PLAIN`): a 1.2 nm
+  liner at 1550 nm with 16 Chebyshev elements per region (a 5.50.2-working
+  geometry) was refused with geometric-grading advice although its answer
+  converged monotonically; the message now gives the advice for the layout in
+  use.
+* Accuracy statements at the default geometric floor restated from
+  measurement (about 1e-6 in a full stack, not 4e-7 / 5e-12);
+  `solve_vs_wavelength` documents that its default floor is resolved at the
+  longest wavelength.  The wall-clock speed-up test moved to the slow marker
+  and an eig-count test replaced it in the fast suite.

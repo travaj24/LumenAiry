@@ -378,6 +378,29 @@ def _blas2():
     return threadpool_limits(2)
 
 
+def test_a52_fast_path_skips_the_uniform_layer_eigs(monkeypatch):
+    """The deterministic half of the speed claim (no wall clock in the fast
+    suite): on fixture A52 the fast path runs the dense coupled eig only for
+    the patterned layer, the dense path for every layer."""
+    st = _fixture(8, 3, graded=52)
+    calls = {True: 0, False: 0}
+    orig = S._sem_modes_tensor
+    for fast in (True, False):
+        monkeypatch.setattr(S, "_UNIFORM_FAST_PATH", fast)
+
+        def spy(*a, _f=fast, **k):
+            calls[_f] += 1
+            return orig(*a, **k)
+        monkeypatch.setattr(S, "_sem_modes_tensor", spy)
+        st.solve()
+    monkeypatch.setattr(S, "_sem_modes_tensor", orig)
+    assert calls[True] == 1, calls                 # the strip layer only
+    # every byte-distinct layer (the dense path memoizes identical ones):
+    # measured 44 of the 53 layers
+    assert calls[False] >= 40, calls
+
+
+@pytest.mark.slow
 def test_a52_fast_path_is_at_least_5x_faster(monkeypatch):
     """Interleaved in one process, median of 3, BLAS pinned to 2 threads.
     MEASURED 2026-11-14 (degree 12 x 3 el, loaded box): dense 1.25 s vs

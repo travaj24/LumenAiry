@@ -491,8 +491,7 @@ def _lagrange_derivative_matrix(nodes):
 # ``h`` = 1.6e-5 of the wavelength at oblique incidence -- which this comment
 # block used to describe as a round-off band; they were a mode-selector defect
 # that let that round-off decide a propagating order's direction, fixed in
-# :func:`_growth_mask`.  The superseded wording is in
-# docs/history/lumenairy.elements.pmm._core.md.)  What remains is gradual.
+# :func:`_growth_mask`.)  What remains is gradual.
 # Measured after the fix on one 50 nm metal strip layer (eps -74+6i, duty
 # 0.47, periods 200-1300 nm, 1300 nm, theta 0-0.7, degrees 6-20, 12 geometric
 # elements per region; TE deviation from the same degree at h = 1e-4
@@ -510,8 +509,13 @@ def _lagrange_derivative_matrix(nodes):
 # ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period,
 # GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength)`` = ``max(3e-5 P,
 # 1.25e-5 wavelength)``: the period part is where the corner error of the
-# strip fixture bottoms out, the wavelength part keeps the round-off below
-# about 4e-7.  Every 1-D entry point knows its wavelength and passes it;
+# strip fixture bottoms out, the wavelength part keeps the
+# round-off on one patterned layer to about 4e-7 (TE deviation); a full stack
+# at the default floor carries about 1e-6 of it (measured 2026-11-14 on the
+# strip / spacer / mirror stacks: the uniform fast path and the dense path
+# differ by up to 1.1e-6, and errors against a converged reference
+# scatter from 1.4e-7 to 2.4e-6 across degree 8-14 -- convergence in degree
+# is not monotone below about 2e-6).  Every 1-D entry point knows its wavelength and passes it;
 # without one (a traced value) the period part applies alone.  The tests that
 # pin these numbers are ``tests/unit/test_pmm_geometric_grading.py`` and
 # ``tests/unit/test_pmm_eig_roundoff_selector.py``.
@@ -532,8 +536,9 @@ GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC = 3e-5
 
 #: Default absolute floor of the geometric layout, WAVELENGTH part
 #: (``GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength``): the round-off of
-#: the modal eig grows like ``1 / (k0 h)^2``, so this part keeps it below about
-#: 4e-7 (measured, see the comment block above).  Applied wherever the
+#: the modal eig grows like ``1 / (k0 h)^2``, so this part keeps it to about
+#: 4e-7 on one patterned layer and about 1e-6 in a full stack (measured, see
+#: the comment block above).  Applied wherever the
 #: wavelength is known (every 1-D single-layer entry point and every PMMStack
 #: solve).
 GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC = 1.25e-5
@@ -552,11 +557,17 @@ def _geometric_default_floor(period, wavelength=None):
         return floor
     try:
         wl = float(np.max(np.asarray(wavelength, dtype=float)))
-    except Exception:        # traced (JAX) / non-numeric: period part only
+    except TypeError:        # a traced (JAX) value: the period part only
         return floor
-    if np.isfinite(wl) and wl > 0.0:
-        floor = max(floor, GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wl)
-    return floor
+    except ValueError:
+        raise ValueError(
+            f"geometric grading: the wavelength {wavelength!r} is not a "
+            f"number, so the default floor cannot be set.") from None
+    if not (np.isfinite(wl) and wl > 0.0):
+        raise ValueError(
+            f"geometric grading: the wavelength must be finite and > 0 to set "
+            f"the default floor, got {wl!r}.")
+    return max(floor, GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wl)
 
 _GRADE_FORMS = (
     "False / True (also None, 0, 1, numpy.bool_), 'chebyshev' (= True), "
@@ -564,7 +575,9 @@ _GRADE_FORMS = (
 
 
 def _is_geometric_spec(grade):
-    """True for a NORMALIZED geometric spec ``('geometric', ratio, min_m)``."""
+    """True for a NORMALIZED geometric spec ``('geometric', ratio, min_m)``
+    (``min_m`` is ``None`` for a deferred default floor, see
+    :func:`_normalize_grade` ``defer_floor``)."""
     return isinstance(grade, tuple) and len(grade) == 3 \
         and grade[0] == "geometric"
 
@@ -586,7 +599,8 @@ def _real_scalar(value, what, where):
 
 
 def _normalize_grade(grade, *, period, where, allow_geometric=True,
-                     elements_per_region=None, wavelength=None):
+                     elements_per_region=None, wavelength=None,
+                     defer_floor=False):
     """Validate a user ``grade`` value and return its normalized spec.
 
     Returns ``False`` (uniform), ``True`` (Chebyshev-Lobatto) or the hashable
@@ -627,6 +641,13 @@ def _normalize_grade(grade, *, period, where, allow_geometric=True,
         floor of a geometric spec without an explicit floor (the longest one
         of an array binds).  ``None`` (or a traced value) -> the period part
         only.
+    defer_floor : bool
+        ``True`` (a solver object that resolves its floor per solve, i.e.
+        ``PMMStack``): a geometric spec without an explicit floor is returned
+        as ``('geometric', ratio, None)`` -- the DEFAULT floor, resolved at
+        solve time with that solve's wavelength -- and such a spec is itself
+        accepted as input, so the stored spec is a fixed point of the
+        normalizer.  Grid builders never accept a ``None`` floor.
     """
     if grade is None or isinstance(grade, (bool, np.bool_)):
         return bool(grade)
@@ -649,6 +670,8 @@ def _normalize_grade(grade, *, period, where, allow_geometric=True,
                 and spec_in[0].strip().lower() == "geometric"):
             raise ValueError(f"{where}: invalid grade spec {grade!r}.  "
                              f"Accepted forms: {_GRADE_FORMS}.")
+        if len(spec_in) == 3 and spec_in[2] is None:
+            spec_in = spec_in[:2]           # a deferred (default) floor
     else:
         raise ValueError(f"{where}: invalid grade {grade!r} (type "
                          f"{type(grade).__name__}).  Accepted forms: "
@@ -665,6 +688,8 @@ def _normalize_grade(grade, *, period, where, allow_geometric=True,
             raise ValueError(f"{where}: the geometric grading floor "
                              f"min_element_m must be > 0 (metres), got "
                              f"{min_el!r}.")
+    elif defer_floor:
+        min_el = None
     else:
         if period is None:
             raise ValueError(f"{where}: grade={grade!r} needs the period to "
@@ -765,6 +790,11 @@ def _graded_fractions(n_el, grade, width=None):
             f"element grading received the un-normalized grade value "
             f"{grade!r}: this entry point does not accept that form (the 1-D "
             f"PMM entry points and PMMStack accept {_GRADE_FORMS}).")
+    if _is_geometric_spec(grade) and grade[2] is None:
+        raise ValueError(
+            f"element grading received the geometric spec {grade!r} with an "
+            f"unresolved default floor; the solver resolves it with the solve "
+            f"wavelength before building a grid.")
     if _is_geometric_spec(grade) and not (
             0.0 < float(grade[1]) < 1.0 and float(grade[2]) > 0.0):
         raise ValueError(
@@ -1451,8 +1481,19 @@ _MODE_GROWTH_REL = 1.0e-6
 # one BIT FOR BIT.  A misclassified EVANESCENT mode (``Im q = -|q|``, the
 # population the repair exists for) is still caught whenever
 # ``|q|^2 > d``; one inside the bound is within round-off of its own cut-off,
-# where neither criterion can resolve a direction and the growth it could
-# carry, ``exp(sqrt(d) k0 t)``, is itself at round-off level.
+# where neither criterion can resolve a direction.  That is NOT harmless in a
+# thick layer: such a mode's ``q`` is only known to about ``sqrt(d)`` (on
+# either branch), so its propagation factor over a thickness ``t`` carries an
+# error of order ``exp(sqrt(d) k0 t) - 1`` -- a growth of up to that factor if
+# the round-off lands on ``Im q < 0``.  At the default geometric floor
+# (``h`` = 1.25e-5 wavelength, ``max|q^2|`` ~ 3e11) ``sqrt(d)`` ~ 8e-3: a factor
+# 1.04 over 1 um and 1.5 over 10 um at 1300 nm; with ``h`` = 4e-6 wavelength
+# (``allow_small_elements``) ``sqrt(d)`` ~ 0.026, 3.5 over 10 um.  No branch
+# choice removes it -- it is the eig's round-off on ``q`` itself -- and it
+# needs a mode within ``|q| < sqrt(d)`` of cut-off, i.e. a thick layer within
+# ~``d / 2`` (relative, ~3e-5) of one of its own Rayleigh anomalies, where the
+# answer is ill-conditioned anyway (review finding B1, 2026-11-14: bounded
+# here, not constructed).
 #: Multiple of the normwise eigenvalue round-off bound ``eps * max|q^2|``
 #: below which a forward mode's ``Im(q) < 0`` is NOT counted as growth.  The
 #: measured round-off is <= 0.02 of the bound (table above), so 1.0 is a 50x
@@ -1465,7 +1506,7 @@ _EIG_ROUNDOFF_FAC = 1.0
 #: small elements and near-coincident walls.  Tests that exercise the
 #: guards built against that population (the sliver refusal / warning
 #: machinery of ``stack.py``) set it ``False`` to reproduce what they guard.
-PMM_EIG_ROUNDOFF_BAR = True
+_PMM_EIG_ROUNDOFF_BAR = True
 
 
 def _growth_mask(qf, q_all, xp=np):
@@ -1480,7 +1521,7 @@ def _growth_mask(qf, q_all, xp=np):
     2026-11-14 block above ``_EIG_ROUNDOFF_FAC``.  Elementwise (plus one
     reduction), so it traces under JAX."""
     aq = xp.abs(qf)
-    if not PMM_EIG_ROUNDOFF_BAR:
+    if not _PMM_EIG_ROUNDOFF_BAR:
         return qf.imag < -_MODE_GROWTH_REL * aq
     d = (_EIG_ROUNDOFF_FAC * float(np.finfo(np.float64).eps)
          * xp.max(xp.abs(q_all)) ** 2)
@@ -2386,6 +2427,29 @@ def _sem_fourier_projection(orders, period, mats):
 # local so this module stays in ONE convention with no cross-coupling)
 # ===========================================================================
 
+#: The small-eigenvalue clamp every modal solve applies when it forms the
+#: magnetic partner ``V = Q W / lam`` (one constant for the dense, structured,
+#: uniform-fast-path and JAX solves: a clamp that differed between two paths
+#: would make them disagree exactly at a Rayleigh anomaly).
+_LAM_CLAMP = 1e-12
+
+
+def _safe_lam(lam, xp=np):
+    """``lam`` with :data:`_LAM_CLAMP` applied (``|lam| < clamp -> clamp``)."""
+    return xp.where(xp.abs(lam) < _LAM_CLAMP, _LAM_CLAMP, lam)
+
+
+def _interface_from_ab(apb, amb, inv, mm):
+    """The interface S-matrix ``(S11, S12, S21, S22)`` from ``a + b`` and
+    ``a - b`` (``a = Wb^-1 Wa``, ``b = Vb^-1 Va``) -- the ONE formula, shared
+    by the dense mode-match (``inv`` the guarded inverse, ``mm`` the matrix
+    product) and the elementwise one of the uniform-layer fast path
+    (``inv = 1 / x``, ``mm`` the elementwise product, ``_uniform_cascade``)."""
+    iapb = inv(apb)
+    return (-mm(iapb, amb), 2.0 * iapb,
+            0.5 * (apb - mm(mm(amb, iapb), amb)), mm(amb, iapb))
+
+
 def _interface_smatrix(Wa, Va, Wb, Vb):
     # ``a + b`` is inverted EXPLICITLY (S12 = 2 (a+b)^-1) and takes the shared
     # M1 screen-and-refuse guard, the same one RCWA's twin takes.  This is the
@@ -2393,13 +2457,13 @@ def _interface_smatrix(Wa, Va, Wb, Vb):
     # last place that may draw a build-dependent answer.
     a = np.linalg.solve(Wb, Wa)
     b = np.linalg.solve(Vb, Va)
-    apb, amb = a + b, a - b
-    iapb = _guarded_inverse(apb, "pmm interface mode-match (a+b)",
-                            hint="Raise degree / elements_per_region, or move "
-                                 "off the exact wavelength / angle "
-                                 "coincidence.")
-    return (-iapb @ amb, 2.0 * iapb,
-            0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+    return _interface_from_ab(
+        a + b, a - b,
+        lambda m: _guarded_inverse(
+            m, "pmm interface mode-match (a+b)",
+            hint="Raise degree / elements_per_region, or move off the exact "
+                 "wavelength / angle coincidence."),
+        np.matmul)
 
 
 
@@ -3067,7 +3131,7 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
     # (cross pairing, imag part: + forward, ~0 evanescent).  Flux ~ 1/q
     # flips sign with the branch; pick +z power (propagating) / +z decay.
     lam0 = -1j * q
-    safe0 = np.where(np.abs(lam0) < 1e-12, 1e-12, lam0)
+    safe0 = _safe_lam(lam0)
     # ``Q @ W2`` is the same (2n)^3 product for the PROBE partner V0 (whose
     # flux picks the forward set) and for the returned V2 -- the two differ only
     # by the per-column branch flip already folded into ``safe``.  Naming it
@@ -3102,7 +3166,7 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
                          flip=flip, passive=passive)
     q = np.where(flip, -q, q)
     lam = -1j * q
-    safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
+    safe = _safe_lam(lam)
     V2 = QW @ np.diag(1.0 / safe)
     if ky0 == 0.0:
         V2[:n] = _hx_partner_rows(W2, q2, safe, n)
@@ -3297,7 +3361,7 @@ def _select_forward_modes(mats, W2, QW, q, passive, label, patterned):
     n = mats["n_glob"]
     S0 = mats["S0"]
     lam0 = -1j * q
-    safe0 = np.where(np.abs(lam0) < 1e-12, 1e-12, lam0)
+    safe0 = _safe_lam(lam0)
     V0 = QW * (1.0 / safe0)[None, :]
     SVt = S0 @ np.conj(V0[:n])          # S0 conj(Hx)
     SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
@@ -3312,7 +3376,7 @@ def _select_forward_modes(mats, W2, QW, q, passive, label, patterned):
                          flip=flip, passive=passive)
     q = np.where(flip, -q, q)
     lam = -1j * q
-    safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
+    safe = _safe_lam(lam)
     V2 = QW * (1.0 / safe)[None, :]
     return W2, V2, lam, q
 
@@ -3451,7 +3515,7 @@ def _sem_modes_conical(mats, k0, kx0, ky0,
     is not finite; the caller decides the fallback."""
     n2 = 2 * mats["n_glob"]
     W0, V0, lam0, q0 = _sem_modes_tensor(mats, k0, kx0, True)
-    safe0 = np.where(np.abs(lam0) < 1e-12, 1e-12, lam0)
+    safe0 = _safe_lam(lam0)
     dP, dQ = _conical_dpq(mats, k0, kx0, ky0)
     with np.errstate(over="raise", invalid="raise", divide="raise"):
         try:
@@ -4922,7 +4986,7 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     # between scipy-QZ and jnp eig -> the naive Im(q)<0 test would flip
     # propagating modes inconsistently).
     lam0 = -1j * q
-    safe0 = jnp.where(jnp.abs(lam0) < 1e-12, 1e-12, lam0)
+    safe0 = _safe_lam(lam0, jnp)
     V0 = Q @ W2 @ jnp.diag(1.0 / safe0)
     # H_x rows by the exact relation, as the NumPy twin (_hx_partner_rows)
     V0 = jnp.concatenate([_hx_partner_rows(W2, q2, safe0, n, jnp), V0[n:]])
@@ -4938,7 +5002,7 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
                                 mats.get("passive", False))
     q = jnp.where(flip, -q, q)
     lam = -1j * q
-    safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
+    safe = _safe_lam(lam, jnp)
     V2 = Q @ W2 @ jnp.diag(1.0 / safe)
     V2 = jnp.concatenate([_hx_partner_rows(W2, q2, safe, n, jnp), V2[n:]])
     return W2, V2, lam, q
@@ -4994,7 +5058,7 @@ def _jpmm_sem_modes_uniform(mats, jnp, eig, k0, kx0, eps, geo=None):
     QW = jnp.block([[Z, w * q2[None, :]], [-eps * w, Z]])
     S0 = mats["S0"]
     lam0 = -1j * q
-    safe0 = jnp.where(jnp.abs(lam0) < 1e-12, 1e-12, lam0)
+    safe0 = _safe_lam(lam0, jnp)
     V0 = QW * (1.0 / safe0)[None, :]
     SVt = S0 @ jnp.conj(V0[:n])
     SVb = S0 @ jnp.conj(V0[n:])
@@ -5006,7 +5070,7 @@ def _jpmm_sem_modes_uniform(mats, jnp, eig, k0, kx0, eps, geo=None):
                                 _jeps_is_passive(eps, jnp))
     q = jnp.where(flip, -q, q)
     lam = -1j * q
-    safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
+    safe = _safe_lam(lam, jnp)
     V2 = QW * (1.0 / safe)[None, :]
     return W2, V2, lam, q
 
@@ -8316,7 +8380,6 @@ __all__ = [
     "_forward_growth_flip",
     "_growth_mask",
     "_EIG_ROUNDOFF_FAC",
-    "PMM_EIG_ROUNDOFF_BAR",
     "_hx_partner_rows",
     "_tensor_is_passive",
     "_grid_is_passive",

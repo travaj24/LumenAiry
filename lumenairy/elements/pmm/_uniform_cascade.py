@@ -2,7 +2,10 @@
 lumenairy.elements.pmm._uniform_cascade -- the laterally-uniform-layer fast
 path of :class:`~lumenairy.elements.pmm.stack.PMMStack`'s vertical cascade.
 
-Two pieces, both exact rewrites of what the dense path computes:
+Two pieces, both exact rewrites (in exact arithmetic) of what the dense path
+computes; in floating point they agree with it to the grid's round-off --
+<= 5e-12 on Chebyshev / single-element grids, about 1e-6 at the default
+geometric floor, where the dense path carries that much itself:
 
 1. **Uniform-layer modes from the shared geometric eig.**  For a layer whose
    permittivity is the same isotropic scalar ``eps`` in every union cell, the
@@ -52,6 +55,7 @@ from __future__ import annotations
 import numpy as np
 
 from ...backend import is_jax_array
+from ._core import _interface_from_ab, _safe_lam
 
 __all__ = []                      # private module
 
@@ -59,11 +63,10 @@ __all__ = []                      # private module
 #: shared geometric eig (the half-spaces keep ``_sem_modes_uniform``'s default).
 UNIFORM_LAYER_LABEL = "PMM modal solve (uniform layer)"
 
-#: The small-eigenvalue clamp the dense modal solvers apply when they form
-#: ``V = Q W / lam`` (``_sem_modes_tensor`` / ``_sem_modes_uniform``).  The
-#: diagonal interface MUST use the same clamped value, or a uniform layer sitting
-#: on a Rayleigh anomaly of its own medium (``lam = 0``) divides by zero.
-_LAM_CLAMP = 1e-12
+# The small-eigenvalue clamp is the dense modal solvers' own
+# (``_core._LAM_CLAMP`` / ``_core._safe_lam``): the diagonal interface MUST use
+# the same clamped value, or a uniform layer sitting on a Rayleigh anomaly of
+# its own medium (``lam = 0``) divides by zero.
 
 
 def _uniform_iso_eps(eps_u):
@@ -103,11 +106,6 @@ def _uniform_iso_eps(eps_u):
     return complex(e0)
 
 
-def _safe_lam(lam):
-    """``lam`` with the dense path's small-eigenvalue clamp applied."""
-    return np.where(np.abs(lam) < _LAM_CLAMP, _LAM_CLAMP, lam)
-
-
 def _uniform_medium_diag(eps, lam, mu):
     """The diagonal ``D`` (length ``2n``) of a uniform medium's modal partner
     relative to the shared eigenvector matrix (see the module docstring):
@@ -132,9 +130,9 @@ def _diag_interface(Da, Db):
     uniform on one grid), or ``None`` when it is not finite."""
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
         b = Da / Db
-        apb = 1.0 + b
-        amb = 1.0 - b
-        S = (-amb / apb, 2.0 / apb, 2.0 * b / apb, amb / apb)
+        # a = 1 between two uniform media on one grid: the dense formula,
+        # elementwise (one implementation, _core._interface_from_ab)
+        S = _interface_from_ab(1.0 + b, 1.0 - b, np.reciprocal, np.multiply)
     if not all(np.all(np.isfinite(x)) for x in S):
         return None
     return S
