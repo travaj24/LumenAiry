@@ -2202,15 +2202,29 @@ class PMMStack:
                 f"grade=('geometric', {spec[1]}, min_element_m).")
         return (spec[0], spec[1], _geometric_default_floor(self.period, wl))
 
-    def _wood_order_reach(self, wavelength):
-        """The largest diffraction order that can reach cut-off in any medium
-        of the stack at ``wavelength`` (the order range the Rayleigh-anomaly
-        nudge scans)."""
-        n_max = max([abs(complex(self.n_sup)), abs(complex(self.n_sub))]
-                    + [abs(np.sqrt(complex(v))) for L in self._layers
-                       for _w, e in L[1]
-                       for v in np.diag(np.asarray(e, dtype=_C))])
-        return int(np.ceil(2.0 * n_max * self.period / float(wavelength))) + 1
+    def _wood_nudged(self, wavelength, angle, where, layer_tensors=None):
+        """``wavelength`` nudged off an EXACT Rayleigh anomaly of any medium
+        of the stack (``_core._wood_safe_wl_1d``, with its
+        ``WoodNudgeWarning``); the identity off an anomaly.  One rule for
+        :meth:`solve`, :meth:`solve_vs_wavelength` and the prepared solve.
+        ``layer_tensors`` (optional) are the layers' resolved tensors (the
+        prepared path's material keys, the sweep's dispersive values);
+        otherwise the stored ones, callables materialized at
+        ``wavelength``."""
+        w = float(wavelength)
+        if layer_tensors is None:
+            layer_tensors = [np.asarray(self._seg_at(e, w), dtype=_C)
+                             for L in self._layers for _w, e in L[1]]
+        eps = [complex(self._seg_at(self.n_sup, w)) ** 2,
+               complex(self._seg_at(self.n_sub, w)) ** 2]
+        for M in layer_tensors:
+            M = np.asarray(M, dtype=_C)
+            eps.extend(complex(v) for v in (np.diag(M) if M.ndim == 2
+                                            else [M]))
+        n_max = max(abs(np.sqrt(e)) for e in eps)
+        reach = int(np.ceil(2.0 * n_max * self.period / w)) + 1
+        return _wood_safe_wl_1d(w, angle, self._seg_at(self.n_sup, w),
+                                self.period, eps, reach, fn_name=where)
 
     def _layout_signature(self):
         """Everything that fixes the element grids of a solve except the
@@ -3561,12 +3575,7 @@ class PMMStack:
         # ill-conditioned -- measured 1e-5 .. 5e-4 of scatter at every element
         # size.  Announced and nudged like every other 1-D entry point
         # (WoodNudgeWarning; identity off the anomaly).
-        wl = _wood_safe_wl_1d(
-            wl, angle, self.n_sup, self.period,
-            [self.n_sup ** 2, self.n_sub ** 2]
-            + [complex(v) for L in self._layers for _w, e in L[1]
-               for v in np.diag(np.asarray(e, dtype=_C))],
-            self._wood_order_reach(wl), fn_name="PMMStack.solve")
+        wl = self._wood_nudged(wl, angle, "PMMStack.solve")
         k0 = 2.0 * np.pi / wl
         kx0 = float(np.real(self.n_sup)) * np.sin(angle) * k0
         eps_sup, eps_sub = self.n_sup ** 2, self.n_sub ** 2
@@ -5116,6 +5125,12 @@ class PMMStack:
         def _tens(e, w):
             return self._as_tensor(self._seg_at(e, float(w)))
 
+        # the same Rayleigh-anomaly nudge as solve(), per wavelength, so a
+        # sweep point equals the pointwise solve (warnings in wavelength order)
+        wl = np.array([self._wood_nudged(
+            w, angle, "PMMStack.solve_vs_wavelength",
+            [_tens(M, w) for L in self._layers for _w, M in L[1]])
+            for w in wl])
         oop = any(self._is_oop(_tens(M, wl[0]))
                   for L in self._layers for _w, M in L[1])
         if oop or any(abs(L[2]) > 1e-12 for L in self._layers):
@@ -5861,6 +5876,13 @@ class _PreparedPMMStack:
                     "out-of-plane tensor (eps_xz/yz/zx/zy); the prepared path "
                     "is in-plane only -- call PMMStack.solve() per material "
                     "point.")
+        # the same Rayleigh-anomaly nudge as PMMStack.solve, on the resolved
+        # materials (identity off an anomaly)
+        wl = st._wood_nudged(
+            wl, angle, "PMMStack.prepare().solve",
+            [t for i, ks in enumerate(self._layer_keys)
+             for t in (self._resolve(self._layer_eps_u[i], materials, wl)
+                       if ks else self._layer_eps_u[i])])
         k0 = 2.0 * np.pi / wl
         kx0 = float(np.real(st.n_sup)) * np.sin(angle) * k0
         eps_sup, eps_sub = st.n_sup ** 2, st.n_sub ** 2

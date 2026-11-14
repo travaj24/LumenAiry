@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: b994e284818cf27944d25b30970eec6e037386ad2ba25962cbff0e35245900f4
-token_sha256: 14cdc22c51d155f3ec2d85ea7280eba85a02a175654884180b25f6f5b0c254b0
+ast_sha256: 33081927dab7c0eee9c1e726e549f158a5bd587290015b615959292ddaae6385
+token_sha256: 7ae678cddc6edab802fc89e05b614e9b65911d70f52f0ed4bced3c776f047d30
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -16,6 +16,7 @@ re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: no per-solve grade state 
 re_recorded: 2026-11-14 -- 2026-11-14 -- add_layer records traced scalar eps (_iso_scalar) for the JAX twin's uniform-layer fast path
 re_recorded: 2026-11-14 -- 2026-11-14 -- classical solve applies the shared Wood nudge at an exact Rayleigh anomaly (_wood_safe_wl_1d, WoodNudgeWarning); _wood_order_reach
 re_recorded: 2026-11-14 -- 2026-11-14 -- import order (ruff isort) after adding _wood_safe_wl_1d; no behaviour change
+re_recorded: 2026-11-14 -- 2026-11-14 -- one Rayleigh-anomaly nudge helper (_wood_nudged) for solve, solve_vs_wavelength and the prepared solve
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
@@ -609,4 +610,6 @@ period equal to the wavelength at normal incidence -- silently, with an
 ill-conditioned answer (1e-5 .. 5e-4 of scatter at every element size).  It
 now applies the shared Wood nudge (`_core._wood_safe_wl_1d`, ~1e-7 relative)
 with a `WoodNudgeWarning`, as the single-layer 1-D entry points and the
-conical path already did; off an anomaly it is the identity.
+conical path already did; off an anomaly it is the identity.  The sweep
+(`solve_vs_wavelength`, per wavelength) and the prepared solve apply the
+same rule (`PMMStack._wood_nudged`), so the three stay equal there.

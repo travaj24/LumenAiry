@@ -33,3 +33,17 @@ def test_off_the_anomaly_nothing_changes():
     with warnings.catch_warnings():
         warnings.simplefilter("error", WoodNudgeWarning)
         _st(1.001 * WL).solve()
+
+
+def test_sweep_and_prepared_nudge_the_same_way():
+    """A sweep point and a prepared solve at the anomaly equal the pointwise
+    solve (all three nudge identically); before, solve() nudged and the
+    sweep did not, and they differed by 3.3e-4 on a tapered grating."""
+    with pytest.warns(WoodNudgeWarning):
+        J0 = np.asarray(_st(WL).solve()[3])
+    with pytest.warns(WoodNudgeWarning, match="solve_vs_wavelength"):
+        o, R, T, J = _st(WL).solve_vs_wavelength([0.9 * WL, WL], jones=True)
+    assert np.array_equal(np.asarray(J)[1], J0)
+    with pytest.warns(WoodNudgeWarning, match="prepare"):
+        Jp = np.asarray(_st(WL).prepare().solve(wavelength=WL)[3])
+    assert np.array_equal(Jp, J0)
