@@ -66,6 +66,57 @@ from ._core import (
     _tensor_is_passive,
     _uniform_geo_eig,
 )
+from ._uniform_cascade import (
+    UNIFORM_LAYER_LABEL,
+    _cascade_vertical,
+    _uniform_iso_eps,
+    _uniform_medium_diag,
+)
+
+#: The laterally-uniform-layer fast path (``_uniform_cascade``): uniform
+#: isotropic vertical layers take their modes from the shared geometric eig and
+#: runs of consecutive uniform media are cascaded elementwise.  A PRIVATE
+#: switch for the tests -- ``False`` restores the dense per-layer path (every
+#: layer through ``_sem_modes_tensor``, no run collapse) bit for bit.
+_UNIFORM_FAST_PATH = True
+
+
+def _vertical_media(sup, sub, lmodes, uni_eps, mu):
+    """The cascade-ordered media list ``[sup, layer_1, ..., layer_L, sub]`` of
+    :func:`~lumenairy.elements.pmm._uniform_cascade._cascade_vertical`.
+
+    ``sup`` / ``sub`` are ``(W, V, lam, eps)`` of the two half-spaces and
+    ``lmodes[i]`` the ``(W, V, lam, q)`` of layer ``i``; ``uni_eps[i]`` is the
+    layer's uniform scalar permittivity or ``None`` (patterned).  ``mu`` is the
+    shared geometric spectrum every uniform medium was built from.  The
+    half-spaces are uniform media on the same basis by construction; with the
+    fast path off they are entered as dense media so nothing collapses."""
+    fast = _UNIFORM_FAST_PATH
+
+    def _half(h):
+        W, V, lam, eps = h
+        return (W, V, lam, _uniform_medium_diag(eps, lam, mu) if fast else None)
+
+    media = [_half(sup)]
+    for (W, V, lam, _q), e in zip(lmodes, uni_eps):
+        media.append((W, V, lam,
+                      _uniform_medium_diag(e, lam, mu)
+                      if (fast and e is not None) else None))
+    media.append(_half(sub))
+    return media
+
+
+def _layer_modes_vertical(mats, eps_row, k0, kx0):
+    """Modes ``(W, V, lam, q)`` of one VERTICAL IN-PLANE layer on its own grid
+    ``mats``: from that grid's geometric eig when the layer is laterally
+    uniform and isotropic (exact, and the eig is cached on the grid's digest,
+    so every uniform layer on one window grid shares it), else the dense coupled
+    eig.  The caller guarantees vertical / in-plane."""
+    e = _uniform_iso_eps(eps_row) if _UNIFORM_FAST_PATH else None
+    if e is None:
+        return _sem_modes_tensor(mats, k0, kx0, True)
+    return _sem_modes_uniform(mats, k0, kx0, e, _uniform_geo_eig(mats, k0, kx0),
+                              label=UNIFORM_LAYER_LABEL)
 
 # ===========================================================================
 # O-11 -- THE NEAR-COINCIDENT-WALL (SLIVER) REFUSAL
@@ -3150,11 +3201,22 @@ class PMMStack:
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers],
                                        self.min_feature / self.period)
         nU = len(uwidths)
+        oop_layer = [any(self._is_oop(M) for _w, M in L[1]) for L in self._layers]
+        # Laterally uniform isotropic VERTICAL in-plane layers are solved from
+        # the shared geometric eig (``_uniform_cascade``); their own
+        # eps-dependent operators are not needed unless the internal fields
+        # (which read ``layer_mats[i]``) are retained.
+        uni_eps = [(_uniform_iso_eps(eps_u)
+                    if (_UNIFORM_FAST_PATH and abs(L[2]) <= 1e-12
+                        and not oop_layer[i]) else None)
+                   for i, (eps_u, L) in enumerate(zip(layer_eps_u,
+                                                      self._layers))]
         layer_mats = [
-            _build_sem_tensor_segments(
-                self.period, uwidths, [_tensor3_dict(e) for e in eps_u],
-                self.degree, self.n_el, self.grade)
-            for eps_u in layer_eps_u]
+            (None if (uni_eps[i] is not None and not retain_internal)
+             else _build_sem_tensor_segments(
+                 self.period, uwidths, [_tensor3_dict(e) for e in eps_u],
+                 self.degree, self.n_el, self.grade))
+            for i, eps_u in enumerate(layer_eps_u)]
         t_sup = _tensor3_dict(eps_sup * np.eye(3))
         t_sub = _tensor3_dict(eps_sub * np.eye(3))
         mats_sup = _build_sem_tensor_segments(
@@ -3164,47 +3226,70 @@ class PMMStack:
         n_glob = mats_sup["n_glob"]
 
         _geo = _uniform_geo_eig(mats_sup, k0, kx0)
-        Wsup, Vsup, _l, _g = _sem_modes_uniform(mats_sup, k0, kx0, eps_sup,
-                                                _geo)
-        Wsub, Vsub, _l, _g = _sem_modes_uniform(mats_sub, k0, kx0, eps_sub,
-                                                _geo)
+        Wsup, Vsup, _lsup, _g = _sem_modes_uniform(mats_sup, k0, kx0, eps_sup,
+                                                   _geo)
+        Wsub, Vsub, _lsub, _g = _sem_modes_uniform(mats_sub, k0, kx0, eps_sub,
+                                                   _geo)
 
         # Redheffer recursion: sup -> [interface, propagation]*layers -> sub.
         # A layer needs the GENERAL fwd/back cascade if it is SLANTED or carries
         # full-3x3 OUT-OF-PLANE coupling (both break the +/-q symmetry and are
         # solved by the metric generator); an all-vertical-in-plane stack keeps the
         # symmetric path (bit-identical to the prior release).
-        oop_layer = [any(self._is_oop(M) for _w, M in L[1]) for L in self._layers]
         if not any(abs(L[2]) > 1e-12 or oo
                    for L, oo in zip(self._layers, oop_layer)):
-            # ALL-VERTICAL IN-PLANE: the symmetric (+/-q) S-matrix path --
-            # bit-identical to the prior release.  Dedup the per-layer modal eig
-            # (the dominant cost) across IDENTICAL layers -- a periodic / Bragg
-            # (ABAB...) stack recomputes the same eig P times; content-key it on
-            # the layer's eps bytes (a 1:1 fingerprint of ``m`` since geometry /
-            # degree / grade are shared).  Byte-identical (deterministic eig,
-            # same arrays a plain loop would build; mirrors rcwa/stack.py).
+            # ALL-VERTICAL IN-PLANE: the symmetric (+/-q) S-matrix path.  Dedup
+            # the per-layer modal eig (the dominant cost) across IDENTICAL
+            # layers -- a periodic / Bragg (ABAB...) stack recomputes the same
+            # eig P times; content-key it on the layer's eps bytes (a 1:1
+            # fingerprint of ``m`` since geometry / degree / grade are shared).
+            # Byte-identical (deterministic eig, same arrays a plain loop would
+            # build; mirrors rcwa/stack.py).
+            #
+            # UNIFORM layers take their modes from the shared geometric eig
+            # ``_geo`` (exact; see ``_uniform_cascade``), and every run of
+            # consecutive uniform media -- the half-spaces included -- is
+            # cascaded elementwise and starred in as ONE S-matrix.  A stack with
+            # no uniform layer runs exactly the arithmetic it ran before.  The
+            # partial cascades of ``retain_internal`` need every interface, so
+            # that mode keeps the per-layer loop (uniform modes still shared).
             _eig_memo = {}
             lmodes = []
-            for eps_u, m in zip(layer_eps_u, layer_mats):
+            for i, (eps_u, m) in enumerate(zip(layer_eps_u, layer_mats)):
                 ck = tuple(np.asarray(e, dtype=_C).tobytes() for e in eps_u)
                 hit = _eig_memo.get(ck)
                 if hit is None:
-                    hit = _sem_modes_tensor(m, k0, kx0, True)
+                    if uni_eps[i] is not None:
+                        hit = _sem_modes_uniform(mats_sup, k0, kx0, uni_eps[i],
+                                                 _geo, label=UNIFORM_LAYER_LABEL)
+                    else:
+                        hit = _sem_modes_tensor(m, k0, kx0, True)
                     _eig_memo[ck] = hit
                 lmodes.append(hit)
             nlay = len(lmodes)
-            ifc = [_interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])]
-            for i in range(1, nlay):
-                ifc.append(_interface_smatrix(
-                    lmodes[i - 1][0], lmodes[i - 1][1],
-                    lmodes[i][0], lmodes[i][1]))
-            ifc.append(_interface_smatrix(lmodes[-1][0], lmodes[-1][1],
-                                          Wsub, Vsub))
-            S = ifc[0]
-            for i in range(nlay):
-                S = _propagation_star(S, lmodes[i][2], k0 * self._layers[i][0])
-                S = _redheffer_star(S, ifc[i + 1])
+            if not retain_internal:
+                media = _vertical_media(
+                    (Wsup, Vsup, _lsup, eps_sup), (Wsub, Vsub, _lsub, eps_sub),
+                    lmodes, uni_eps, _geo[0])
+                S = _cascade_vertical(
+                    media, [k0 * self._layers[i][0] for i in range(nlay)],
+                    interface=_interface_smatrix, star=_redheffer_star,
+                    propagation_star=_propagation_star,
+                    collapse=_UNIFORM_FAST_PATH)
+            else:
+                ifc = [_interface_smatrix(Wsup, Vsup, lmodes[0][0],
+                                          lmodes[0][1])]
+                for i in range(1, nlay):
+                    ifc.append(_interface_smatrix(
+                        lmodes[i - 1][0], lmodes[i - 1][1],
+                        lmodes[i][0], lmodes[i][1]))
+                ifc.append(_interface_smatrix(lmodes[-1][0], lmodes[-1][1],
+                                              Wsub, Vsub))
+                S = ifc[0]
+                for i in range(nlay):
+                    S = _propagation_star(S, lmodes[i][2],
+                                          k0 * self._layers[i][0])
+                    S = _redheffer_star(S, ifc[i + 1])
             if retain_internal:
                 # partial cascades for internal-amplitude recovery (device-
                 # geometry roadmap item 6): S_above[i] = sup -> TOP of layer i
@@ -3291,8 +3376,13 @@ class PMMStack:
                     Wf, Vf, lamf, _qf, Wb, Vb, lamb, _qb = _layer_modes_metric(
                         mm, k0, slant, kx0)
                 else:
-                    Wl, Vl, lam_l, _q = _sem_modes_tensor(
-                        layer_mats[i], k0, kx0, True)
+                    if uni_eps[i] is not None:
+                        Wl, Vl, lam_l, _q = _sem_modes_uniform(
+                            mats_sup, k0, kx0, uni_eps[i], _geo,
+                            label=UNIFORM_LAYER_LABEL)
+                    else:
+                        Wl, Vl, lam_l, _q = _sem_modes_tensor(
+                            layer_mats[i], k0, kx0, True)
                     Wf, Wb, Vf, Vb = Wl, Wl, Vl, -Vl
                     lamf, lamb = lam_l, -lam_l
                 Mls.append(np.block([[Wf, Wb], [Vf, Vb]]))
@@ -3411,7 +3501,7 @@ class PMMStack:
                 m = _build_sem_tensor_segments(
                     period, w, [_tensor3_dict(e) for e in eps_row],
                     self.degree, self.n_el, self.grade)
-                hit = (m, _sem_modes_tensor(m, k0, kx0, True), wkey)
+                hit = (m, _layer_modes_vertical(m, eps_row, k0, kx0), wkey)
                 memo[(wkey, ekey)] = hit
             mats_by.append(hit[0])
             modes_by.append(hit[1])
@@ -3587,7 +3677,7 @@ class PMMStack:
                 m = _build_sem_tensor_segments(
                     period, w_i, [_tensor3_dict(e) for e in row],
                     self.degree, self.n_el, self.grade)
-                Wl, Vl, lam_l, _q = _sem_modes_tensor(m, k0, kx0, True)
+                Wl, Vl, lam_l, _q = _layer_modes_vertical(m, row, k0, kx0)
                 Wf, Wb, Vf, Vb = Wl, Wl, Vl, -Vl
                 lamf, lamb = lam_l, -lam_l
             mats_by.append(m)
@@ -4532,8 +4622,14 @@ class PMMStack:
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers],
                                        self.min_feature / self.period)
         nU = len(uwidths)
+        # a NON-dispersive uniform isotropic layer never needs its own
+        # operators (its modes come from the shared geometric eig at every
+        # wavelength); a dispersive one is classified per wavelength below.
         layer_mats = [
-            (None if disp_layer[i] else _build_sem_tensor_segments(
+            (None if (disp_layer[i] or (
+                _UNIFORM_FAST_PATH and _uniform_iso_eps(
+                    [self._as_tensor(e) for e in eps_u]) is not None))
+             else _build_sem_tensor_segments(
                 self.period, uwidths,
                 [_tensor3_dict(self._as_tensor(e)) for e in eps_u],
                 self.degree, self.n_el, self.grade))
@@ -4621,34 +4717,47 @@ class PMMStack:
             # the applied pool.
             with _blas_threads_quiet(None):
                 _geo = _uniform_geo_eig(msup, k0, kx0)
-                Wsup, Vsup, _l, _g = _sem_modes_uniform(msup, k0, kx0,
-                                                        eps_sup, _geo)
-                Wsub, Vsub, _l2, _g2 = _sem_modes_uniform(msub, k0, kx0,
-                                                          eps_sub, _geo)
+                Wsup, Vsup, _lsup, _g = _sem_modes_uniform(msup, k0, kx0,
+                                                           eps_sup, _geo)
+                Wsub, Vsub, _lsub, _g2 = _sem_modes_uniform(msub, k0, kx0,
+                                                            eps_sub, _geo)
                 # DBR / identical-layer dedup: eig each DISTINCT layer once per
                 # wavelength (an ABAB Bragg stack recomputes the same eig P times
                 # otherwise -- solve() already dedups, the sweep did not).  Key
                 # on the materialised per-region eps bytes (mirrors solve():937).
+                # Uniform isotropic layers take the shared geometric eig and
+                # runs of uniform media collapse, exactly as in solve().
                 _eig_memo = {}
                 lmodes = []
+                uni = []
                 for i, m in enumerate(layer_mats):
-                    ck = tuple(np.asarray(_tens(e, w), dtype=_C).tobytes()
-                               for e in layer_eps_u[i])
+                    tens = [_tens(e, w) for e in layer_eps_u[i]]
+                    ck = tuple(np.asarray(t, dtype=_C).tobytes() for t in tens)
+                    e_u = _uniform_iso_eps(tens) if _UNIFORM_FAST_PATH else None
+                    uni.append(e_u)
                     hit = _eig_memo.get(ck)
                     if hit is None:
-                        mm = (m if m is not None else _build_sem_tensor_segments(
-                            self.period, uwidths,
-                            [_tensor3_dict(_tens(e, w)) for e in layer_eps_u[i]],
-                            self.degree, self.n_el, self.grade))
-                        hit = _sem_modes_tensor(mm, k0, kx0, True)
+                        if e_u is not None:
+                            hit = _sem_modes_uniform(
+                                msup, k0, kx0, e_u, _geo,
+                                label=UNIFORM_LAYER_LABEL)
+                        else:
+                            mm = (m if m is not None
+                                  else _build_sem_tensor_segments(
+                                      self.period, uwidths,
+                                      [_tensor3_dict(t) for t in tens],
+                                      self.degree, self.n_el, self.grade))
+                            hit = _sem_modes_tensor(mm, k0, kx0, True)
                         _eig_memo[ck] = hit
                     lmodes.append(hit)
-                S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
-                for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
-                    S = _propagation_star(S, lam_l, k0 * depths[i])
-                    nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
-                              else (lmodes[i + 1][0], lmodes[i + 1][1]))
-                    S = _redheffer_star(S, _interface_smatrix(Wl_, Vl_, nW, nV))
+                media = _vertical_media(
+                    (Wsup, Vsup, _lsup, eps_sup), (Wsub, Vsub, _lsub, eps_sub),
+                    lmodes, uni, _geo[0])
+                S = _cascade_vertical(
+                    media, [k0 * d for d in depths],
+                    interface=_interface_smatrix, star=_redheffer_star,
+                    propagation_star=_propagation_star,
+                    collapse=_UNIFORM_FAST_PATH)
             S11, _S12, S21, _S22 = S
             kx = (kx0 + orders * G) / k0
             Hsup, Hsub = _proj(Wsup), _proj(Wsub)
@@ -4840,7 +4949,8 @@ class PMMStack:
                                   self.period, w_i,
                                   [_tensor3_dict(_tens(e, w)) for e in row],
                                   self.degree, self.n_el, self.grade))
-                        hit = (mm, _sem_modes_tensor(mm, k0, kx0, True))
+                        hit = (mm, _layer_modes_vertical(
+                            mm, [_tens(e, w) for e in row], k0, kx0))
                         _eig_memo[ck] = hit
                     mats_l.append(hit[0])
                     lmodes.append(hit[1])
@@ -5154,7 +5264,8 @@ class _PreparedPMMStack:
                 out.append(e)
         return out
 
-    def _layer_eig(self, i, materials, k0, kx0, wavelength, angle):
+    def _layer_eig(self, i, materials, k0, kx0, wavelength, angle,
+                   mats_geo=None):
         st = self._st
         keys = self._layer_keys[i]
         if keys:
@@ -5174,10 +5285,20 @@ class _PreparedPMMStack:
             return hit
         if resolved is None:
             resolved = [st._as_tensor(e) for e in self._layer_eps_u[i]]
-        mats = _build_sem_tensor_segments(
-            st.period, self._uwidths, [_tensor3_dict(e) for e in resolved],
-            st.degree, st.n_el, st.grade)
-        modes = _sem_modes_tensor(mats, k0, kx0, True)
+        e_u = (_uniform_iso_eps(resolved)
+               if (_UNIFORM_FAST_PATH and mats_geo is not None) else None)
+        if e_u is not None:
+            # uniform isotropic layer: the shared geometric eig of the union
+            # grid (``mats_geo`` is the half-space operator set on that grid;
+            # the eig is cached on its digest), no layer operators built.
+            modes = _sem_modes_uniform(
+                mats_geo, k0, kx0, e_u, _uniform_geo_eig(mats_geo, k0, kx0),
+                label=UNIFORM_LAYER_LABEL)
+        else:
+            mats = _build_sem_tensor_segments(
+                st.period, self._uwidths, [_tensor3_dict(e) for e in resolved],
+                st.degree, st.n_el, st.grade)
+            modes = _sem_modes_tensor(mats, k0, kx0, True)
         with self._cache_lock:
             self._eig_cache[ck] = _freeze_cached(modes)   # W7 A13
             while len(self._eig_cache) > self._EIG_CACHE_SIZE:
@@ -5243,7 +5364,7 @@ class _PreparedPMMStack:
         Wsub, Vsub = sub_modes[0], sub_modes[1]
         n_glob = mats_sup["n_glob"]
 
-        lmodes = [self._layer_eig(i, materials, k0, kx0, wl, angle)
+        lmodes = [self._layer_eig(i, materials, k0, kx0, wl, angle, mats_sup)
                   for i in range(len(st._layers))]
         # out-of-plane resolved tensors are not supported on this path
         S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
