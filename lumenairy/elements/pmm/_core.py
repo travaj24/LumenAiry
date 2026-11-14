@@ -478,39 +478,85 @@ def _lagrange_derivative_matrix(nodes):
 # boundaries, the classical corner-refined hp mesh) shrinks the wall element
 # like ``r^m`` and converges much faster: on a 50 nm metal strip (eps
 # -74 + 6i, 175 nm in a 370 nm period) 21 nm above a metal mirror (TM,
-# 1300 nm), degree 8 x 12 elements is 4.4e-6 off with the default floor below
+# 1300 nm), degree 8 x 12 elements is 7.4e-7 off with the default floor below
 # (1.5e-6 with an explicit 11 pm floor) where Chebyshev grading at degree
 # 10 x 8 elements is 1.0e-3 off.
 #
 # Why a floor.  Tiny elements cost accuracy through ROUND-OFF, not
-# discretisation: the spectrally converging TE channel, which a correct mesh
-# refinement cannot move, drifts by ~1e-6 at a 4.7 pm wall element and ~4e-5
-# at 0.9 pm (strip alone, 370 nm period, 1300 nm, both BLAS builds), and below
-# about 6e-6 of a WAVELENGTH a solve can fail outright and silently -- an
-# O(1) error with R + T > 1 on an absorbing grating -- measured at 4.7 pm
-# (370 nm period), 7.2 pm (200 nm period) and 7.5 pm (1300 nm period), all at
-# 1300 nm, mostly at oblique incidence.  The danger scale is therefore set by
-# the wavelength, while the layout is built before the wavelength is known,
-# so the default floor is a fraction of the PERIOD chosen to stay clear of
-# that band for periods down to about a sixth of the wavelength:
-# ``GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period``.  For shorter periods pass an
-# explicit floor, e.g. ``('geometric', 0.17, 2e-5 * wavelength)``.  Every
-# layout whose smallest element was at least 8e-6 of the wavelength read clean
-# in the same sweep (TE drift <= 4.4e-7).  The test that pins these numbers is
-# ``tests/unit/test_pmm_geometric_grading.py``.
+# discretisation: a backward-stable eig returns every modal ``q^2`` with an
+# absolute error of order ``eps * max|q^2|``, and ``max|q^2|`` grows like
+# ``(degree^2 / (k0 h))^2`` on an element of width ``h`` -- so the danger scale
+# is ``h / wavelength``.  (Up to 2026-11-14 the same scale also produced
+# OUTRIGHT, silent O(1) failures -- R + T > 1 on an absorbing grating, up to
+# ``h`` = 1.6e-5 of the wavelength at oblique incidence -- which this comment
+# block used to describe as a round-off band; they were a mode-selector defect
+# that let that round-off decide a propagating order's direction, fixed in
+# :func:`_growth_mask`.  The superseded wording is in
+# docs/history/lumenairy.elements.pmm._core.md.)  What remains is gradual.
+# Measured after the fix on one 50 nm metal strip layer (eps -74+6i, duty
+# 0.47, periods 200-1300 nm, 1300 nm, theta 0-0.7, degrees 6-20, 12 geometric
+# elements per region; TE deviation from the same degree at h = 1e-4
+# wavelengths, max over the grid, Windows/MKL and WSL/OpenBLAS):
+#
+#     h / wavelength   2e-6    4e-6    8e-6    1e-5    1.25e-5  2e-5    3e-5
+#     max TE dev       2.7e-5  3.8e-6  1.5e-6  3.2e-7  4.0e-7   2.4e-7  1.6e-7
+#
+# (900 Windows/MKL + 360 WSL/OpenBLAS solves; the 1e-5 column is WSL only.
+# Excluded: a period equal to the wavelength at normal incidence, where a
+# diffraction order is at grazing and the answer itself is ill-conditioned --
+# 1e-5 .. 5e-4 of scatter at every element size, before and after the fix.)
+#
+# The default floor :func:`_geometric_default_floor` is therefore
+# ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period,
+# GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength)`` = ``max(3e-5 P,
+# 1.25e-5 wavelength)``: the period part is where the corner error of the
+# strip fixture bottoms out, the wavelength part keeps the round-off below
+# about 4e-7.  Every 1-D entry point knows its wavelength and passes it;
+# without one (a traced value) the period part applies alone.  The tests that
+# pin these numbers are ``tests/unit/test_pmm_geometric_grading.py`` and
+# ``tests/unit/test_pmm_eig_roundoff_selector.py``.
 # --------------------------------------------------------------------------- #
 
 #: Default ratio of the geometric layout (successive boundary distances from the
 #: wall shrink by this factor).  0.15-0.2 is the classical corner-mesh band.
 GEOMETRIC_DEFAULT_RATIO = 0.17
 
-#: Default absolute floor of the geometric layout, as a fraction of the PERIOD
-#: (``min_element_m = GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period``).  No
-#: element of a geometric layout is made smaller than this (the ratio is raised
-#: instead).  Chosen from the measured round-off band -- see the comment block
-#: above and :func:`_normalize_grade`.  On the 370 nm / 1300 nm strip fixture
-#: it is 37 pm, which raises the 12-element ratio from 0.17 to about 0.21.
-GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC = 1e-4
+#: Default absolute floor of the geometric layout, PERIOD part
+#: (``GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period``).  No element of a
+#: geometric layout is made smaller than the default floor (the ratio is
+#: raised instead); see :func:`_geometric_default_floor` for how this part and
+#: the wavelength part combine, and the comment block above for the
+#: measurements.  3e-5 x period is where the corner error of the strip fixture
+#: bottoms out (1.5e-6 at an 11.1 pm wall element on the 370 nm period).
+GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC = 3e-5
+
+#: Default absolute floor of the geometric layout, WAVELENGTH part
+#: (``GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength``): the round-off of
+#: the modal eig grows like ``1 / (k0 h)^2``, so this part keeps it below about
+#: 4e-7 (measured, see the comment block above).  Applied wherever the
+#: wavelength is known (every 1-D single-layer entry point and every PMMStack
+#: solve).
+GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC = 1.25e-5
+
+
+def _geometric_default_floor(period, wavelength=None):
+    """The default floor (metres) of a geometric layout:
+    ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period,
+    GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength)`` -- the period part
+    alone when ``wavelength`` is ``None`` or not a finite positive number (a
+    traced value).  For a sweep pass the LONGEST wavelength: the round-off
+    scale is ``h / wavelength``, so the longest wavelength is the binding
+    one."""
+    floor = GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * float(period)
+    if wavelength is None:
+        return floor
+    try:
+        wl = float(np.max(np.asarray(wavelength, dtype=float)))
+    except Exception:        # traced (JAX) / non-numeric: period part only
+        return floor
+    if np.isfinite(wl) and wl > 0.0:
+        floor = max(floor, GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wl)
+    return floor
 
 _GRADE_FORMS = (
     "False / True (also None, 0, 1, numpy.bool_), 'chebyshev' (= True), "
@@ -540,7 +586,7 @@ def _real_scalar(value, what, where):
 
 
 def _normalize_grade(grade, *, period, where, allow_geometric=True,
-                     elements_per_region=None):
+                     elements_per_region=None, wavelength=None):
     """Validate a user ``grade`` value and return its normalized spec.
 
     Returns ``False`` (uniform), ``True`` (Chebyshev-Lobatto) or the hashable
@@ -554,8 +600,8 @@ def _normalize_grade(grade, *, period, where, allow_geometric=True,
     * ``False`` / ``True`` and the values today's ``bool()`` reading accepts:
       ``None``, ``0``, ``1`` (any integer type) and ``numpy.bool_``;
     * ``'chebyshev'`` -- alias of ``True``;
-    * ``'geometric'`` -- ratio :data:`GEOMETRIC_DEFAULT_RATIO`, floor
-      ``GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period``;
+    * ``'geometric'`` -- ratio :data:`GEOMETRIC_DEFAULT_RATIO`, the default
+      floor :func:`_geometric_default_floor` ``(period, wavelength)``;
     * ``('geometric', ratio)`` (default floor) and
       ``('geometric', ratio, min_element_m)``, with ``0 < ratio < 1`` and
       ``min_element_m > 0`` (metres).
@@ -576,6 +622,11 @@ def _normalize_grade(grade, *, period, where, allow_geometric=True,
         When given, a geometric spec with fewer than 3 elements per region
         raises ``ValueError`` (at 1 or 2 elements every layout is the
         midpoint split, so the request would be silently inert).
+    wavelength : float or array, optional
+        The wavelength(s) the layout will be solved at; completes the default
+        floor of a geometric spec without an explicit floor (the longest one
+        of an array binds).  ``None`` (or a traced value) -> the period part
+        only.
     """
     if grade is None or isinstance(grade, (bool, np.bool_)):
         return bool(grade)
@@ -622,7 +673,7 @@ def _normalize_grade(grade, *, period, where, allow_geometric=True,
         p = _real_scalar(period, "period", where)
         if not p > 0.0:
             raise ValueError(f"{where}: period must be > 0, got {period!r}.")
-        min_el = GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * p
+        min_el = _geometric_default_floor(p, wavelength)
     if not allow_geometric:
         raise NotImplementedError(
             f"{where}: geometric grading is validated on the 1-D PMM family "
@@ -1359,6 +1410,85 @@ _MODE_CUT_MARGIN_WARN = 1.0e1
 #: headroom on each side and not a fitted constant.
 _MODE_GROWTH_REL = 1.0e-6
 
+# ---------------------------------------------------------------------------
+# 2026-11-14 -- WHY ``_MODE_GROWTH_REL`` ALONE WAS NOT A ROUND-OFF BAR
+# ---------------------------------------------------------------------------
+# The "six decades apart" measurement above was taken on element grids whose
+# smallest element is a sizeable fraction of the wavelength.  The round-off on
+# an eigenvalue is NOT relative to that eigenvalue: a backward-stable eig
+# returns every ``q^2`` with an ABSOLUTE error of order ``eps * ||M||``, and the
+# spectral radius of the modal operator grows like ``(p^2 / (k0 h))^2`` on an
+# element of width ``h`` at degree ``p``.  Measured on the eps-free geometric
+# operator of a uniform medium (where the exact spectrum is REAL, so its
+# imaginary part is pure round-off), oblique incidence, geometric layouts with
+# the smallest element ``h`` (12 elements per region, degrees 8 / 14, periods
+# 370 / 700 nm, 1300 nm wavelength):
+#
+#     h / wavelength   max|q^2|   |Im q^2| of the propagating modes
+#     1e-4             4.8e9      1e-8 .. 2e-8
+#     2e-5             1.2e11     1e-7 .. 3e-7
+#     1.25e-5          3.1e11     2e-7 .. 9e-7
+#     4e-6             3.0e12     2e-6 .. 6e-6
+#
+# -- i.e. ``|Im q^2| <= 0.02 * eps * max|q^2|`` on every reading, a
+# NORMWISE bound, while ``|Im q| / |q|`` of a genuinely propagating mode
+# reached 2.1e-6 at ``h = 1.25e-5`` wavelengths: past ``_MODE_GROWTH_REL``.
+# The passive widening of :func:`_forward_growth_flip` then took such a mode's
+# direction from the SIGN OF THAT ROUND-OFF instead of from its flux (which sat
+# 1e9 x the cut -- unambiguous power), sent a propagating substrate order to
+# the backward branch, and the cascade returned a super-unity answer
+# (R + T = 2.55 on an absorbing strip; a discrete wrong branch, the same
+# number at every ``h`` and degree that flips the same mode, decided by the
+# BLAS build's round-off sign, never at normal incidence, where the geometric
+# operator is real and a simple real eigenvalue carries no imaginary part).
+#
+# So "growing" now means growing BEYOND THE EIGENSOLVE'S ROUND-OFF: the bar on
+# ``-Im(q_forward)`` is ``max(_MODE_GROWTH_REL |q|, d / max(|q|, sqrt(d)))``
+# with ``d = _EIG_ROUNDOFF_FAC * eps * max|q^2|`` the normwise ``q^2`` error
+# bound and ``d / |q|`` its image on ``q`` (``sqrt(d)`` where ``|q|`` is
+# itself inside the noise).  Where that bound is below ``_MODE_GROWTH_REL |q|``
+# -- every grid the 2026-08 calibration measured -- the mask is the historical
+# one BIT FOR BIT.  A misclassified EVANESCENT mode (``Im q = -|q|``, the
+# population the repair exists for) is still caught whenever
+# ``|q|^2 > d``; one inside the bound is within round-off of its own cut-off,
+# where neither criterion can resolve a direction and the growth it could
+# carry, ``exp(sqrt(d) k0 t)``, is itself at round-off level.
+#: Multiple of the normwise eigenvalue round-off bound ``eps * max|q^2|``
+#: below which a forward mode's ``Im(q) < 0`` is NOT counted as growth.  The
+#: measured round-off is <= 0.02 of the bound (table above), so 1.0 is a 50x
+#: margin over the noise, and it is the bound itself (no fitted constant).
+_EIG_ROUNDOFF_FAC = 1.0
+
+#: FAIL-BEFORE SWITCH for the round-off term of :func:`_growth_mask`
+#: (2026-11-14).  ``False`` restores the historical ``Im(q) < -_MODE_GROWTH_REL
+#: |q|`` growth test bit for bit -- and with it the wrong-branch population on
+#: small elements and near-coincident walls.  Tests that exercise the
+#: guards built against that population (the sliver refusal / warning
+#: machinery of ``stack.py``) set it ``False`` to reproduce what they guard.
+PMM_EIG_ROUNDOFF_BAR = True
+
+
+def _growth_mask(qf, q_all, xp=np):
+    """Forward modes that GROW along +z beyond the eigensolve's round-off --
+    the ONE growth test shared by :func:`_forward_growth_flip` (the repair),
+    :func:`_mode_cut_growth` (the diagnosis) and
+    :func:`_mode_cut_growth_post` (the residual), so the three can never
+    disagree about which modes are affected.
+
+    ``qf`` are the forward-assigned ``q``; ``q_all`` the whole modal set of
+    the same eig (its largest ``|q|^2`` sets the round-off scale).  See the
+    2026-11-14 block above ``_EIG_ROUNDOFF_FAC``.  Elementwise (plus one
+    reduction), so it traces under JAX."""
+    aq = xp.abs(qf)
+    if not PMM_EIG_ROUNDOFF_BAR:
+        return qf.imag < -_MODE_GROWTH_REL * aq
+    d = (_EIG_ROUNDOFF_FAC * float(np.finfo(np.float64).eps)
+         * xp.max(xp.abs(q_all)) ** 2)
+    den = xp.maximum(aq, xp.sqrt(d))
+    noise = xp.where(den > 0.0, d / xp.where(den > 0.0, den, 1.0), 0.0)
+    return qf.imag < -xp.maximum(_MODE_GROWTH_REL * aq, noise)
+
+
 #: Per-solve accumulator for the STACK-LEVEL half of the conjunction.  The
 #: verdict cannot be reached inside one layer's eig -- it needs the whole
 #: stack's propagating-mode counts -- so the per-layer solve paths open a scope
@@ -1461,9 +1591,8 @@ def _mode_cut_growth(flux, q, thr, prop):
     ratio = _mode_cut_ratio(flux, thr)
     # the forward q the selector will hand downstream, for the prop modes
     qf = np.where(np.asarray(flux) < 0.0, -q, q)
-    aq = np.abs(qf)
     grow = (prop & (ratio < _MODE_CUT_MARGIN_WARN)
-            & (qf.imag < -_MODE_GROWTH_REL * aq))
+            & _growth_mask(qf, q))
     if not bool(grow.any()):
         return 0, float("inf")
     return int(np.count_nonzero(grow)), float(np.min(ratio[grow]))
@@ -1720,7 +1849,7 @@ def _forward_growth_flip(flux, q, thr, prop, xp=np, passive=False):
     if not PMM_FORWARD_GROWTH_REPAIR:
         return flip
     qf = xp.where(flip, -q, q)
-    grow = qf.imag < -_MODE_GROWTH_REL * xp.abs(qf)
+    grow = _growth_mask(qf, q, xp)
     # ``_mode_cut_ratio``'s ``ratio < _MODE_CUT_MARGIN_WARN`` without the
     # division: under ``prop`` we have |flux| > thr, so the ratio IS
     # |flux| / thr.  A degenerate cut (thr <= 0 or non-finite) gives lim <= 0
@@ -1756,7 +1885,7 @@ def _mode_cut_growth_post(flux, q, flip):
     library caught it" from "the forward set is still wrong"."""
     q = np.asarray(q)
     qf = np.where(np.asarray(flip, dtype=bool), -q, q)
-    bad = qf.imag < -_MODE_GROWTH_REL * np.abs(qf)
+    bad = _growth_mask(qf, q)
     return int(np.count_nonzero(bad))
 
 
@@ -2948,6 +3077,11 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
     # for complex v, measured -- and ``lam`` is complex).
     QW = Q @ W2
     V0 = QW @ np.diag(1.0 / safe0)
+    if ky0 == 0.0:
+        # the probe partner's H_x rows by the exact relation as well (see
+        # _hx_partner_rows): a TE-like mode at cut-off otherwise carries a
+        # round-off H_x, and with it a round-off flux.
+        V0[:n] = _hx_partner_rows(W2, q2, safe0, n)
     SVt = S0 @ np.conj(V0[:n])          # S0 conj(Hx)
     SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
     flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
@@ -2970,7 +3104,35 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
     lam = -1j * q
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
     V2 = QW @ np.diag(1.0 / safe)
+    if ky0 == 0.0:
+        V2[:n] = _hx_partner_rows(W2, q2, safe, n)
     return W2, V2, lam, q
+
+
+def _hx_partner_rows(W2, q2, safe, n, xp=np):
+    """The ``H_x`` (top) rows of the classical (``ky0 = 0``) magnetic partner
+    ``V = Q W diag(1/lam)``, by the EXACT relation ``V_top = W_bot q^2 / lam``.
+
+    WHY (2026-11-14).  The classical operator factors as ``M = P Q`` with
+    ``P = [[0, -G], [I, 0]]``, so ``P V = M W / lam = W q^2 / lam`` and the
+    bottom block row of ``P`` reads ``V_top = W_bot q^2 / lam`` -- Faraday's
+    ``dEy/dz ~ Hx``, which carries no x-derivative at ``ky0 = 0``.  The
+    ``Q``-route evaluates the same rows as ``(Cyx W_x + (Cyy - Kx2) W_y) / lam``:
+    a difference of terms of size ``||Kx2|| |W|`` whose result is
+    ``q^2 |W|``, divided by ``lam``.  Its round-off is therefore of relative
+    size ``eps ||Kx2|| / |q|^2`` -- every digit is lost for a TE-like mode at
+    or near its cut-off (``q -> 0``), and the loss grows like ``1 / (k0 h)^2``
+    on small elements.  Measured: a laterally uniform air layer whose -1
+    order sits exactly at cut-off (1000 nm period, 1300 nm, the dense
+    per-layer eig): TE ``R + T`` = 1.257 / 1.156 at degree 10 / 14 with the
+    ``Q``-route, against 0.983202 at both degrees with this one -- identical to
+    the structured uniform-medium solve (``_sem_modes_uniform``, whose
+    ``V_top = w q^2 / lam`` is this same expression).  ``q2`` is the eig's own
+    eigenvalue (unchanged by the forward/backward flip), ``safe`` the clamped
+    ``lam``, so a mode exactly at cut-off gets ``0`` as the structured solve
+    does.  The bottom (``H_y``) rows keep the ``Q``-route: ``Cxx W_x``
+    carries no derivative and no cancellation."""
+    return W2[n:] * (q2 / safe)[None, :]
 
 
 
@@ -4597,6 +4759,8 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     lam0 = -1j * q
     safe0 = jnp.where(jnp.abs(lam0) < 1e-12, 1e-12, lam0)
     V0 = Q @ W2 @ jnp.diag(1.0 / safe0)
+    # H_x rows by the exact relation, as the NumPy twin (_hx_partner_rows)
+    V0 = jnp.concatenate([_hx_partner_rows(W2, q2, safe0, n, jnp), V0[n:]])
     SVt = S0 @ jnp.conj(V0[:n])             # S0 conj(Hx)
     SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
     flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
@@ -4611,6 +4775,7 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     lam = -1j * q
     safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
     V2 = Q @ W2 @ jnp.diag(1.0 / safe)
+    V2 = jnp.concatenate([_hx_partner_rows(W2, q2, safe, n, jnp), V2[n:]])
     return W2, V2, lam, q
 
 
@@ -7984,6 +8149,10 @@ __all__ = [
     "_resolve_incidence_checked",
     "_forward_branch_flip",
     "_forward_growth_flip",
+    "_growth_mask",
+    "_EIG_ROUNDOFF_FAC",
+    "PMM_EIG_ROUNDOFF_BAR",
+    "_hx_partner_rows",
     "_tensor_is_passive",
     "_grid_is_passive",
     "_eps_is_passive",
@@ -8008,6 +8177,8 @@ __all__ = [
     "_lagrange_derivative_matrix",
     "GEOMETRIC_DEFAULT_RATIO",
     "GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC",
+    "GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC",
+    "_geometric_default_floor",
     "_normalize_grade",
     "_graded_boundaries",
     "_build_sem",

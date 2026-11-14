@@ -106,12 +106,12 @@ def test_chebyshev_alias_is_bit_identical_to_true():
 # --------------------------------------------------------------------------- #
 # physics on fixture A
 # --------------------------------------------------------------------------- #
-#: Geometric (default floor: max(1e-4 x period, 4e-5 x wavelength) = 52 pm
-#: here) degree 8 x 12 el vs the same layout at degree 20.  MEASURED
-#: 2026-11-14: 5.90e-6 on Windows/MKL and WSL/OpenBLAS (identical to 3
-#: digits; the degree-20 value is itself 7.1e-7 from r_ref).  Bar 2e-5: 3.4x
-#: above the reading, 50x below the Chebyshev-at-equal-cost error (1.03e-3)
-#: it must separate from.
+#: Geometric (default floor: max(3e-5 x period, 1.25e-5 x wavelength) =
+#: 16.25 pm here) degree 8 x 12 el vs the same layout at degree 20.
+#: RE-MEASURED 2026-11-14 after the floor was lowered (it read 5.90e-6 at the
+#: former 52 pm floor): 5.7e-7 on Windows/MKL, 5.7e-7 on WSL/OpenBLAS (the
+#: degree-20 value is itself 5.2e-7 from r_ref).  Bar 2e-5 kept: 35x above
+#: the reading, 50x below the Chebyshev-at-equal-cost error (1.03e-3).
 GEO_DEG_BAR = 2e-5
 
 
@@ -121,14 +121,15 @@ def test_geometric_beats_chebyshev_at_equal_cost():
     Jc = _J(_fixture(10, 8, True))                 # Chebyshev, DOF 160 vs 192
     e8 = abs(J8[0, 0] - J20[0, 0])
     assert e8 < GEO_DEG_BAR, e8
-    # against the external reference: geometric 6.6e-6, Chebyshev 1.03e-3
-    # (MEASURED 2026-11-14, both builds) -- a >= 50x decision with 3x to
-    # spare
+    # against the external reference: geometric 7.4e-7 (16.25 pm floor; it
+    # was 6.6e-6 at the former 52 pm floor), Chebyshev 1.03e-3 (MEASURED
+    # 2026-11-14, both builds) -- a >= 50x decision with 28x to spare
     assert abs(Jc[0, 0] - R_REF) > 50.0 * abs(J8[0, 0] - R_REF)
 
 
-#: theta = 0.3: degree 8 vs 20 at 12 geometric elements.  MEASURED
-#: 2026-11-14: 5.90e-6, both builds.  Bar as for normal incidence.
+#: theta = 0.3: degree 8 vs 20 at 12 geometric elements.  RE-MEASURED
+#: 2026-11-14 at the 16.25 pm floor: 2.0e-6 (Windows/MKL), 2.0e-6
+#: (WSL/OpenBLAS).  Bar as for normal incidence (10x above).
 GEO_OBLIQUE_BAR = 2e-5
 
 
@@ -140,9 +141,11 @@ def test_geometric_oblique_converges():
 
 
 #: TE (E_y, spectrally converging -- a correct mesh change cannot move it) of
-#: geometric degree 8 x 12 el vs single-element degree 60.  MEASURED
-#: 2026-11-14: 1.7e-8, both builds -- 59x below the bar, which itself sits
-#: 13x below what an unclamped tiny wall does to TE (1.3e-5 at ratio 0.10,
+#: geometric degree 8 x 12 el vs single-element degree 60.  RE-MEASURED
+#: 2026-11-14 at the 16.25 pm floor: 3.0e-7 (Windows/MKL), 3.0e-7
+#: (WSL/OpenBLAS) -- the eig round-off of a 1.25e-5-wavelength element (it
+#: read 1.7e-8 at the former 52 pm floor); the bar sits 30x below what an
+#: unclamped tiny wall does to TE (3e-5 .. 4.5e-5 at ratio 0.10,
 #: single-layer measurement).
 GEO_TE_BAR = 1e-6
 
@@ -156,14 +159,17 @@ def test_geometric_leaves_te_untouched():
 
 def test_the_floor_turns_a_bad_ratio_into_a_good_layout():
     """('geometric', 0.05) at 16 elements is clamped by the default floor
-    (52 pm) to a working layout: its error is within 3x of the recommended
-    0.17 / 12-element one.  MEASURED 2026-11-14, both builds: 6.56e-6 against
-    6.56e-6 -- both layouts end in the same 52 pm wall element, which is what
-    sets the corner error.  Unclamped, ratio 0.05 at 16 elements puts a
-    1e-17 m wall element on the grid."""
+    (16.25 pm) to a working layout.  Unclamped, ratio 0.05 at 16 elements puts
+    a 1e-17 m wall element on the grid.  RE-MEASURED 2026-11-14: 2.4e-6 from
+    r_ref (Windows/MKL and WSL/OpenBLAS) against 7.4e-7 for the 0.17 /
+    12-element layout.  At the former 52 pm floor both read 6.56e-6 and this
+    test asserted "within 3x"; at the lower floor the two layouts no longer
+    share an error budget dominated by the wall element (3.3x apart, both
+    inside r_ref's own 1e-5 uncertainty), so the decision is stated against
+    the geometric bar instead: 8x below it, and 400x below the Chebyshev
+    error it must separate from."""
     e_bad = abs(_J(_fixture(8, 16, ("geometric", 0.05)))[0, 0] - R_REF)
-    e_ok = abs(_J(_fixture(8, 12, "geometric"))[0, 0] - R_REF)
-    assert e_bad < 3.0 * e_ok, (e_bad, e_ok)
+    assert e_bad < GEO_DEG_BAR, e_bad
 
 
 # --------------------------------------------------------------------------- #
@@ -207,7 +213,9 @@ _CONICAL_LAYERS = [(50e-9, E_AU, 1.0 + 0j), (21e-9, E_HF, E_HF),
 
 
 def test_conical_incidence_refuses_geometric():
-    """Geometric grading is refused at conical incidence (phi != 0).
+    """Geometric grading is refused at conical incidence (phi != 0) -- kept
+    after the 2026-11-14 selector fix, which leaves these readings unchanged
+    (see ``conical._refuse_geometric_conical`` for the separate mechanism).
 
     MEASURED 2026-11-14 (both builds) on the strip / 21 nm spacer / mirror
     stack, theta 0.2, phi 0.3, 12 geometric elements at the default floor
@@ -294,11 +302,12 @@ def test_guard_threshold_follows_the_wavelength():
 
 
 def test_default_geometric_floor_follows_the_wavelength():
-    """Without an explicit floor PMMStack uses max(1e-4 x period,
-    4e-5 x wavelength), resolved at solve time; an explicit floor is kept."""
+    """Without an explicit floor PMMStack uses the 1-D default
+    max(3e-5 x period, 1.25e-5 x wavelength), resolved at solve time; an
+    explicit floor is kept."""
     st = _fixture(8, 12, "geometric")
     stored = st.grade
-    assert stored[2] == C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P      # 37 pm
+    assert stored[2] == C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P    # 11.1 pm
     assert st._effective_grade(WL) == ("geometric", stored[1],
                                        S._SMALL_ELEMENT_SUGGEST_FRAC * WL)
     assert st._effective_grade(100e-9) == stored          # period part wins
@@ -371,9 +380,9 @@ def test_opt_out_solves_and_the_backstop_refuses_super_unity():
         S._warn_stack_energy(R, T, stack=st)
 
 
-#: The configurations of the measured failure band that returned O(1) wrong,
-#: super-unity answers on the Windows/MKL build with the guard opted out and
-#: the backstop off (2026-11-14 sweep; which ones fail is build-dependent).
+#: Configurations that returned O(1) wrong, super-unity answers on the
+#: Windows/MKL build before the selector fix, with the guard opted out and the
+#: backstop off (2026-11-14 sweep; which ones failed was build-dependent).
 #: (period, theta, degree, wall element / wavelength)
 _GARBAGE_PRONE = [
     (370e-9, 0.3, 10, 3e-6), (370e-9, 0.5, 8, 5.5e-6),
@@ -382,23 +391,31 @@ _GARBAGE_PRONE = [
 
 
 @pytest.mark.parametrize("Pq,theta,deg,hw", _GARBAGE_PRONE)
-def test_opted_out_solves_raise_or_are_clean(Pq, theta, deg, hw):
-    """RAISE-OR-CLEAN, on every build: with the guard opted out, a solve in
-    the failure band either is refused by the energy backstop or returns
-    R + T <= 1 + 1e-3 (the strip absorbs, so the theorem is R + T <= 1; every
-    measured wrong answer read at least 1.028)."""
-    Wq = 0.47 * Pq
-    r = (hw * WL / (0.5 * Wq)) ** 0.2
-    st = PMMStack(Pq, n_substrate=N_SUB, degree=deg, elements_per_region=12,
-                  grade=("geometric", r, 1e-15), allow_small_elements=True)
-    st.add_layer(50e-9, segments=[(0.47, E_AU), (0.53, 1.0)])
-    st.set_source(WL, theta=theta)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        try:
+def test_opted_out_solves_return_the_reference(Pq, theta, deg, hw):
+    """These rows returned super-unity garbage before the selector fix
+    (``_core._growth_mask``).  With the guard opted out they must now be
+    passive (the strip absorbs: R + T <= 1) AND agree with the same degree at
+    a 1e-4-wavelength wall element.  MEASURED 2026-11-14: |dJ| <= 5.5e-6 on
+    Windows/MKL and on the three rows also measured on WSL/OpenBLAS (the
+    round-off floor of 3e-6 .. 8e-6 wavelength elements); bar 5e-5, against
+    pre-fix errors of 0.26 .. 3.9 in the sweep that found them.  WHICH rows
+    fail moved with every code change before the fix (a round-off sign
+    lottery): on this branch's pre-fix head two of these four read clean, so
+    ``test_pmm_eig_roundoff_selector.py`` carries rows re-checked to fail
+    there on both builds."""
+    def run(h):
+        Wq = 0.47 * Pq
+        r = (h * WL / (0.5 * Wq)) ** 0.2
+        st = PMMStack(Pq, n_substrate=N_SUB, degree=deg,
+                      elements_per_region=12,
+                      grade=("geometric", r, 1e-15), allow_small_elements=True)
+        st.add_layer(50e-9, segments=[(0.47, E_AU), (0.53, 1.0)])
+        st.set_source(WL, theta=theta)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
             o, R, T, J = st.solve()
-        except ValueError as exc:
-            assert "energy not conserved" in str(exc)
-            return
-    assert float(np.max(R.sum(axis=1) + T.sum(axis=1))) <= \
-        1.0 + S._SLIVER_TRIGGER_BAR
+        return np.asarray(J), R.sum(axis=1) + T.sum(axis=1)
+    J, tot = run(hw)
+    Jr, _ = run(1e-4)
+    assert float(np.max(tot)) <= 1.0, tot
+    assert float(np.max(np.abs(J - Jr))) < 5e-5
