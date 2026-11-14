@@ -7,14 +7,15 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 ## Versions covered
 
-v4.13 through v5.50.  Sections are in version order; the newest, 5.50.0, is at
+v4.13 through v5.51.  Sections are in version order; the newest, 5.51.0, is at
 the end of this file.  The 5.46.0 section is the largest single batch of
 behaviour changes the library has shipped, 5.47.0 is the wave that implemented
 what it deferred, 5.48.0 finished that audit's handoff (two answers move from
 wrong to right, several silent wrong answers become refusals), and 5.49.0 is the
 release that turns the settings those waves shipped switchable into the defaults
 their measurements supported.  5.50.0 executes the removals that 5.46.0
-deprecated.
+deprecated.  5.51.0 changes the `RCWAStack` formulation default and adds
+refusals to `PMMStack`.
 
 Only behavior shifts that **require user code changes** or **change
 numerical answers** are listed.  Pure additions (new functions, new
@@ -3148,3 +3149,75 @@ unhashable, as it was while it was mutable.
 `NEXT_REMOVAL_VERSION` (and `API_TRANSITION_VERSION`, which is bound to it)
 moves from `'5.50'` to `'5.52'`.  No live deprecation targets 5.52; the value is
 the backstop horizon for the next deprecation cycle.
+
+---
+
+## 5.51.0 -- RCWA / PMM stack solvers
+
+The CHANGELOG's "Changed defaults, and the way back" list is the full record;
+this section is the recipe.
+
+### `RCWAStack` patterned layers default to `formulation='auto'`
+
+`RCWAStack.add_layer` and its builders (`add_graded_layer`,
+`add_tapered_grating`, `add_tapered_ridges`, `add_tapered_pillars`) default to
+`'auto'`.  On a 1-D stack an `eps_cell`, a y-invariant `shapes` list and the new
+`segments=` resolve to Li's inverse rule (`'li'`); on a 2-D stack every
+`eps_cell` and every list of axis-aligned rectangles resolves to `'li'`, and a
+list holding a disk or an ellipse stays on the direct rule.  TM results of
+metallic gratings move the most (on a resonant metal-strip stack the direct
+rule was 0.257 off at `n_orders` 50; `'li'` is 0.039 off).  `layer_absorption`
+of an `'li'` layer is now its face-flux difference.
+
+```python
+# 5.50: the direct rule ran on every patterned layer, implicitly
+st.add_layer(50e-9, eps_cell=cell)
+# 5.51: the same numbers as 5.50, bit for bit
+st.add_layer(50e-9, eps_cell=cell, formulation='laurent')
+# which rule ran:
+st.layers[-1].formulation, st.layers[-1].formulation_requested
+```
+
+### `rcwa_convergence` judges a relative error estimate
+
+Without `bump=` the check now steps the truncation geometrically and compares a
+relative error bound against `rtol` (default 1e-2), so a verdict can flip from
+converged to not converged.  A call that passes `bump=` and no `rtol` keeps the
+5.50 verdict and warnings exactly.
+
+```python
+# the 5.50 verdict
+res, rep = rcwa_convergence(stack, bump=4, atol=1e-3)
+# the 5.51 verdict (relative estimate; estimate=True adds a third solve)
+res, rep = rcwa_convergence(stack)
+rep["converged"], rep["err_estimate"]
+```
+
+### `PMMStack` refuses what it used to return silently
+
+* An element smaller than 1e-5 of the wavelength made by a geometric layout,
+  or 3e-6 of the wavelength made by a Chebyshev / uniform layout, raises
+  `ValueError` before solving.  `allow_small_elements=True` solves anyway (with
+  a `UserWarning`).
+* `prepare().solve()` raises when the stack's layout (`period`, `degree`,
+  `elements_per_region`, `grade`, `min_feature`, `layer_grids`,
+  `window_halfwidth`) changed after `prepare()`; call `prepare()` again.
+* `grade=` accepts `False` / `True` (and `None`, `0`, `1`), `'chebyshev'`,
+  `'geometric'` and `('geometric', ratio[, min_element_m])`; any other value
+  raises `ValueError` (it ran Chebyshev grading).  The 2-D hybrid family
+  refuses a geometric spec.  With the default geometric floor a traced (JAX)
+  wavelength raises; pass `grade=('geometric', ratio, min_element_m)`.
+* At an exact Rayleigh anomaly `solve()`, `solve_vs_wavelength()` and the
+  prepared solve nudge the wavelength by about 1e-7 relative and emit
+  `lumenairy.elements.rcwa.WoodNudgeWarning`.  A test suite that turns warnings
+  into errors sees it only at such a point; move the wavelength off the
+  anomaly.
+
+### PMM results that move
+
+Conical PMM results with Chebyshev layouts move by at most 1.1e-9 (structured
+modal solves), `PMMStack` results with uniform layers move at round-off (the
+uniform-layer fast path), and PMM solves that the forward-mode selector used to
+send to a wrong branch (very small elements at oblique incidence, typically
+reading `R + T > 1` on an absorbing structure) now return the right answer.
+None of these has a switch back.

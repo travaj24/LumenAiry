@@ -4,6 +4,323 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.51.0] — 2026-11-14
+
+A minor release for the RCWA and PMM stack solvers.  One default changes:
+`RCWAStack.add_layer` and its builders now use `formulation='auto'`, which
+picks Li's inverse rule wherever the layer supports it.  New in this release:
+geometric element grading for the 1-D PMM family and `PMMStack`, a fast path
+for laterally uniform layers in `PMMStack` (and its JAX twin), adaptive spatial
+resolution for 1-D `RCWAStack` stacks (`asr=`), `RCWAStack.add_layer(segments=)`,
+and a `rcwa_convergence` that judges a relative error estimate.  A defect in the
+PMM forward-mode selector is fixed at its root.  It returned wrong answers on
+very small elements at oblique incidence.
+
+**Results change** for patterned `RCWAStack` layers left at the default
+formulation, for `rcwa_convergence` verdicts (except the legacy `bump=` form),
+for the conical PMM path at round-off level, and for PMM solves that the
+selector defect had sent to a wrong branch.  Each changed default and refusal
+is listed first, with the setting that restores the old behaviour where one
+exists.
+
+### Changed defaults, and the way back
+
+- **1-D `RCWAStack`: `formulation='auto'` is the default** of
+  `RCWAStack.add_layer`, `add_graded_layer`, `add_tapered_grating`,
+  `add_tapered_ridges` and `add_tapered_pillars`.  The stack used the direct
+  (Laurent) rule on every patterned layer; the single-layer 1-D entry already
+  defaulted to `'auto'`.  On a 1-D stack, `'auto'` resolves an `eps_cell`, a
+  y-invariant `shapes` list and a `segments` list to `'li'`.  A y-varying layer
+  keeps `'laurent'` (bit-identical to pre-averaging, with
+  `RCWAYAverageWarning`).  Uniform and tensor layers are not affected.  A JAX
+  `eps_cell` and a layer with an exact zero permittivity resolve to
+  `'laurent'`.  `layers[i].formulation` is the rule that ran; the new
+  `layers[i].formulation_requested` is what was asked for.  The tapered
+  builders resolve once per call from their concrete permittivities (the
+  `raster` default stays `'hard'`); `add_graded_layer` resolves slice by
+  slice.  Measured on a resonant metal-strip stack (175 nm strip, eps
+  -74+6i, 370 nm period, 21 nm spacer over a metal mirror, 1300 nm, TM): the
+  direct rule's zeroth-order reflection was 0.257 off at `n_orders` 50 (wrong
+  sign of Re r) and 0.167 off at 100; `'li'` is 0.039 / 0.0106 off.
+  *Way back:* `formulation='laurent'`, which reproduces 5.50.2 bit for bit.
+- **2-D `RCWAStack`: `'auto'` resolves by shape class.**  It resolves to `'li'`
+  for every `eps_cell` (dispersive included) and every list of axis-aligned
+  rectangles, whatever the material, and to `'laurent'` for a `shapes` list
+  holding a disk or an ellipse.  Measured against the factorization-free 2-D
+  polynomial modal solver (`PMM2DStackPure`) on squares and disks of eps 4,
+  12, -3+1i, -10+1i and -70+5i, and against the published checkerboard
+  benchmark of Li's 1997 factorization paper.  Li's rule is 15x-60x more accurate than the direct rule on
+  dielectric rectangles at the same truncation and 2x-50x on the -10+1i and
+  -70+5i metal rectangles.  It is better or level on rasterized disks.  The
+  one regime where the direct rule wins is a weak metal (eps -3+1i) above
+  about 14 orders per direction; the `add_layer` docstring carries the table.
+  Analysis and tables: `docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md`.
+  *Way back:* `formulation='laurent'`.
+- **Dispersive layers left at `'auto'`** are resolved again at each wavelength
+  of `solve_vs_wavelength`, from their materialised values, by the same rule
+  as a concrete layer.
+- **`RCWAResult.layer_absorption` of an `'li'` layer is its face-flux
+  difference.**  The volume integral of `Im(eps)|E|^2` is not consistent with
+  the field an `'li'` solve represents: the truncated series of the
+  wall-normal `E_x` is a poor `|E_x|^2` inside a metal.  Measured on a lossy
+  bar over a metal line (eps -20+2i, 1.31 um, theta 0.25, `n_orders` 8, TM):
+  the raw integrals summed to 0.2505 against an absorptance of 0.2088.  This
+  was already wrong in 5.50.2 with an explicit `'li'`.  An `'li'` layer is now
+  attributed the Poynting-flux difference between its two faces, from the
+  retained modal fields on `2 M + 2` nodes per axis.  The face fluxes close on
+  the absorptance to 6e-15.  `'laurent'` layers keep the volume integral, bit
+  for bit.  *Way back:* `formulation='laurent'` on that layer.
+- **`rcwa_convergence` steps geometrically and judges a relative error
+  estimate.**  It compared the solve at `N` with `N + 4` and passed when the
+  largest per-order efficiency change was below an absolute 1e-3.  On a
+  resonant stack under `'li'` that certified a reflectance 23.5 % wrong at
+  `N = 61`.  The call forms now behave as follows.
+  * Default (no `bump=`): `N_hi = max(N + 1, ceil(f N))`, with `f = 1.5` for
+    one axis and 1.25 per axis for two.  Per-order efficiencies are compared
+    relative to `max(R_m, 1e-3 sum R)` (T likewise), and the zeroth-order Jones
+    elements relative to `max(|J|, sqrt(1e-3 sum R))`.  The largest change `d`
+    gives the bound `d / (f - 1)`, judged against `rtol` (default 1e-2), plus
+    the absolute test when `atol` is given.  At `n_orders` 4 the higher rung is
+    6 (it was 8).
+  * Legacy (`bump=` given, `rtol` not given, no `estimate`): the verdict of
+    releases up to 5.50, exactly (`delta <= atol`, `atol` default 1e-3), with
+    the same warnings.  Lossless Si lamellar grating, `bump=4`, `atol=1e-3`,
+    N = 20 / 40 / 60: converged, delta 4.29e-4 / 1.08e-4 / 4.74e-5, no
+    warning, as in 5.50.2.
+  * `bump=` with `rtol=`: judged by the estimate (on that grating 7.1e-2 /
+    4.0e-2 / 2.8e-2: not converged).
+  * `estimate=True`: a third solve and a per-quantity local exponent
+    (`erratic` outside [0.5, 4] or when successive changes turn around).
+  * The report keeps every key and adds `delta_rel`, `delta_amp`,
+    `err_estimate`, `factor` (and `exponent`, `erratic`, `n_orders_mid` with
+    `estimate=True`).
+  * The stack branch refuses a pixel or tensor cell sampled too coarsely for
+    the higher truncation instead of comparing against an aliased solve.  On
+    an `asr` stack with `eta='auto'` the stretch is frozen at the base rung
+    (reported as `asr_eta`).  An extra output of a callable solver that
+    cannot be read now raises instead of silently leaving the comparison.
+
+  *Way back:* `bump=4` and no `rtol`.
+- **`PMMStack` small-element guard (new refusal).**  A solve whose element
+  LAYOUT (the split of a cell into several elements) makes an element smaller
+  than 1e-5 of the wavelength under geometric grading, or 3e-6 of the
+  wavelength under Chebyshev or uniform grading, raises `ValueError` before
+  solving.  Below those sizes the eigensolve's round-off can exceed 1e-6
+  (geometric) / 1e-5 (Chebyshev, uniform) of the answer (measured: the
+  Chebyshev ladder of 4..20 elements converges monotonically to a geometric
+  reference down to 4.8e-6 wavelengths, and its round-off passes 1e-5 below
+  3e-6).  A cell the GEOMETRY makes thin (a liner, a near-coincident wall
+  pair) is not subject to this guard.  A 1.2 nm liner at 1550 nm with 16
+  Chebyshev elements per region, which 5.50.2 solved, still solves.  Below
+  1e-4 of the wavelength a layout-made element also arms an energy check: a
+  provably passive stack reading `R + T > 1 + 1e-3` is refused.
+  *Way back:* `PMMStack(..., allow_small_elements=True)` solves (with a
+  `UserWarning`); the energy check still applies.
+- **`PMMStack.prepare().solve()` refuses a changed layout.**  If `period`,
+  `degree`, `elements_per_region`, `grade`, `min_feature`, `layer_grids` or
+  `window_halfwidth` changed after `prepare()`, the prepared solve raises
+  `ValueError`.  The prepared caches were keyed without the layout, so a
+  changed layout returned an O(1) wrong answer: 5.50.2 was 0.51 off after
+  flipping `grade` between `True` and `False`.  *Way back:* call `prepare()`
+  again.
+- **`PMMStack` announces and nudges an exact Rayleigh anomaly.**  At a
+  diffraction order exactly at cut-off in some medium (for example a period
+  equal to the wavelength at normal incidence) the answer is ill-conditioned;
+  measured solves there scatter by 1e-5 .. 5e-4 at every element size and
+  degree.  `solve()`, `solve_vs_wavelength()` and the prepared solve now run
+  such a point at a wavelength nudged by about 1e-7 relative and say so with
+  `lumenairy.elements.rcwa.WoodNudgeWarning`, as the single-layer 1-D entry
+  points and the conical path already did.  Off an anomaly nothing changes.
+  *Way back:* none (the nudged answer is the well-posed one); move the
+  wavelength off the anomaly yourself, or filter the warning class.
+- **Geometric grading with the default floor needs a concrete wavelength.**
+  `PMMStack` with `grade='geometric'` (default floor) raises `ValueError` when
+  the solve wavelength is traced (JAX) or missing; its layout would otherwise
+  differ from the NumPy solve at the same wavelength.  *Way back:* pass an
+  explicit floor, `grade=('geometric', ratio, min_element_m)`.
+- **`grade=` values are validated.**  Every PMM entry point that takes
+  `grade` accepts `False` / `True` (and `None`, `0`, `1`, `numpy.bool_`),
+  `'chebyshev'` (= `True`), `'geometric'`, `('geometric', ratio)` and
+  `('geometric', ratio, min_element_m)`.  Anything else raises `ValueError`;
+  it used to run Chebyshev grading.  A geometric spec with fewer than 3
+  elements per region raises `ValueError`.  The 2-D hybrid entry points
+  (`pmm_efficiency_2d`, `pmm_efficiency_2d_cell`, `prepare_pmm_2d`,
+  `prepare_pmm_2d_cell`, their sweeps, `PMM2DStackHybrid` and `pmm_jones_2d`)
+  refuse a geometric spec with `NotImplementedError`.  The JAX branch of
+  `pmm_jones_2d` used to run Chebyshev for it.  `PMMStack.grade` and
+  `PMM2DStackHybrid.grade` are validated properties; a default geometric floor
+  is stored as `('geometric', ratio, None)`, so the stored value can be passed
+  back unchanged.  *Way back:* pass `True` or `False`.
+- **Conical PMM: structured modal solves; Chebyshev results move by at most
+  1.1e-9.**  The nodal conical cascade solved every medium with the dense
+  eigensolve of `M = -(P @ Q)`, whose round-off grows on small elements and
+  which splits the exactly degenerate TE/TM pairs of a uniform medium into
+  arbitrary mixtures.  Uniform isotropic media now take exactly structured
+  modes, and other layers are solved in the classical modal basis.  Chebyshev
+  layouts move by at most 1.1e-9 (their discretization errors are 1e-6 ..
+  2e-2), and their round-off falls: the scatter under a perturbation of `phi`
+  goes from 1.7e-8 to 6.8e-11 at 12 elements and degree 12.  Geometric
+  grading is now accepted at conical incidence.  On a metal strip / 21 nm
+  spacer / mirror stack at theta 0.2, phi 0.3, geometric 8 x 12 is within
+  2.8e-8 of `RCWAStack(asr=True)` in the cross-polarized `J_xy`, and at
+  `phi = 1e-9` within 1.2e-10 of the classical solve.  *Way back:* none
+  supported (the module switch
+  `lumenairy.elements.pmm.conical.PMM_CONICAL_STRUCTURED` exists so tests can
+  reproduce the dense eigensolve).
+- **PMM mode selector fix (results move where the old selector failed).**  The
+  passive growth repair counted a forward mode as growing when
+  `Im(q) < -1e-6 |q|` and took its direction from the sign of `Im(q)`.  The
+  eigensolve returns `q^2` with an absolute round-off of order
+  `eps * max|q^2|`, which grows on small elements.  On such elements the
+  round-off part of a propagating half-space order crossed the bar, and its
+  sign sent the order to the backward branch.  Measured: the -1 substrate
+  order of a 700 nm strip at theta 0.5 came back as `q = -0.442384 + 9.2e-7i`
+  and the solve read `R + T = 2.55`.  The failures depend on the BLAS build and
+  thread count and never occur at normal incidence.  The growth test now
+  uses `max(1e-6 |q|, d / max(|q|, sqrt d))` with `d = eps * max|q^2|`; where
+  `d` is small it is the previous test bit for bit.  The classical magnetic
+  partner's `H_x` rows are now formed by the exact relation `W_bot q^2 / lam`
+  (NumPy and JAX twins).  The dense per-layer path at a mode cut-off inside a
+  uniform spacer read TE `R + T` 1.257 / 1.156 (degree 10 / 14) and now reads
+  0.983202 at both.  Results on the default layouts stay within 1e-12 of
+  5.50.2 (`tests/unit/test_pmm_geometric_grading.py`).  *Way back:* none (the
+  previous selector returned wrong branches).
+- **`PMMStack` uniform-layer fast path (round-off moves).**  See *Added*.
+  Against the dense path, measured differences are at most 4.7e-12 in J / R /
+  T on the metal-strip stack (normal and oblique), 1.2e-12 with 52 graded
+  sub-layers, and 4.4e-13 against an analytic TMM on an all-uniform Bragg
+  stack.  At the default geometric floor the two paths differ by up to 1.1e-6,
+  the round-off the dense path itself carries there.  *Way back:* none
+  public.
+
+### Added
+
+- **Geometric element grading for the 1-D PMM family and `PMMStack`.**
+  `grade='geometric'` or `('geometric', ratio[, min_element_m])` selects a
+  corner-refined layout with `n_el // 2` geometric layers per side (default
+  ratio 0.17), one central element for odd counts, and exact mirror symmetry.
+  An absolute floor on the smallest element raises the ratio; if no graded
+  layout can meet it the uniform layout is used, and the element count never
+  changes.  The default floor is `max(3e-5 x period, 1.25e-5 x wavelength)`,
+  for `PMMStack` and the single-layer 1-D entry points alike
+  (`GEOMETRIC_DEFAULT_RATIO`, `GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC`,
+  `GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC`).  A sweep uses the floor of its
+  longest wavelength.  Geometric grading needs `elements_per_region >= 3`; it
+  is refused on the 2-D hybrid family.
+  * On the metal-strip / spacer / mirror stack (TM, 1300 nm), zeroth-order
+    reflection error against an external reference: default (degree 16, 1
+    element) 1.4e-2; degree 80, 1 element 4.2e-4; Chebyshev degree 10 x 8
+    elements 1.0e-3; geometric degree 8 x 12 elements 7.4e-7.
+  * On a single 50 nm metal strip (TM, 1300 nm): geometric 8 x 10 elements is
+    2.6e-7 off, where Chebyshev 10 x 8 (the same nodal count) is 2.7e-5 off.
+  * On the slanted (covariant) path, a 0.2 rad slant with 12 geometric
+    elements is 1.9e-4 / 3.6e-6 / 2.9e-8 off a degree-24 solve at degree 8 /
+    12 / 16, so the "degree 8-10" recipe is stated for vertical walls.
+  * Accuracy at the default floor is limited by round-off at about 1e-6:
+    reference errors scatter between 1.4e-7 and 2.4e-6 across degree 8-14,
+    so convergence in degree is not monotone below about 2e-6.
+- **`PMMStack` fast path for laterally uniform layers.**  An isotropic uniform
+  layer takes its modes from the one geometric eigensolve every uniform medium
+  on the grid shares.  Every run of consecutive uniform media, the
+  half-spaces included, is cascaded elementwise and enters the dense cascade
+  as one S-matrix; a run whose elementwise cascade is not finite falls back to
+  the dense kernels.  It serves `solve()`, both wavelength sweeps, the
+  per-layer cascades and the prepared solve.  Speed on a stack with 52 graded
+  sub-layers: 13x at degree 12, about 25x at degree 20.  At a mode cut-off
+  inside a uniform layer the fast path is passive and stationary in degree.
+  Implementation: `lumenairy/elements/pmm/_uniform_cascade.py`.
+- **The JAX twin of `PMMStack` takes the same fast path**, with the same
+  kernels run on `jax.numpy`.  Twin vs NumPy forward: 9.4e-14
+  (Windows/MKL) / 6.8e-14 (WSL/OpenBLAS).  Forward plus gradient on 44 layers:
+  68.5 s on the dense path, 1.05 s on the fast path.
+- **`RCWAStack(asr=...)`: adaptive spatial resolution for 1-D stacks.**  One
+  stretched lateral coordinate for the whole stack puts the walls of every
+  patterned layer on coordinate lines and clusters the harmonics there.  It
+  uses the covariant Li factorization with exact Fourier coefficients, a
+  fourth-order `'sine4'` map, half-spaces through an admittance built in a 2x
+  basis, and a balanced first-order eigensolve for patterned layers.  Spec:
+  `None` (default, bit-for-bit unchanged), `True`, a stretch `eta` in `(0, 1]`,
+  `'auto'`, or `dict(eta=, profile=)`.  It reaches `solve`,
+  `solve(stabilize=True)`, `solve_vs_wavelength`, `rcwa_convergence`,
+  `internal_field` and `layer_absorption` (face fluxes).  On TM metal-strip
+  stacks it reaches 5e-6 at `n_orders` 20 and 1e-7 (the accuracy of the
+  reference) from about 70.  With `eta='auto'` it beats or matches the plain
+  basis at 62 of 66 measured points (`n_orders` 6..16).  2-D stacks,
+  `eps_cell` rasters, tensor and `'laurent'` patterned layers, JAX and GPU are
+  refused with `ValueError`.  Design note: `docs/rcwa_stack_asr.md`; engine:
+  `lumenairy/elements/rcwa/_asr_stack.py`.  The single-layer
+  `rcwa_efficiency_1d(asr_eta=)` keeps its own engine; its coordinate map is
+  now the shared one (round-off identical).
+- **`RCWAStack.add_layer(segments=[(width_fraction, eps), ...])`**: exact
+  lamellar layers, laid out left to right from x = 0 in the public frame
+  (`segments[0]` on `[0, w0 P)`), the layout of `PMMStack.add_layer(segments=)`
+  and `rcwa_jones_1d_segments`.  Validated by the same validator as
+  `PMMStack` (fractions finite and > 0, summing to 1 within 1e-6).  The layer
+  is stored as the equivalent `shapes` layer; one segment is a uniform layer;
+  dispersive callables pass through; allowed on 2-D stacks (lines along y).
+  The metal strip given by `segments=` is the `shapes` strip bit for bit; an
+  asymmetric three-segment cell at theta 0.3 matches `PMMStack` order by order
+  on the +/-1 orders to 4.9e-6 (TM) / 3.7e-7 (TE).
+- **Documented reference planes.**  `RCWAResult.jones_reflection` /
+  `jones_transmission` and `PMMStack.solve` / `jones_transmission` state their
+  basis (lab tangential `E_x`, `E_y` over incident, `exp(-i w t)`) and phase
+  reference planes (reflection at the top interface of the first layer,
+  transmission at the bottom interface of the last).  Pinned by
+  `tests/unit/test_rcwa_doc_contracts.py` and
+  `tests/unit/test_pmm_stack_doc_contracts.py`.  The `PMMStack` docstring also
+  states that `far_field_orders` / `n_orders` is not an accuracy knob
+  (`n_orders` 3 / 21 / 61 give the same zeroth-order Jones to 4.3e-15
+  relative).
+
+### Fixed
+
+- **`'li'` under `jax.jit` or a wavelength gradient.**  A NumPy cell under
+  `'li'` raised `TracerArrayConversionError` inside `jax.jit` or under
+  `jax.grad` with respect to the wavelength, because the contrast test read
+  the cell back during the solve.  The test is now taken once, when the layer
+  is added.  Explicit `'li'` results are bit-identical.
+- **`PMMStack.prepare()` after a layout change** returned an O(1) wrong
+  answer; it is now refused (see above).
+- **The shared segment validator refuses a NaN or infinite width fraction.**
+  Both of its comparisons are False for a NaN, so the walls came out NaN; the
+  1-D PMM segment solvers and `RCWAStack.add_layer(segments=)` now refuse it
+  in one place.
+- **PMM mode selector** and the **dense per-layer path at a mode cut-off**
+  (see above).
+
+### Internal
+
+- One element-grading rule, `_graded_fractions` in
+  `lumenairy/elements/pmm/_core.py`, now serves the 1-D PMM family, the JAX
+  topology builder and the BOR sub-element mesh
+  (`lumenairy/elements/bor/bor_stack.py` and its traced twin), which carried
+  inline copies.  Uniform and Chebyshev layouts and every BOR mesh are
+  bit-identical.
+- One Redheffer-star formula and one propagation-star formula in
+  `lumenairy/elements/rcwa/_core.py` (`_star_from_blocks`,
+  `_propagation_scale`), parametrized over the array operations, as the
+  interface formula `_interface_from_ab` already was.  The dense kernels and
+  the elementwise ones of the uniform-layer fast path call them.  Byte-identical
+  on 46 solver outputs before and after.
+- One small-eigenvalue clamp (`_LAM_CLAMP` / `_safe_lam`) for the 1-D modal
+  solves, the JAX twin and the fast path.  One host-read tracer guard in
+  `lumenairy/elements/rcwa/stack.py` (`_host_array_or_none`, catching
+  `(TypeError, ValueError)`), so that module carries no broad `except`.
+- The wall-clock speed-up assertion of the fast path moved behind the `slow`
+  marker; an eigensolve-count test replaces it in the fast suite.
+- The sliver-guard test modules restore the previous selector through a
+  private module switch for their own scope, so the guard is still tested
+  against the population it was built for; a production-configuration test
+  was added.
+- History fingerprints re-recorded for `lumenairy/elements/pmm/_core.py`,
+  `lumenairy/elements/pmm/stack.py`, `lumenairy/elements/pmm/conical.py`,
+  `lumenairy/elements/pmm/oned.py`, `lumenairy/elements/pmm/stack2d.py`,
+  `lumenairy/elements/pmm/twod.py`, `lumenairy/elements/rcwa/stack.py` and
+  `lumenairy/elements/bor/bor_stack.py`.
+- The `[5.47.0]` block's source-line citations into the PMM files and
+  `lumenairy/elements/rcwa/_core.py` were re-anchored by content (with
+  scripts/reanchor_citations.py against the 5.50.1 base).
+
 ## [5.50.2] — 2026-11-13
 
 A housekeeping release.  The library code is unchanged from 5.50.1; only
@@ -7463,7 +7780,7 @@ fast path cannot fire there (both `A22` and `B11` are non-zero), so it was assem
 `2N x 2N` blocks -- twelve matrix products and TWO `_guarded_inverse` calls -- to use two of
 them on one or two columns.
 
-New `_redheffer_star_rt` (`lumenairy/elements/rcwa/_core.py:3114`) computes those two
+New `_redheffer_star_rt` (`lumenairy/elements/rcwa/_core.py:3139`) computes those two
 products directly.  With `D = (I - B11 A22)^-1`, `u = A21 c` and `z = D B11 u`, the
 push-through identity `(I - A22 B11)^-1 = I + A22 D B11` removes the second inverse
 outright and the star reduces to
@@ -7529,7 +7846,7 @@ and `pmm/twod_jones.py` fold their own cascades through it, and closing its last
 sources would move the PMM engines' last bits from inside the RCWA package.  Pinned by a
 test.
 
-Files: `lumenairy/elements/rcwa/_core.py:3114` (new `_redheffer_star_rt`), `:3019`,
+Files: `lumenairy/elements/rcwa/_core.py:3139` (new `_redheffer_star_rt`), `:3019`,
 `:5067` (`__all__`); `rcwa/oned.py:42,:721,:756,:1153`; `rcwa/twod.py:40,:1253,:1377,:2105,:2418`.
 Tests: `tests/unit/test_audit2609_b5_rcwa_eme_bor.py::test_d2_closed_form_matches_the_independent_star_oracle`,
 `::test_d2_closed_form_matches_the_oracle_on_the_metallic_chain`,
@@ -7748,27 +8065,27 @@ entry; both items are a docstring and two added tests.
 sweep, but `_tensor_layer_modes` rebuilt the per-axis projections
 (`_axis_projection` + `pinv`) and the `_proj` sandwiches at **every wavelength
 and every angle**, where the scalar branch cached them (finding **G10(d)**, P2;
-`lumenairy/elements/pmm/twod_jones.py:151`, `lumenairy/elements/pmm/stack2d.py:1188`).
+`lumenairy/elements/pmm/twod_jones.py:152`, `lumenairy/elements/pmm/stack2d.py:1208`).
 
 The source-free half of the assembly is now
 `twod_jones._tensor_projected_ops(ax, ay, x_walls, y_walls, tile_i, ox, oy,
 formulation)` -- the off-plane Schur fold and the three discretization branches
-**moved verbatim** (`lumenairy/elements/pmm/twod_jones.py:151`), returning
+**moved verbatim** (`lumenairy/elements/pmm/twod_jones.py:152`), returning
 `dict(kind, Gx0F, IpxF, Gy0F, IpyF, Cxx, Cxy, Cyx, Cyy, EZZ, oop)`.  `kind`
 names which axes carry a k0-free derivative part, which is exactly where the
 three branches differ: `'uniform'` has none and is `diag(k)` on both axes
-(`lumenairy/elements/pmm/twod_jones.py:210`); `'x'`/`'y'` (a separable cell) has
+(`lumenairy/elements/pmm/twod_jones.py:211`); `'x'`/`'y'` (a separable cell) has
 one, `kron(Iy, g1)/k0 + kx0*kron(Iy, ip1)` on the patterned axis and exact
 `diag(k)` on the wall-less one
-(`lumenairy/elements/pmm/twod_jones.py:289`, `:300`); `'xy'` (crossed) has both,
+(`lumenairy/elements/pmm/twod_jones.py:290`, `:301`); `'xy'` (crossed) has both,
 in the scalar branch's `Gx0F/k0 + kx0*Ip` shape
-(`lumenairy/elements/pmm/twod_jones.py:335`).  `_tensor_layer_modes` keeps its
-signature and gains `ops=` (`lumenairy/elements/pmm/twod_jones.py:374`);
+(`lumenairy/elements/pmm/twod_jones.py:336`).  `_tensor_layer_modes` keeps its
+signature and gains `ops=` (`lumenairy/elements/pmm/twod_jones.py:375`);
 handed one, it rebuilds `GxF`/`GyF` from `kind` with the same expression in the
-same order (`lumenairy/elements/pmm/twod_jones.py:415`) and goes straight to the
+same order (`lumenairy/elements/pmm/twod_jones.py:416`) and goes straight to the
 circular restriction, the fold gate, the block-eig gauge and the eig.
 `PMM2DStackHybrid` caches it beside the scalar `lops`
-(`lumenairy/elements/pmm/stack2d.py:1190`), on the FULL order box so one entry
+(`lumenairy/elements/pmm/stack2d.py:1210`), on the FULL order box so one entry
 serves both truncations (`keep` is applied at use, as `_restrict_lops` already
 did for the scalar branch).
 
@@ -7810,7 +8127,7 @@ non-vacuity guard that feeds a deliberately perturbed build through and
 requires the perturbation to come out the other side.
 
 One key change came with it: `_geom_key` now carries `formulation`
-(`lumenairy/elements/pmm/stack2d.py:610`).  The cached scalar `lops` never
+(`lumenairy/elements/pmm/stack2d.py:630`).  The cached scalar `lops` never
 depended on it (they carry every rule's operator side by side and the caller
 routes), but the cached tensor operators do -- `EZZ` is `inv([[1/e_zz]])` under
 `'li'` and the direct `[[e_zz]]` otherwise -- and `formulation` is a plain public
@@ -8355,13 +8672,13 @@ The RCWA, EME, PMM and BOR engines each resolve a square root's sign with a band
 relative to their own spectrum, and the comparison itself was written out four
 times.  It is now one function, `band_mask(r, *, scale, band, xp=None)`
 (`lumenairy/_branchcut.py:63`), called from `rcwa/_core.py:1406`,
-`eme/_branch.py:164`, `pmm/_core.py:828` and `bor/_orient.py:251`.  Each engine
+`eme/_branch.py:164`, `pmm/_core.py:1197` and `bor/_orient.py:251`.  Each engine
 keeps its own derived SCALE, because the four are different quantities: the
 Cartesian engines floor the spectrum's top at a dimensionless 1.0 while the EME
 and BOR engines carry a wavenumber and floor at `|k0|`, where a dimensionless
 literal would make the branch decision depend on the caller's unit system.
 
-The PMM band gains a name, `pmm/_core.py:795::_PMM_CUT_BAND_REL`, so the 1e-8 it
+The PMM band gains a name, `pmm/_core.py:1164::_PMM_CUT_BAND_REL`, so the 1e-8 it
 shares with `rcwa/_core._CUT_BAND_REL` is visible rather than inlined.
 
 ### Added -- two forward selectors, and the measurement that says they are not one
@@ -8460,7 +8777,7 @@ silently dropped (`hfpi.py:1082`).
 On an out-of-plane or slanted cell at normal incidence the even-parity fold
 probe ran the whole projected-operator assembly, answered `None` because the
 fold does not apply there, and the cascade then assembled it again.  The build
-is hoisted (`elements/pmm/twod_jones.py:1055`) and passed to both calls
+is hoisted (`elements/pmm/twod_jones.py:1062`) and passed to both calls
 (`:1058`, `:1074`).  `_tensor_layer_modes` only reads that dict, so one build
 serves both and the answer is bit-identical by construction.
 
@@ -8469,7 +8786,7 @@ serves both and the answer is bit-identical by construction.
 `__init__` refused an out-of-vocabulary value and then stored it as a plain
 attribute, so `st.formulation = 'fff_nv'` was ACCEPTED and read through an
 `== 'li'` test that a typo silently fails -- the stack behaved as `'laurent'`
-and said nothing.  The three are properties now (`elements/pmm/stack2d.py:471`,
+and said nothing.  The three are properties now (`elements/pmm/stack2d.py:472`,
 `:467`, `:476`) sharing one vocabulary with the constructor
 (`_check_formulation` `:91`, `_check_cascade` `:103`, `_symmetry_on`), and
 `st.symmetry = 'auto'` resolves to `True` on assignment exactly as the
