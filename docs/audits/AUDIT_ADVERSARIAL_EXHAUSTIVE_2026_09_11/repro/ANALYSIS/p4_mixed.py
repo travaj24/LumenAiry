@@ -1,6 +1,6 @@
 """ANALYSIS probe 4: SH wavefront recon, beam_stats, detector, GS error scale, EE."""
 import sys, warnings, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.analysis.detector import shack_hartmann, apply_detector
 from lumenairy.analysis.beam_stats import M2, beam_d4sigma, beam_centroid, beam_diameter
 from lumenairy.analysis.psf_mtf_otf import encircled_energy_radius, encircled_energy_curve, compute_psf

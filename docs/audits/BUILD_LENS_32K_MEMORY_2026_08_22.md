@@ -882,7 +882,7 @@ Not in git, in the scratchpad: `_d121_fix.py` (the shared design-121 fixture),
 The 4.5-hour N = 32768 run is deliberately NOT started here.  To start it:
 
 ```bash
-cd d:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Reverse_Symmetric_ASM
+cd <workspace>/Python_Test_Scripts/Free_Space_Optics/Reverse_Symmetric_ASM
 # PYTHONPATH IS NOT ENOUGH -- see the note below.
 export LUMENAIRY_ROOT=C:/tmp/lum_mm
 export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 OPENBLAS_NUM_THREADS=8

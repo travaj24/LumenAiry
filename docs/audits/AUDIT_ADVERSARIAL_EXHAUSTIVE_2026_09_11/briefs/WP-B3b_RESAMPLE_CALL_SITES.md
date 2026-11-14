@@ -1,6 +1,6 @@
 # WP-B3b (Wave 4, follow-up to WP-B3) -- the K6 call sites: `system.py`'s Fresnel and SAS legs and `_lens_real.py`'s gap legs
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B3 (commit 284daccc) added
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B3 (commit 284daccc) added
 `resample_field(method='chirpz')` and `fresnel_propagate_mft` is available; WP-B2 (the newest `_lens_real.py` commit) has released that file.  Other
 Wave-4 engineers are editing `lumenairy/elements/lenses_maslov.py` + `lumenairy/propagators/asymptotic*.py`, `lumenairy/propagators/carrier.py` +
 `carrier_field.py`, `lumenairy/elements/rcwa/*`, `eme/*`, `bor/*`, `lumenairy/elements/pmm/*`, `lumenairy/analysis/*`, `lumenairy/sources/*`,
@@ -28,7 +28,7 @@ and `WP-A5_REPORT.md` section 6 item 3 (K6).
    propagates in glass so it lands in the converging direction more often -- report how often on the covering-array fixtures.
 
 For each: byte-identity where the gate selects the spline (prove it against `git archive <HEAD>^ lumenairy` extracted READ-ONLY into your scratch
-directory under `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b3b\`,
+directory under `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b3b\`,
 child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted, never through pytest), and an oracle-refereed improvement where it
 selects chirp-Z or the direct MFT (the direct Fresnel evaluation, or a band-limited ASM at the same pitch, is the reference).
 

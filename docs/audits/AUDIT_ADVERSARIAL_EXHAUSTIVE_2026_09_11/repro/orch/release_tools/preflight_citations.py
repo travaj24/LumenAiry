@@ -16,7 +16,7 @@ Usage: python preflight_citations.py [--fix] [--only WP-A6_CHANGELOG.md ...]
 """
 import re, subprocess, sys, pathlib
 
-REPO = pathlib.Path("D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+REPO = pathlib.Path(__import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..", "..")))
 FIX = REPO / "docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes"
 CIT = re.compile(r"(?<![\w/.-])((?:[\w.-]+/)*[\w-]+\.py):(\d+)(?:-(\d+))?(?![\w.-]*/)")
 TRIVIAL = re.compile(r"^\s*(?:[\)\]\}]+,?|pass|continue|break|return|\.\.\.|)\s*$")

@@ -1,6 +1,6 @@
 # PMM-2D audit — the 2-D Polynomial Modal Method (hybrid + staggered + stacks + JAX twins)
 
-Repo `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, branch `main`,
+Repo `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, branch `main`,
 HEAD `a1ff1e6e` (v5.45.1). Python 3.14 / numpy 2.4.6 / scipy 1.17.1 / jax 0.10.1 (CPU).
 All repro scripts and logs:
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/PMM-2D/`.

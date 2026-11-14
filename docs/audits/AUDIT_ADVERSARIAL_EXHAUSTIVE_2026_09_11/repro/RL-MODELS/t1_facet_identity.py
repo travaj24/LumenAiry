@@ -7,7 +7,7 @@ referenced between two fixed planes z=0 (in) and z=Z (out).
 """
 import numpy as np
 import sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements._lens_real import _facet_axial_momenta
 
 rng = np.random.default_rng(7)

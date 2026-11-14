@@ -1,6 +1,6 @@
 """Probe 4: absorption=True -- amplitude factor, path length, kappa source."""
 import sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import numpy as np
 from lumenairy.elements._lens_real import apply_real_lens
 from lumenairy.glass import (get_glass_index, get_glass_index_complex,

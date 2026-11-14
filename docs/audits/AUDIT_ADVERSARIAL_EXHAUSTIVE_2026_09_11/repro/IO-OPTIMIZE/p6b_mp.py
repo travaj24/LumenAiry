@@ -1,12 +1,12 @@
 import os, sys, shutil
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 TMP = r"docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/IO-OPTIMIZE/stor"
 os.makedirs(TMP, exist_ok=True)
 import numpy as np
 
 def worker(args):
     path, wid, n = args
-    sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
     from lumenairy.io import storage as S
     E = np.full((8, 8), wid + 0j, dtype=np.complex128)
     ok = 0

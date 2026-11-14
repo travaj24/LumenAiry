@@ -1,6 +1,6 @@
 # TR-MAIN-1 audit — `apply_real_lens_traced` first half (validation / delegation / amplitude legs / launch grid / trace / fits / Newton call)
 
-Repo: `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`
+Repo: `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`
 All repro scripts under `…/scratchpad/TR-MAIN-1/`. Nothing in the repo was modified.
 
 ## Scope read (files + line ranges actually read; what I did NOT get to)

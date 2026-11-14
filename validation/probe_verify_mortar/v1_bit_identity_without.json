@@ -103,7 +103,7 @@
   "b_d1.31_N5_M4_t0.500_stiff_eps": "3163d894071f56ca4c6fed4da88c7d36ff7be582bf245ac321d220ac4e3e9105",
   "b_d1.31_N5_M4_t0.500_stiff_tt": "f5d0a5e8643ffdd1d401adbc672435f685609b660a38f2a58890fdbd8552f9a0"
  },
- "lumenairy": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy\\lumenairy\\__init__.py",
+ "lumenairy": "<workspace>\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy\\lumenairy\\__init__.py",
  "numpy": "2.4.4",
  "pencil": {
   "p_2x2_M5_gyro_Agen": "None",

@@ -7,7 +7,7 @@ import threading
 import warnings
 import numpy as np
 
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as la  # noqa: E402
 from lumenairy.propagators.mhs import (  # noqa: E402
     HuygensSurface, MhsSubdomain, MhsPipeline, asm_subdomain,

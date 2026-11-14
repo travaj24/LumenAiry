@@ -29,9 +29,9 @@ RESULTS.mkdir(exist_ok=True)
 
 FIX_ROOTS = (str(pathlib.PureWindowsPath("C:/tmp/lum_hyb")),
              "C:/tmp/lum_hyb", "/mnt/c/tmp/lum_hyb")
-_BASE = "D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+_BASE = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 BASE_ROOTS = (str(pathlib.PureWindowsPath(_BASE)), _BASE,
-              "/mnt/d/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics"
+              "<workspace>/Python_Test_Scripts/Free_Space_Optics"
               "/Lumenairy")
 
 

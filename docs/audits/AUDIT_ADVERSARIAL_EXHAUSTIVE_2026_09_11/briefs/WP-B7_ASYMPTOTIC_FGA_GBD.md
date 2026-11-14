@@ -1,6 +1,6 @@
 # WP-B7 (Wave 4) -- the asymptotic family: Y4 performance, the FGA-vs-phase_screen convergence question, the uniform asymptotics (Pearcey / fold Airy) behind `integration_method='uniform'`, GBD kernel clipping (S9)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the newest commit; WP-B1's
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD is the newest commit; WP-B1's
 Maslov S6 work has landed in `lenses_maslov.py` and `asymptotic*.py` -- read its report `fixes/WP-B1_REPORT.md` first, and do not undo it).  Other
 Wave-4 engineers and verifiers are editing `lumenairy/elements/_lens_real.py`, `lens_config.py`, `_lens_traced.py`, `lumenairy/propagators/carrier.py`,
 `carrier_field.py`, `system.py`, `hf.py`, `hfpi.py`, `rs.py`, `mft.py`, `lumenairy/elements/rcwa/*`, `eme/*`, `bor/*`, `pmm/*`, `lumenairy/analysis/*`,
@@ -95,7 +95,7 @@ raise), and one derived test should pin that an aspheric prescription reaches th
 Implementation with the sec. 2 prefix on every new validation; oracles the library did not produce; derived envelopes in a new
 `tests/unit/test_audit2609_b7_asymptotic_family.py` (S5; no wall-clock assertions -- operation counts, evaluation counts, peak-memory measurements
 reported); stated fail-befores; byte-identity proofs against `git archive <HEAD>^ lumenairy` extracted READ-ONLY into your scratch directory under
-`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b7\`
+`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b7\`
 (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest); wall-clock medians of interleaved runs reported.
 Re-record every history document you touch.  Report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B7_REPORT.md` (summary table:
 item / status / files:lines / tests / oracle / measured before -> after; sections; files touched; tests run; requested changes outside your

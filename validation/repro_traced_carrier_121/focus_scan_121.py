@@ -65,8 +65,8 @@ import numpy as np
 warnings.filterwarnings('ignore', message='.*prescription aperture.*')
 warnings.filterwarnings('ignore', message='.*residual transverse.*')
 warnings.filterwarnings('ignore', message='.*under-sampled.*')
-sys.path.insert(0, r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy")
-sys.path.insert(0, r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")))
+sys.path.insert(0, r"<workspace>\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM")
 import lumenairy as la
 from lumenairy import GLASS_REGISTRY, GLASS_VALIDITY, SELLMEIER_COEFFICIENTS
 from lumenairy.propagators.mft import angular_spectrum_propagate_mft
@@ -74,9 +74,9 @@ from lumenairy.propagators.mft import angular_spectrum_propagate_mft
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _grid_intent as gi        # noqa: E402  (import-safe: no module body work)
 
-RUNNER = (r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics"
+RUNNER = (r"<workspace>\Python_Test_Scripts\Free_Space_Optics"
           r"\Reverse_Symmetric_ASM\run_poc_119_120_v518.py")
-ZMX = (r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics"
+ZMX = (r"<workspace>\Python_Test_Scripts\Free_Space_Optics"
        r"\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx")
 lam = 1.31e-6
 w0 = 4e-6

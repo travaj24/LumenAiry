@@ -1,6 +1,6 @@
 """cite_ctx.py CHANGELOG_NAME TOKEN [RESOLVED_PATH] -- show reference content of a cited range and where it sits now."""
 import subprocess, sys, pathlib, re
-REPO = pathlib.Path("D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+REPO = pathlib.Path(__import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..", "..")))
 FIX = "docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/"
 def git(*a):
     return subprocess.run(["git", *a], cwd=REPO, capture_output=True).stdout.decode("utf-8", "replace")

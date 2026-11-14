@@ -1,7 +1,7 @@
 """Do the `code refs` in README/docs still resolve? (random sample, seed 0)"""
 import os, re, random, importlib
 
-ROOT = r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 import sys
 sys.path.insert(0, ROOT)
 import lumenairy as lm

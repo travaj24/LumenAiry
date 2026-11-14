@@ -1,6 +1,6 @@
 # WP-A26 -- the traced lens's DECENTRED exit wavefront regressed at WP-A1 (ray tracing): 2 urad -> 44 urad against a decentre-invariant analytic oracle, on axis unchanged
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy` (branch `audit-fixes-2026-09`,
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy` (branch `audit-fixes-2026-09`,
 HEAD 6345d99d).  Another engineer (WP-A25) is editing `lumenairy/propagators/carrier.py`, `docs/history/carrier.md`
 and `tests/unit/test_audit2609_a25_carrier_focus_readout.py` right now -- do not touch those.
 
@@ -49,7 +49,7 @@ mechanism.
 
 1. **Diagnose with measurements.**  Reproduce with the test module's helpers (import it by path; call `_apply`,
    `_exit_slope_rms`, `_bfd_by_inline_raytrace`).  Extract the pre-A1 library read-only (`git archive 0067d63b
-   lumenairy` into `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\a26\`; never check out or stash) and compare the decentred exit
+   lumenairy` into `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\a26\`; never check out or stash) and compare the decentred exit
    OPD MAPS (not just the RMS) before and after: is the difference a tilt, a defocus, a decentre-dependent
    offset, a launch-lattice change?  Then attribute it to ONE of A1's sub-changes by neutralising them one at a
    time in-process (monkeypatch / flag) or by reading which raytrace helpers `_lens_traced.py` calls on this path.

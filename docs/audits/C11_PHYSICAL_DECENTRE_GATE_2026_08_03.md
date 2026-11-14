@@ -92,7 +92,7 @@ red is reported as unexplained rather than guessed at.
 
 | | |
 |---|---|
-| repo | `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy` |
+| repo | `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy` |
 | branch / base | `feat/d121-final-closure`, `5af1edf` |
 | `lumenairy` | 5.32.0 |
 | `_lens_traced.py` BEFORE | `34ef5a9d95279b8f` (the C10 hash) |

@@ -1,6 +1,6 @@
 """Downstream OPD impact of the n1 double-count on carrier='auto' / ndarray."""
 import numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements._lens_real import _screen_obliquity_delta, _facet_axial_momenta
 from lumenairy.elements.lenses import surface_sag_general as sg
 lam=0.55e-6

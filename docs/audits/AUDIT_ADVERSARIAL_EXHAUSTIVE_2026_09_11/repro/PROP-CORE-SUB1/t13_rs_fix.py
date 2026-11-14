@@ -7,7 +7,7 @@ samples it) instead of to FFT(h) after the damage is done.
 import sys
 import numpy as np
 from scipy.special import j0
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators.rs import rayleigh_sommerfeld_propagate
 from lumenairy.propagators.asm import angular_spectrum_propagate
 

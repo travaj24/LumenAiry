@@ -1,6 +1,6 @@
 # RCWA-EME-BOR audit — `lumenairy/elements/rcwa`, `elements/eme`, `elements/bor`
 
-Repo at `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`,
+Repo at `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`,
 branch `main`, v5.45.1, HEAD `a1ff1e6e`. All probe scripts and raw output under
 `…/scratchpad/RCWA-EME-BOR/` (`oracle1d.py`, `tmm.py`, `p01`–`pL`).
 

@@ -4,7 +4,7 @@ You are one of several Opus engineers implementing the findings of the 2026-09-1
 Lumenairy optics library. Work carefully and exhaustively; verify everything by MEASUREMENT.
 
 ## Where things are
-- Repository: `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy` (git branch
+- Repository: `<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy` (git branch
   `audit-fixes-2026-09`, already checked out — do not switch branches).
 - The audit report (consolidated): `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md`. Finding rows are
   identified by letter+number (L12, K16, G5, …); each row gives Where / Evidence / Fix.

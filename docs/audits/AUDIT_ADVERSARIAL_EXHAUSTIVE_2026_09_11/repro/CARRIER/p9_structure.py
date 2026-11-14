@@ -1,6 +1,6 @@
 """Probe 9: structural census of carrier.py / carrier_field.py."""
 import io, sys, tokenize, ast, collections
-BASE = r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy/lumenairy/propagators/"
+BASE = __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..", "lumenairy", "propagators"))
 for fn in ("carrier.py", "carrier_field.py"):
     path = BASE + fn
     src = open(path, encoding='utf-8').read()

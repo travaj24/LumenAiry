@@ -1,7 +1,7 @@
 """RAYTRACE probe 1b: corrected stable root + the h>|R| conic false-miss."""
 import sys
 import numpy as np
-sys.path.insert(0, r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy')
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.raytrace.surface import Surface, RayBundle
 from lumenairy.raytrace.intersection import _intersect_surface
 from lumenairy.raytrace import trace, make_fan, make_ray

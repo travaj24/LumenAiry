@@ -54,7 +54,7 @@ Two structural blind spots the fix audit does not name are documented in S4.4.
 | threads | `OMP/OPENBLAS/MKL_NUM_THREADS = 1` | same |
 
 The pre-fix ("without") arm is the **READ-ONLY main clone**
-`D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, now at
+`<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, now at
 `a68a0da` (5.44.0 candidate). I verified independently, not by reading the fix
 audit, that its `lumenairy/elements/pmm/{stack,_core,conical,oned,_jax_stack,
 twod,stack2d}.py` are byte-identical (modulo line endings) to this branch's

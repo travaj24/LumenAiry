@@ -9,7 +9,7 @@ repaired at `6454f68`.
 Worktree `C:/tmp/lum_vmag`, branch `verify/magnetic`, started from `5c384e5`,
 merged (fast-forward) to `6454f68` mid-verification -- see Section 0.1.
 Reference arm: the READ-ONLY main clone
-`D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy` at
+`<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy` at
 `fb3fd93` (= 5.43.0 + one backend commit).
 
 Machine: Windows 11, py3.14.6, numpy 2.4.4,

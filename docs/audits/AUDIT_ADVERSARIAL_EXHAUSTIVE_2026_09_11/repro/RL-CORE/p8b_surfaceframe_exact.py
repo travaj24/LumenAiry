@@ -1,7 +1,7 @@
 """Probe 8b: exact field-frame height of a RIGID-BODY rotated sphere vs what
 surface_frame=True evaluates.  Pure geometry -- no ray trace needed."""
 import sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import numpy as np
 from lumenairy.elements.lenses import surface_sag_general as sg
 lam = 632.8e-9; n = 1.5150891983370924

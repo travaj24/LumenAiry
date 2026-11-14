@@ -1,6 +1,6 @@
 """Probe 17: _math/chebyshev vs numpy.polynomial; _math/levin vs brute force."""
 import numpy as np, sys, time
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from numpy.polynomial import chebyshev as C
 from lumenairy._math.chebyshev import (chebyshev_vandermonde as V,
                                        chebyshev_derivative_vandermonde as Vd,

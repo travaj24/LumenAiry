@@ -450,12 +450,12 @@ document.  Listed so the orchestrator can see the partition is complete:
 
    ```python
    src_path = REPO_ROOT / header["module"]
-   dotted = ".".join(src_path.with_suffix("").parts)      # <- D:\.Metacept.Neurophos...
+   dotted = ".".join(src_path.with_suffix("").parts)      # <- <workspace>...
    assert name in (src_path.stem, dotted)
    ```
 
    so the comparison value is
-   `D:\.Metacept.Neurophos.Python_Test_Scripts.Free_Space_Optics.Lumenairy.lumenairy.elements.pmm.stack`.
+   `<workspace>.Python_Test_Scripts.Free_Space_Optics.Lumenairy.lumenairy.elements.pmm.stack`.
    The fix is to derive it from the RELATIVE path in the header:
 
    ```python

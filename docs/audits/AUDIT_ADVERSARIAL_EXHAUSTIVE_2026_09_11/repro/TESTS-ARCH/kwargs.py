@@ -1,7 +1,7 @@
 """Extract apply_real_lens-family signatures and check which kwargs the test corpus exercises."""
 import ast, os, re, json, collections
 
-ROOT = r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 TESTS = os.path.join(ROOT, "tests")
 
 TARGETS = {

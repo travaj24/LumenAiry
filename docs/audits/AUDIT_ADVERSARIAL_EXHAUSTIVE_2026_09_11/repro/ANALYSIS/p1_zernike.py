@@ -1,6 +1,6 @@
 """ANALYSIS probe 1: Zernike indexing, normalisation, orthogonality, fitting."""
 import sys, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.analysis.zernike import (
     zernike_index_to_nm, zernike_nm_to_index, zernike_polynomial,
     zernike_basis_matrix, zernike_decompose, zernike_reconstruct,

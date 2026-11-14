@@ -1,6 +1,6 @@
 import sys, numpy as np
 sys.path.insert(0, r"docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/UI/stub")
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import numpy as np
 from lumenairy.ui.model import SystemModel, Element, SurfaceRow
 from lumenairy.raytrace import system_abcd, find_paraxial_focus

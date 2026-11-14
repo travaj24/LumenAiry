@@ -1,5 +1,5 @@
 import warnings, numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 warnings.simplefilter('ignore')
 from lumenairy.propagators.propagation import rayleigh_sommerfeld_propagate, angular_spectrum_propagate
 wl=633e-9; w0=6e-6

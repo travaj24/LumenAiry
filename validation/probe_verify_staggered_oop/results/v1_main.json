@@ -1,6 +1,6 @@
 {
- "root": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy",
- "lumenairy": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy\\lumenairy\\__init__.py",
+ "root": "<workspace>\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy",
+ "lumenairy": "<workspace>\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy\\lumenairy\\__init__.py",
  "version": "5.42.1",
  "has_tensor_entry": false,
  "python": "3.14.6",

@@ -1,5 +1,5 @@
 import numpy as np, sys, warnings
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as lu
 from lumenairy.sources.core import (create_gaussian_beam, create_hermite_gauss,
     create_laguerre_gauss, create_tilted_plane_wave, create_point_source,

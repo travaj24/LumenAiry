@@ -2,7 +2,7 @@
 because the canonical map is fitted at the last-surface SAG?  Compare exit-plane phase vs traced
 for a curved-exit biconvex singlet and a flat-exit plano-convex singlet of the same power."""
 import warnings, time, numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements import apply_real_lens, apply_real_lens_traced, apply_real_lens_maslov
 from lumenairy.elements.lenses import surface_sag_general
 wl = 1.0e-6; k0 = 2*np.pi/wl; N = 512; dx = 14e-6; ap = 5e-3

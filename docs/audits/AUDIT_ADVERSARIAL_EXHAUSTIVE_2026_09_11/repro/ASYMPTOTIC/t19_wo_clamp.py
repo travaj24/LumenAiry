@@ -3,7 +3,7 @@ the JAX twin does not.  The docstrings claim the two are identical
 'character for character' / the documented cross-backend contract."""
 import sys, math
 import numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import jax; jax.config.update('jax_enable_x64', True)
 import lumenairy as lm
 from lumenairy.propagators.asymptotic import (

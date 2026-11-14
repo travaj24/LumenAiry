@@ -1,6 +1,6 @@
 """Physical consequence: where does the beam focus with/without seidel_correction?"""
 import warnings, numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements import apply_real_lens
 from lumenairy.propagators.propagation import angular_spectrum_propagate
 from lumenairy.raytrace import surfaces_from_prescription, system_abcd

@@ -4,7 +4,7 @@ import sys
 import warnings
 import numpy as np
 
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators.hfpi import (  # noqa: E402
     init_paths_from_field, propagate_to_plane, apply_aperture_diffraction,
     accumulate_to_grid, propagate_hfpi_freespace_aperture)

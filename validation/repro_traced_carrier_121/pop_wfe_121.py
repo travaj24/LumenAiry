@@ -25,7 +25,7 @@ import sys
 
 import numpy as np
 
-ZMX = (r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics"
+ZMX = (r"<workspace>\Python_Test_Scripts\Free_Space_Optics"
        r"\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx")
 
 

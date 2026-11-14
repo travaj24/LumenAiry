@@ -1,4 +1,4 @@
-lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+lumenairy 5.32.0 @ <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
   _lens_traced.py 9717ad88dd959889
   carrier.py 5a1b0d1021969df1
 
@@ -42,4 +42,4 @@ lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\L
     5   89.0209  -0.9404   99.4890  -0.2971    3.426    2.5116   69425   [76s]
     6   89.8285  +0.8076   99.6626  +0.1736    3.383    0.1797   46225   [63s]
 
-saved D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_rc_ng.npz
+saved <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_rc_ng.npz

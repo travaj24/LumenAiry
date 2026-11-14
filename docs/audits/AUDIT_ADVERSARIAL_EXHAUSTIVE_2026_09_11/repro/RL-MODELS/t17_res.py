@@ -2,7 +2,7 @@
 HARD-CODED 181x181 scattered ray set (n_side=181), so its transverse
 resolution is independent of N."""
 import numpy as np, sys, time
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements._lens_real import apply_real_lens
 lam=0.55e-6
 N=1024; dx=4e-6; ap=2.0e-3

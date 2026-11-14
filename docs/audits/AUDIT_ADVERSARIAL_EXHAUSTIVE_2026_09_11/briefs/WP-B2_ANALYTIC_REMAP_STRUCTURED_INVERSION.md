@@ -1,6 +1,6 @@
 # WP-B2 (Wave 4) -- analytic lens L9: invert the displaced remap on its structured launch grid, then raise the lattice
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD 81d5b586
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD 81d5b586
 (= release 5.46.0, Wave 3 closed).  Two other Wave-4 engineers are working concurrently on `lumenairy/elements/lenses_maslov.py` and
 the asymptotic modules (WP-B1) and on `lumenairy/propagators/hf.py` / `hfpi.py` (WP-B3); never touch those files.
 

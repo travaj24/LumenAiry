@@ -1,6 +1,6 @@
 === ARM WSL requested_coretype=NONE threads=4
 === cwd=/mnt/c/tmp/lum_vbor
-fatal: not a git repository: /mnt/c/tmp/lum_vbor/D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy/.git/worktrees/lum_vbor
+fatal: not a git repository: /mnt/c/tmp/lum_vbor/<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy/.git/worktrees/lum_vbor
 === git: 
 === started 2026-09-11T08:35:46Z
 LIBFILE /mnt/c/tmp/lum_vbor/lumenairy/__init__.py

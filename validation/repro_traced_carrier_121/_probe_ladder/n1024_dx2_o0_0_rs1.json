@@ -69,11 +69,11 @@
   "messages": [
    {
     "cat": "UserWarning",
-    "msg": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Reverse_Symmetric_ASM\\tx4designstudy121\\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_"
+    "msg": "<workspace>\\Python_Test_Scripts\\Free_Space_Optics\\Reverse_Symmetric_ASM\\tx4designstudy121\\20260707 dll Tx02-MSOP16.zmx: Zemax surface 9 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -4, azimuth 0.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / apply_"
    },
    {
     "cat": "UserWarning",
-    "msg": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Reverse_Symmetric_ASM\\tx4designstudy121\\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / app"
+    "msg": "<workspace>\\Python_Test_Scripts\\Free_Space_Optics\\Reverse_Symmetric_ASM\\tx4designstudy121\\20260707 dll Tx02-MSOP16.zmx: Zemax surface 11 is a DGRATING.  Its GEOMETRY is imported as the flat/conic surface it is, and its grating data (period 113.7656 um, design order -2, azimuth 270.0 deg) is attached at prescription['diffractives'] -- but NO diffraction is applied by apply_real_lens / app"
    },
    {
     "cat": "RuntimeWarning",

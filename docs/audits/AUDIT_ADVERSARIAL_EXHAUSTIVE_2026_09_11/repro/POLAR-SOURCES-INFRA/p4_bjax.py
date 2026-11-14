@@ -1,6 +1,6 @@
 import os, numpy as np, sys
 os.environ.setdefault("JAX_ENABLE_X64","1")
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import jax, jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from lumenairy.elements.berreman import berreman_jones_1d

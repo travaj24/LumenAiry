@@ -79,8 +79,8 @@ warnings.filterwarnings('ignore', message='.*residual transverse.*')
 warnings.filterwarnings('ignore', message='.*under-sampled.*')
 warnings.filterwarnings('ignore', message='.*decentre_fit_frac.*')
 warnings.filterwarnings('ignore', message='.*DGRATING.*')
-sys.path.insert(0, r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy")
-sys.path.insert(0, r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")))
+sys.path.insert(0, r"<workspace>\Python_Test_Scripts\Free_Space_Optics\Reverse_Symmetric_ASM")
 
 import lumenairy as la
 from lumenairy import GLASS_REGISTRY, GLASS_VALIDITY, SELLMEIER_COEFFICIENTS
@@ -94,9 +94,9 @@ from lumenairy.raytrace.trace import _make_bundle, surfaces_from_prescription
 if os.environ.get('PRE_D7') == '1':
     _LT._DECENTRED_FIT_POLY_ORDER = 6
 
-RUNNER = (r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics"
+RUNNER = (r"<workspace>\Python_Test_Scripts\Free_Space_Optics"
           r"\Reverse_Symmetric_ASM\run_poc_119_120_v518.py")
-ZMX = (r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics"
+ZMX = (r"<workspace>\Python_Test_Scripts\Free_Space_Optics"
        r"\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx")
 
 # --- Schott glasses the 121 design uses, parsed out of the runner ----------

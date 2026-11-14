@@ -1,7 +1,7 @@
 """For every modified lumenairy/**/*.py: the multiset of import bindings (module, level, name, asname)
 must be unchanged, and the AST with import statements removed must be identical to HEAD."""
 import ast, subprocess, sys, pathlib
-REPO = pathlib.Path("D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+REPO = pathlib.Path(__import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..", "..")))
 class Strip(ast.NodeTransformer):
     def __init__(self): self.binds = []
     def visit_Import(self, node):

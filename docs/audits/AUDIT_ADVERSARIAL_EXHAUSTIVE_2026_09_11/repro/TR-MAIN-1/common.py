@@ -1,6 +1,6 @@
 import os, sys, warnings
 import numpy as np
-REPO = r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 

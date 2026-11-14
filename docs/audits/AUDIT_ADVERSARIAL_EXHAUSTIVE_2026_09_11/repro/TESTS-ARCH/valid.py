@@ -1,7 +1,7 @@
 """validation/ oracle independence + conftest fixture audit + docs census."""
 import ast, os, re, collections
 
-ROOT = r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 
 
 def rel(p):

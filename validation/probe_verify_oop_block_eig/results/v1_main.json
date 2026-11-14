@@ -1,6 +1,6 @@
 {
  "arm": "main",
- "lumenairy": "d:/metacept/neurophos/python_test_scripts/free_space_optics/lumenairy/lumenairy/__init__.py",
+ "lumenairy": "<workspace>/python_test_scripts/free_space_optics/lumenairy/lumenairy/__init__.py",
  "version": "5.43.0",
  "numpy": "2.4.4",
  "rows": {

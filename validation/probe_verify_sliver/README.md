@@ -29,7 +29,7 @@ wsl.exe -e bash -lc "cd /mnt/c/tmp/lum_vsliver && \
 The PRE-FIX arm is the READ-ONLY main clone; run the same script with
 
 ```
-cd /c/tmp && PYTHONPATH="D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy" \
+cd /c/tmp && PYTHONPATH="<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy" \
   python /c/tmp/lum_vsliver/validation/probe_verify_sliver/v1_bitid.py <out.json> "D:/Metacept"
 ```
 

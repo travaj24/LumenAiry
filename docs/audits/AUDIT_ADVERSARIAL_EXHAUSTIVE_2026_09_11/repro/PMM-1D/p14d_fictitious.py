@@ -5,7 +5,7 @@ jump is a reconstruction error in internal_field, not physics.
 """
 import sys, warnings
 import numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements.pmm import PMMStack
 
 per, wl = 0.8e-6, 1.0e-6

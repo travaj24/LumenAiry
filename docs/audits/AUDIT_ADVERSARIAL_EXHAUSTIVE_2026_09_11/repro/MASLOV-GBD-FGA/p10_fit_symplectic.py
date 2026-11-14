@@ -1,7 +1,7 @@
 """Probe 10: Maslov canonical-map fit -- conditioning, and the symplectic
 identities dOPD/ds2 = n2*v2 - n1*v1.ds1/ds2 and dOPD/dv2 = -n1*v1.ds1/dv2."""
 import numpy as np, sys, warnings
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as la
 from lumenairy import raytrace as rt
 from lumenairy.elements.lenses import (_multi_indices_total_degree, _fit_normaliser)

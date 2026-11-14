@@ -1,5 +1,5 @@
 import sys, time
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import numpy as np, lumenairy as la
 import lumenairy.optimize.core as _core
 tmpl = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=10e-3)

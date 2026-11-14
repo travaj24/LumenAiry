@@ -1,6 +1,6 @@
 # WP-B12 -- the FGA reference plane: `ray_transfer_jacobian`'s state is on the last surface, `fga.py` treats it as the exit-vertex plane
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD = the 5.47.0 release commit (the top of `CHANGELOG.md`; 5.47.0 closed).
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD = the 5.47.0 release commit (the top of `CHANGELOG.md`; 5.47.0 closed).
 You own `lumenairy/propagators/fga.py`, `lumenairy/raytrace/differential.py` (its docstring only unless you find the primitive itself wrong),
 the test files that pin FGA fields and routes (`tests/unit/test_fga.py`, `test_fga_h4_h5.py`, `test_g1_gate_generality.py`,
 `test_niche_audit_w9_dispatch2.py`, `test_niche_p8_capstone.py`, `test_niche_p7_seidel_gate.py`, `test_audit2609_a4_fga_s10.py`,

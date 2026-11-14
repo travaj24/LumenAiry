@@ -1,6 +1,6 @@
 """Probe 7: odd-N centring consistency; complex64 preservation; dead code."""
 import sys, warnings, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy.propagators.carrier as C
 from lumenairy.propagators.carrier import (
     propagate_carrier_referenced, carrier_referenced_reconstruct,

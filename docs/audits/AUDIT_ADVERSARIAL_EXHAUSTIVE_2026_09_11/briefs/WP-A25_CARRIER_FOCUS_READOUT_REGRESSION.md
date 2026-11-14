@@ -1,6 +1,6 @@
 # WP-A25 -- the traced-carrier chain's paraxial focus readout regressed at WP-A6 (C1): an unclipped Gaussian doublet lost half its focal power
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy` (branch `audit-fixes-2026-09`,
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy` (branch `audit-fixes-2026-09`,
 HEAD 6c83ac91 = release 5.46.0, plus a few uncommitted test fixes in the working tree that are NOT yours: leave
 `lumenairy/memory.py`, `lumenairy/elements/lens_config.py`, `tests/unit/test_audit_v5_24_2_g07_dedup.py`,
 `tests/unit/test_niche_r3_gbd_mem_lstsq.py`, `tests/unit/test_perf_v4_12_0_asymptotic.py`,

@@ -112,9 +112,9 @@
 > side — it is NOT requested here. The request is PMM-family parity with that surface.
 
 All file:line anchors relative to
-`d:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\`.
+`<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\`.
 Consumer anchors relative to DynaMeta
-(`d:\Metacept\Neurophos\Python_Test_Scripts\DynaMeta`), branch `fix/deep-audit-2026-07-05`.
+(`<workspace>\Python_Test_Scripts\DynaMeta`), branch `fix/deep-audit-2026-07-05`.
 
 ---
 

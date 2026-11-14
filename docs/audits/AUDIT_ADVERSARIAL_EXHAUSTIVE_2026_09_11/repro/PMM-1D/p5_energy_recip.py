@@ -3,7 +3,7 @@ grating.  Also TE/TM labelling cross-check against the library's own RCWA.
 """
 import sys, os
 import numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 np.set_printoptions(precision=12, suppress=False, linewidth=200)
 from lumenairy.elements.pmm import pmm_efficiency_1d
 from lumenairy.elements.rcwa import rcwa_efficiency_1d

@@ -1,7 +1,7 @@
 """ANALYSIS probe 11: is trace(...).image_rays.opd a true OPL?  Independent
 geometric recomputation from the ray history."""
 import sys, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as la
 from lumenairy.raytrace import surfaces_from_prescription, system_abcd, trace
 from lumenairy.raytrace.core import _make_bundle

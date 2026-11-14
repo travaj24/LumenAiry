@@ -1,6 +1,6 @@
 # WP-B8 (Wave 4) -- analysis and sources: the performance designs WP-A7 and WP-A11 deferred, MFT-based PSF sampling (audit sec. 15.9), Gori pseudo-modes for Schell sources
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD 284daccc or later).  Other
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09` (HEAD 284daccc or later).  Other
 Wave-4 engineers are concurrently editing `lumenairy/elements/lenses_maslov.py` + `lumenairy/propagators/asymptotic*.py`, `lumenairy/elements/_lens_real.py`
 + `lens_config.py`, `lumenairy/propagators/carrier.py` + `carrier_field.py`, `lumenairy/propagators/hf.py`, `hfpi.py`, `rs.py`, `mft.py`,
 `lumenairy/elements/rcwa/*`, `eme/*`, `bor/*`, `lumenairy/elements/pmm/*`, and (WP-B9) `lumenairy/raytrace/*`; never touch any of those.  You CONSUME
@@ -47,7 +47,7 @@ section 6 (items 1-3), their changelogs and verify reports, and the audit's ANAL
 Implementation with the sec. 2 prefix on every new validation; oracles the library did not produce; derived envelopes in a new
 `tests/unit/test_audit2609_b8_analysis_sources.py` (S5; no wall-clock assertions -- peak-memory via tracemalloc is a MEASUREMENT, not an assertion,
 unless you can derive a bar from the array counts); stated fail-befores; byte-identity proofs against `git archive <HEAD>^ lumenairy` extracted
-READ-ONLY into your scratch directory under `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b8\`
+READ-ONLY into your scratch directory under `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\b8\`
 (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest); wall-clock and peak-memory medians of interleaved
 runs reported.  Re-record every history document you touch.  Report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B8_REPORT.md`
 (summary table: item / status / files:lines / tests / oracle / measured before -> after; per-item sections; files touched; tests run; requested

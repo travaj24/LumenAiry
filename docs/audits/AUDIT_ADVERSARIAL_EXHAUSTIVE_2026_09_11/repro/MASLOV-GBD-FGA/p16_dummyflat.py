@@ -3,7 +3,7 @@ after the last (curved) surface moves the Maslov exit chart from the curved
 surface to the vertex plane.  If the reference surface were already the vertex
 plane, the two results would be identical."""
 import numpy as np, sys, warnings, copy
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as la
 from lumenairy import raytrace as rt
 warnings.simplefilter("ignore")

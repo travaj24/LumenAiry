@@ -4,7 +4,7 @@ Also the AMPLITUDE/PHASE check via pmm_jones_1d.
 """
 import sys, os
 import numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from oracle import tmm_slab
 from lumenairy.elements.pmm import pmm_efficiency_1d, pmm_jones_1d

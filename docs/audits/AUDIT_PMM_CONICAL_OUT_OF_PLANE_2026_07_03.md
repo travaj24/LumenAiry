@@ -19,7 +19,7 @@ reflection Jones matrix. Motivating consumer: exp12 (oblique-angle assessment of
 LC-QWP out-couplers, in-plane **and** out-of-plane, up to 25 deg).
 
 All file:line anchors are relative to
-`d:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\`.
+`<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\`.
 Evidence gathered by a 3-agent read-only sweep of the current source (no code was modified).
 
 ---

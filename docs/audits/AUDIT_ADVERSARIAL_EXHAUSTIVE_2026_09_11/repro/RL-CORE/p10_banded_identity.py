@@ -1,7 +1,7 @@
 """Probe 10/11/13/14: banded byte-identity, complex64 dtype, memmap store,
 prepared-lens agreement, thicknesses validation."""
 import sys, warnings, os
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import numpy as np
 from lumenairy.elements._lens_real import (apply_real_lens, prepare_real_lens,
                                            set_lens_sag_dtype)

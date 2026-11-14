@@ -1,6 +1,6 @@
 # WP-B1 (Wave 4, first) -- Maslov S6 proper: the saddle must follow the INPUT field's local wavevector
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD 81d5b586
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`, HEAD 81d5b586
 (= release 5.46.0, Wave 3 closed).  Two other Wave-4 engineers are working concurrently on `lumenairy/elements/_lens_real.py`
 (WP-B2) and on `lumenairy/propagators/hf.py` / `hfpi.py` (WP-B3); never touch those files.
 

@@ -1,5 +1,5 @@
 import numpy as np, sys, time
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements._lens_real import (_screen_obliquity_delta,
     _facet_axial_momenta, _build_displaced_cos_grid, _disp_surface_z_grad)
 from lumenairy.elements.lenses import surface_sag_general as sg

@@ -1,5 +1,5 @@
 [fc_with_taper] TAPER=on  _sphere_parab_conversion=_sphere_parab_conversion  C8=True
-[fc_with_taper] lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+[fc_with_taper] lumenairy 5.32.0 @ <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
 [fc_with_taper] _lens_traced 9717ad88dd959889  carrier 1a90453a4ef65399
 config: N=2048 rs=4 nfc=8192 wf=4.0 nout=2048 chain_kwargs={}  (pure library defaults)
 chain done 1337s

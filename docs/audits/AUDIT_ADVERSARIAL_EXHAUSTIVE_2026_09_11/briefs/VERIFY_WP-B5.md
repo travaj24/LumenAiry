@@ -1,13 +1,13 @@
 # VERIFY-WP-B5 -- independent adversarial re-verification of WP-B5 (RCWA / EME / BOR: Toeplitz solves D1, the two-interface closed form D2, off-plane `fff_nv` symmetrisation D3)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B5 is commit 4ea16066 (its parent
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B5 is commit 4ea16066 (its parent
 is the pre-change library for byte-identity and fail-before probes).  Other Wave-4 engineers may be editing other subsystems concurrently; never touch
 those, and expect their fingerprint checks to be red until they re-record.  You own `lumenairy/elements/rcwa/*`, `eme/*`, `bor/*` for this pass;
 `pmm/*` and `berreman.py` are NOT yours (use them as oracles, never edit them).
 
 You did not write WP-B5.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B5's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B5_RCWA_EME_BOR_PERFORMANCE.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B5_RCWA_EME_BOR_PERFORMANCE.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B5_REPORT.md`, its changelog, its test file
 `tests/unit/test_audit2609_b5_rcwa_eme_bor.py`, and `fixes/WP-A14_REPORT.md` sections 2 and 6 (H2/H3/H4/M1 and the D1-D3 designs) + `VERIFY_WP-A14.md`.
 
@@ -29,7 +29,7 @@ its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B5_REPO
    reflection-symmetry property (swap the cell's axes, swap the result); prove the `l3-` Schur fold is applied AFTER the mean (a hand-built 2x2-block
    example where mean-then-Schur and Schur-then-mean differ); in-plane path byte-identical to the parent.
 4. **Attack the byte-identity claims** against `git archive 4ea16066^ lumenairy` extracted READ-ONLY into
-   `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b5\`
+   `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b5\`
    (child process, cwd + PYTHONPATH = the archive, `lumenairy.__file__` asserted; never through pytest), including EME and BOR entry points the
    package says it did not touch, and `tests/unit/test_ci_kernel_consistency.py` (no decision may move).
 5. **Attack the pins.**  Derived envelopes or per-build numbers?  Fail-before real on the parent?  Mutate in memory (serve `inv(T) @ X` again; drop

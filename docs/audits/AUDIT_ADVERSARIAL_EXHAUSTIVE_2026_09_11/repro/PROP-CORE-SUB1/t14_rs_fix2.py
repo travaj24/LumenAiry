@@ -4,7 +4,7 @@ instead of point-sampling h(x,y,z) in the spatial domain."""
 import sys
 import numpy as np
 from scipy.special import j0
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators.rs import rayleigh_sommerfeld_propagate
 
 lam = 633e-9; k = 2*np.pi/lam

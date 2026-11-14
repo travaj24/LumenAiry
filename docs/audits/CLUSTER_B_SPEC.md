@@ -8,7 +8,7 @@
 
 ## 1. Background
 
-This work originated from a comparative review of a small in-house repo (`Neurophos/lens-designer`, ~4.7 kLOC, frozen at "initial code") against the current LumenAiry codebase. The lens-designer repo carried a Nazarathy/Shamir-style operator algebra (`Q`, `F`, `V`, `R` classes with `__mul__` composition and automatic ABCD tracking) plus a coherent-field-to-rays bridge. Neither of those exists in LumenAiry, and both are **additive** — they can sit on top of LumenAiry's existing array-first propagator infrastructure without forking the field representation or breaking any existing API.
+This work originated from a comparative review of a small in-house repo (`lens-designer`, ~4.7 kLOC, frozen at "initial code") against the current LumenAiry codebase. The lens-designer repo carried a Nazarathy/Shamir-style operator algebra (`Q`, `F`, `V`, `R` classes with `__mul__` composition and automatic ABCD tracking) plus a coherent-field-to-rays bridge. Neither of those exists in LumenAiry, and both are **additive** — they can sit on top of LumenAiry's existing array-first propagator infrastructure without forking the field representation or breaking any existing API.
 
 A larger architectural change ("Cluster A" — Σ-matrix phase-space grid evolution, `Field` as callable closure, automatic `build_grid` sizing) was considered and **rejected**: it would require a parallel field-representation API, only applies in the paraxial regime, and its better non-paraxial cousin (Σ-evolution applied to *beamlets*) already exists as `lumenairy/propagators/gbd.py`. This spec covers only Cluster B.
 
@@ -987,5 +987,5 @@ Each PR should:
 - Existing LumenAiry ABCD ground truth: `system_abcd`, `lens_abcd`, `surfaces_from_prescription` in [`raytrace/core.py`](lumenairy/raytrace/core.py).
 - Existing LumenAiry grid sizing: `recommend_grid_for_prescription`, `check_grid_vs_apertures` in [`elements/lenses.py`](lumenairy/elements/lenses.py).
 - Existing LumenAiry bundle types: `RayBundle` ([`raytrace/core.py:65`](lumenairy/raytrace/core.py)), `PathBundle` ([`propagators/hfpi.py`](lumenairy/propagators/hfpi.py)), `BeamletBundle` ([`propagators/gbd.py`](lumenairy/propagators/gbd.py)). Inter-bundle converters at [`raytrace/bundles.py`](lumenairy/raytrace/bundles.py).
-- Reference implementation of operator algebra (paraxial-only, closure-based — do not copy verbatim, the architecture is different): `Neurophos/lens-designer/operators.py` lines 286–940 (`Operator`, `V`, `FT`, `Qu`, `Rprop`, `Aperture`).
-- Reference implementation of rays-from-field (also paraxial-only, source repo — adapt the math, not the structure): `Neurophos/lens-designer/fields.py:186-307` (`generate_smart_rays`).
+- Reference implementation of operator algebra (paraxial-only, closure-based — do not copy verbatim, the architecture is different): `lens-designer/operators.py` lines 286–940 (`Operator`, `V`, `FT`, `Qu`, `Rprop`, `Aperture`).
+- Reference implementation of rays-from-field (also paraxial-only, source repo — adapt the math, not the structure): `lens-designer/fields.py:186-307` (`generate_smart_rays`).

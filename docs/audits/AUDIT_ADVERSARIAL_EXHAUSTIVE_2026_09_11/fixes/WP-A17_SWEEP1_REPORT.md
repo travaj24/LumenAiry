@@ -487,7 +487,7 @@ assert name in (src_path.stem, dotted)
 `src_path.parts` starts at the drive root, so `dotted` comes out as
 
 ```
-'D:\\.Metacept.Neurophos.Python_Test_Scripts.Free_Space_Optics.Lumenairy.lumenairy.sources.core'
+'<workspace>.Python_Test_Scripts.Free_Space_Optics.Lumenairy.lumenairy.sources.core'
 ```
 
 and every dotted-named document is rejected.  This hits **all three concurrent

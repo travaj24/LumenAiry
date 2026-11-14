@@ -4,7 +4,7 @@ Also checks the SIGN of the imprinted phase (converging lens => phase
 decreases with r under exp(+ikz)).
 """
 import sys, os
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from oracle import trace_meridional

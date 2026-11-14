@@ -1,7 +1,7 @@
 """Probe 18: (a) n_v2 auto-resolution estimator bound; (b) GBD FFT reconstruct
 memory/time; (c) Tukey weight normalisation."""
 import numpy as np, sys, time, tracemalloc, warnings
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 warnings.simplefilter("ignore")
 import lumenairy as la
 from lumenairy import raytrace as rt

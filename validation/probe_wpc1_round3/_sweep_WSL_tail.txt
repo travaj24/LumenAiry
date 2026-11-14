@@ -24,7 +24,7 @@
                 f"makes test_v16_synthetic_fabrication_is_caught red on that lane, "
                 f"on the base tree too.  The citation content gate cannot run "
                 f"without the base commit, and it does not skip.")
-E           Failed: ENVIRONMENT, not a citation finding: git cannot resolve this repository from /mnt/c/tmp/lum_c1c (fatal: not a git repository: /mnt/c/tmp/lum_c1c/D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy/.git/worktrees/lum_c1c).  This is the WSL-against-a-Windows-worktree condition that also makes test_v16_synthetic_fabrication_is_caught red on that lane, on the base tree too.  The citation content gate cannot run without the base commit, and it does not skip.
+E           Failed: ENVIRONMENT, not a citation finding: git cannot resolve this repository from /mnt/c/tmp/lum_c1c (fatal: not a git repository: /mnt/c/tmp/lum_c1c/<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy/.git/worktrees/lum_c1c).  This is the WSL-against-a-Windows-worktree condition that also makes test_v16_synthetic_fabrication_is_caught red on that lane, on the base tree too.  The citation content gate cannot run without the base commit, and it does not skip.
 
 tests/unit/test_v5_3_2_walker_source_line_citation.py:595: Failed
 =============================== warnings summary ===============================

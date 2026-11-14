@@ -18,7 +18,7 @@ wherever the claim is about the library's behaviour, and with the build's own
 fixture only where the claim is *about that fixture's numbers* (the equal-DOF
 ratios).  Every script asserts which tree it imported.  The "without" arm is
 the READ-ONLY main clone
-`D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, whose
+`<workspace>/Python_Test_Scripts/Free_Space_Optics/Lumenairy`, whose
 `HEAD` (`50824e9`) has an EMPTY diff against `a68a0da` over
 `lumenairy/elements/pmm/`, `lumenairy/elements/rcwa/` and `lumenairy/cache.py`
 -- verified with `git diff --stat`, so it IS the 5.44.0-candidate "without" arm

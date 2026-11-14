@@ -1,7 +1,7 @@
 """Parse .test_durations: totals, slowest, fast/slow split proposal."""
 import json, os, collections, statistics
 
-ROOT = r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 d = json.load(open(os.path.join(ROOT, ".test_durations")))
 print("entries:", len(d))
 tot = sum(d.values())

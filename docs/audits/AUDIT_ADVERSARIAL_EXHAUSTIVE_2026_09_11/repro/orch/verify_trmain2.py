@@ -1,5 +1,5 @@
 import warnings, numpy as np, sys, traceback
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements import apply_real_lens, apply_real_lens_traced
 wl = 1.31e-6; N = 256; dx = 8e-6
 x = (np.arange(N)-N/2)*dx; X, Y = np.meshgrid(x, x); r2 = X**2+Y**2

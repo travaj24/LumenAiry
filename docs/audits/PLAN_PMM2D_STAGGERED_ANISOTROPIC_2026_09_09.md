@@ -28,7 +28,7 @@ the foundation") is this work.
 | 1-D SEM first-order OOP generator | pmm/_core.py:5738 `_build_generator_metric` (state [Ex;Ey;iZHx;iZHy], L=A+BC^-1D) | reference for Stage B only |
 | tensor helpers | rcwa/_core.py:2790 `uniaxial_tensor`; pmm/_core.py:96 `_promote_eps_tensor`, `_tensor_is_passive` | reuse |
 | Berreman oracles | `lumenairy.elements.berreman.berreman_jones_1d` (library), `tests/unit/_berreman4x4.berreman_jones` (test oracle) | exact for uniform layers, any incidence, in-plane AND OOP |
-| the paper | `D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/PMM_Papers/josaa-40-4-652.pdf` (Granet, JOSA A 40, 652 (2023)) | READ IT (pages 2-3 = Eqs. 5-25; page 9 = Appendix A Eqs. 39-45; page 7 = Table 2 oracle) |
+| the paper | `<workspace>/Python_Test_Scripts/Free_Space_Optics/PMM_Papers/josaa-40-4-652.pdf` (Granet, JOSA A 40, 652 (2023)) | READ IT (pages 2-3 = Eqs. 5-25; page 9 = Appendix A Eqs. 39-45; page 7 = Table 2 oracle) |
 
 Conventions of the staggered module (PUBLIC end to end, NO conjugation bridge,
 unlike twod_jones.py): `exp(-i w t)`, `Im(eps) > 0` = loss, forward

@@ -1,13 +1,13 @@
 # VERIFY-WP-B3 -- independent adversarial re-verification of WP-B3 (propagator kernels: HFPI output plane + `normalisation='auto'`, Sobol sampler, Shen-Wang pixel-integrated RS kernel, chirp-Z resampler)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B3 is the
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B3 is the
 newest commit on the branch (`git log -1` shows it; call it {HEAD}).  Three other Wave-4 engineers are editing `lumenairy/elements/lenses_maslov.py`
 + `lumenairy/propagators/asymptotic*.py`, `lumenairy/elements/_lens_real.py` + `lens_config.py`, and `lumenairy/propagators/carrier.py` +
 `carrier_field.py` concurrently; never touch those, and expect their history-fingerprint checks to be red until they re-record (not your concern).
 
 You did not write WP-B3.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B3's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B3_PROPAGATOR_KERNELS.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B3_PROPAGATOR_KERNELS.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B3_REPORT.md`, its changelog `WP-B3_CHANGELOG.md`, and its test
 file `tests/unit/test_audit2609_b3_propagator_kernels.py`.  Also `fixes/WP-A5_REPORT.md` section 6 (the designs it implemented) and
 `fixes/VERIFY_WP-A5.md` (the verifier's independent RS-I double quadrature and the HFPI transparency property, both reusable METHODS).
@@ -27,7 +27,7 @@ file `tests/unit/test_audit2609_b3_propagator_kernels.py`.  Also `fixes/WP-A5_RE
    * K6: confirm the chirp-Z leg's unit MTF and its 2x2 tiling in the converging direction with your own carrier fixture; check the odd-N
      half-pixel origin handling against the Dirichlet interpolant on an ODD grid with a non-square extent.
 2. **Attack the byte-identity claims** (52 comparisons in the report): repeat a representative subset against `git archive {HEAD}^ lumenairy`
-   extracted READ-ONLY into `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b3\`,
+   extracted READ-ONLY into `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b3\`,
    importing the archived library from a child process whose cwd and PYTHONPATH are the archive (never through pytest, which puts the
    repository root first; assert `lumenairy.__file__` per probe).  Include `propagate_hfpi_through_prescription` with the OLD default
    (`normalisation='legacy'` explicitly) against the new default (`'auto'` -> `'legacy'` when no `z_output`): identical bits and the identical

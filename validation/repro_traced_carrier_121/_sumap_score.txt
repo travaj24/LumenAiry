@@ -121,4 +121,4 @@ ARM B LINEARITY [_sumap_Bc_p0_p0_m2_p0_m4_m2.npz]: || sum_j B_j - B_all || / || 
    frame   (-2, 0): 3.459e-16
    frame  (-4, -2): 3.725e-16
 
-wrote D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_sumap_score.json
+wrote <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\validation\repro_traced_carrier_121\_sumap_score.json

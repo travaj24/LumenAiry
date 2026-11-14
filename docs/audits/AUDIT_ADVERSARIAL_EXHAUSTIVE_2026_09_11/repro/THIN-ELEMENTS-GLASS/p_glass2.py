@@ -1,5 +1,5 @@
 import numpy as np, sys, traceback, warnings
-sys.path.insert(0,r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0,__import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy.glass as G
 
 print("refractiveindex available:", G._REFRACTIVEINDEX_AVAILABLE)

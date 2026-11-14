@@ -9,7 +9,7 @@ import os, sys, warnings
 import numpy as np
 
 warnings.filterwarnings('ignore')
-sys.path.insert(0, r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")))
 import lumenairy as la
 
 lam = 1.31e-6

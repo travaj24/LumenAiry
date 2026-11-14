@@ -1,5 +1,5 @@
 import os, sys, time, warnings
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import numpy as np, lumenairy as la
 from lumenairy.optimize.driver import design_optimize, _fd_grad_pure
 from lumenairy.optimize import DesignParameterization, FocalLengthMerit, MinThicknessMerit

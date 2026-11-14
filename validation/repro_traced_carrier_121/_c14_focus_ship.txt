@@ -1,5 +1,5 @@
 [c13_with_stepdown] LSTSQ_CONDITIONING_STEPDOWN=True  rcond_min=1.0e-08  resid_margin=1.0e-06  RESID_DEG=6  PREDICTOR=False  ARBITER=True
-[c13_with_stepdown] lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+[c13_with_stepdown] lumenairy 5.32.0 @ <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
 [c13_with_stepdown] _lens_traced fed19a0dbd146238  carrier 7276dd62d7037465
 config: N=2048 rs=4 nfc=8192 wf=4.0 nout=2048 chain_kwargs={}  (pure library defaults)
 chain done 690s

@@ -1,7 +1,7 @@
 """Probe 14: exit-plane phase of apply_real_lens_maslov vs apply_real_lens /
 apply_real_lens_traced, for a FLAT vs CURVED last surface."""
 import numpy as np, sys, warnings
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 import lumenairy as la
 warnings.simplefilter("ignore")
 lam, N, dx = 1.0e-6, 96, 6.0e-6

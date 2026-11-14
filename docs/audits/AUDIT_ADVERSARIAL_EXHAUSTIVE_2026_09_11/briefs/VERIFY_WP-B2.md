@@ -1,6 +1,6 @@
 # VERIFY-WP-B2 -- independent adversarial re-verification of WP-B2 (the 2-D displaced remap: symmetric input window, structured inversion, lattice 181 -> 257, `displaced_n_side`)
 
-Repository: `D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B2 is commit 47bc7a79 (its
+Repository: `<workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy`, branch `audit-fixes-2026-09`.  WP-B2 is commit 47bc7a79 (its
 parent is the pre-change library for byte-identity and fail-before probes).  Other Wave-4 engineers are editing `lumenairy/elements/lenses_maslov.py`
 + `lumenairy/propagators/asymptotic*.py`, `lumenairy/propagators/carrier.py` + `carrier_field.py`, `lumenairy/elements/rcwa/*`, `eme/*`, `bor/*`,
 `lumenairy/elements/pmm/*`, `lumenairy/analysis/*`, `lumenairy/sources/*`, `lumenairy/raytrace/*` concurrently; never touch those, and expect
@@ -9,7 +9,7 @@ AFTER you finish; if you must change `_lens_real.py`, keep to the remap function
 
 You did not write WP-B2.  Your job is to try to break it.  Read `docs/TESTING_STANDARDS.md` (S1-S5), `CONVENTIONS.md` sec. 2 and 7,
 `CONTRIBUTING.md` ("Modules with a history document"), then WP-B2's brief
-(`C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B2_ANALYTIC_REMAP_STRUCTURED_INVERSION.md`),
+(`C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\briefs\WP-B2_ANALYTIC_REMAP_STRUCTURED_INVERSION.md`),
 its report `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B2_REPORT.md`, its changelog `WP-B2_CHANGELOG.md`, its test file
 `tests/unit/test_audit2609_b2_displaced_remap_inversion.py`, and `fixes/WP-A2_REPORT.md` section 2 (L9) + `VERIFY_WP-A2.md` (the reflection
 instability WP-A2 attributed to Delaunay -- WP-B2 says that attribution was wrong; decide who is right with your own measurement).
@@ -49,7 +49,7 @@ instability WP-A2 attributed to Delaunay -- WP-B2 says that attribution was wron
 
 * Every python run with `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1`; one process at a time (the box is shared).
 * NO git write commands of any kind; read-only `git show` / `git archive` / `git log` are fine (archive the parent into
-  `C:\Users\AndrewT\AppData\Local\Temp\claude\D--Metacept-Neurophos-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b2\`
+  `C:\Users\AndrewT\AppData\Local\Temp\claude\workspace-Python-Test-Scripts-Metasurface-QWP\78f7e8ef-9607-4e41-ba1d-ebd1c2e74c7e\scratchpad\verify_b2\`
   and import it from a child process whose cwd + PYTHONPATH are the archive, `lumenairy.__file__` asserted; never through pytest).  Do not kill
   processes.  The orchestrator commits with an explicit file list.
 * Own only: `lumenairy/elements/_lens_real.py` (remap functions), `lumenairy/elements/lens_config.py`, their `docs/history/` documents,

@@ -1,4 +1,4 @@
-lumenairy 5.32.0 @ D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
+lumenairy 5.32.0 @ <workspace>\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\__init__.py
   _lens_traced.py 34ef5a9d95279b8f   gate ships at pixels=0.5 w_frac=0.05
 
 ########## f6: c11-f6  N=512 dx=30.000 um w=1.000 mm  aperture=10.000 mm  rs=8 frbf=2.0 ##########

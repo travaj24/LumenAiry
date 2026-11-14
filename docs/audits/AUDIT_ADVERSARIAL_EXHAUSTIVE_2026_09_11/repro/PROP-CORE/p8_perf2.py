@@ -1,5 +1,5 @@
 import numpy as np, sys, time, threading, gc, os
-sys.path.insert(0, r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy')
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators import fft_infra as fi
 print("cpu count:", os.cpu_count(), "load-sensitive: many other processes may be running")
 

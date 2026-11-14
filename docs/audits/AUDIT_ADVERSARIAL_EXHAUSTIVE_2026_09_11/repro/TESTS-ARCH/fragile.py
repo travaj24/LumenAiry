@@ -1,7 +1,7 @@
 """Check the test corpus against TESTING_STANDARDS S1-S5 fragile shapes + find non-independent oracles."""
 import ast, os, re, collections, json
 
-ROOT = r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 
 
 def pyfiles(base):

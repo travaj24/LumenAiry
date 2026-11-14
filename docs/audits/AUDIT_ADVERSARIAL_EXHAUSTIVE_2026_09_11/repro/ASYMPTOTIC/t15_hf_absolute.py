@@ -6,7 +6,7 @@ Tests the '-1j' Maslov factor + sqrt|det d2Phi/ds1ds2| units claim
 (asymptotic_canonical_fit.py:1264-1274)."""
 import sys, math
 import numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators.asymptotic import (
     HFPolyFit, propagate_hf_chebyshev_quadrature)
 from lumenairy.elements.lenses import _multi_indices_total_degree

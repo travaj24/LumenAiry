@@ -33,7 +33,7 @@ import sys
 
 import numpy as np
 
-ZMX = (r"D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics"
+ZMX = (r"<workspace>\Python_Test_Scripts\Free_Space_Optics"
        r"\Reverse_Symmetric_ASM\tx4designstudy121\20260707 dll Tx02-MSOP16.zmx")
 LAM_UM = 1.31
 # order (-4) on a 1/0.00879 um = 113.77 um period -> 46.06 mrad; the y grating

@@ -12,7 +12,7 @@ Test D: an ON-CUT case (q exactly real-negative / purely imaginary) and the
 """
 import sys
 import numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements.pmm import _core as pc
 
 wl = 1.0e-6

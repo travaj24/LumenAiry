@@ -1,7 +1,7 @@
 """Probe 2: does carrier_referenced_reconstruct warn on an undersampled carrier?
    Probe A: near-focus LANDING returns an aliased envelope (scalar path)."""
 import sys, warnings, numpy as np
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.propagators.carrier import (
     propagate_carrier_referenced, carrier_referenced_reconstruct,
     carrier_referenced_envelope, carrier_referenced_fit_radius)

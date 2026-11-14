@@ -3,7 +3,7 @@
 import os, sys
 os.environ['JAX_ENABLE_X64'] = '1'
 import numpy as np
-sys.path.insert(0, r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy')
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.raytrace._conic_core import conic_sag
 from lumenairy.elements.lenses import surface_sag_general
 from lumenairy.raytrace import trace, Surface, surfaces_from_prescription

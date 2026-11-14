@@ -1,7 +1,7 @@
 """B: is the tangent_facet_remap fold / pull-back guard driven by pixels that
 carry NO energy?  A converging beam normally needs a PADDED grid."""
 import numpy as np, sys
-sys.path.insert(0, r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy")
+sys.path.insert(0, __import__("os").path.abspath(__import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "..", "..", "..", "..", "..")))
 from lumenairy.elements._lens_real import (apply_real_lens,
     _tangent_facet_remap_screen, _TF_REMAP_MIN_DET)
 lam = 0.55e-6

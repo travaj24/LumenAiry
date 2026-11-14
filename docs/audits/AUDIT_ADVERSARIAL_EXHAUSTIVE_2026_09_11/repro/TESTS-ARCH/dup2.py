@@ -1,7 +1,7 @@
 """Targeted duplication probes + token-level near-duplicate clustering (difflib)."""
 import ast, os, re, collections, difflib, itertools
 
-ROOT = r"D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 
 
 def pyfiles(base):
