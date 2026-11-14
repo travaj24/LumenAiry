@@ -148,15 +148,17 @@ _ASR_DEFAULT_ETA = "auto"
 #: The full stretch clusters the harmonics so hard that the middle of each
 #: segment is resolved ``1 + 5/3 = 2.7`` times more coarsely than by the plain
 #: basis, which costs accuracy while ``n_orders`` is small.  Measured (TE and
-#: TM, ``n_orders`` 4..20, ``eta`` 0 / 0.25 / 0.5 / 0.75 / 1) on a lossless
-#: lamellar grating (eps 4 / 1, period 1000 nm, 800 nm, depth 300 nm), on the
-#: resonant metal-strip stack and on the same stack at period 1200 nm: with
-#: this rule ASR is at least as accurate as the plain basis at every
-#: ``n_orders`` >= 6 of all six series except the metal stack's TM at 8, where
-#: both are more than 5 % off; ``eta = 1`` everywhere would have lost to the
-#: plain basis below ``n_orders`` 13 on the dielectric grating (TE 2.1e-3
-#: against 2.9e-4 at 10).  At ``n_orders <= N0`` the rule gives ``eta = 0``
-#: and the solve is the standard one.
+#: TM, ``n_orders`` 6..16) on a lossless lamellar grating (eps 4 / 1, period
+#: 1000 nm, 800 nm, depth 300 nm), on the resonant metal-strip stack and on
+#: the same stack at period 1200 nm: with this rule ASR beat or matched the
+#: plain basis at 62 of the 66 points; the four exceptions are the dielectric
+#: TE at 7 (8.2e-4 against 7.3e-4), the metal stack's TM at 7 and 8 (both
+#: more than 6 % off) and the wide-period TM at 11 (6.5e-3 against 5.0e-3, a
+#: dip of the plain basis's own scatter).  A fixed ``eta = 1`` would have lost
+#: to the plain basis below ``n_orders`` 13 on the dielectric grating (TE
+#: 2.1e-3 against 2.9e-4 at 10, where the rule gives 1.9e-5).  At
+#: ``n_orders <= N0`` the rule gives ``eta = 0`` and the solve is the
+#: standard one.
 _ASR_AUTO_N0 = 5
 _ASR_AUTO_N1 = 15
 

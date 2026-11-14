@@ -142,10 +142,12 @@ Express 17, 8051 (2009); Essig and Busch, Opt. Express 18, 23258 (2010).
 The full stretch resolves the middle of each segment 2.7 times more coarsely
 than the plain basis; at `n_orders` 10 a fixed `eta = 1` was less accurate
 than the plain basis on the dielectric grating (TE 2.1e-3 against 2.9e-4),
-while the ramp (0.5 there) gives 1.9e-5.  With the ramp ASR was at least as
-accurate as the plain basis at every `n_orders >= 6` of six series (TE and TM
-on the dielectric grating, fixture A and fixture B), except fixture A TM at 8,
-where both are more than 5 % off.  At 5 and below the solve is the standard
+while the ramp (0.5 there) gives 1.9e-5.  With the ramp, ASR beat or
+matched the plain basis at 62 of 66 points (`n_orders` 6..16; TE and TM on the
+dielectric grating, fixture A and fixture B); the exceptions are the
+dielectric TE at 7 (8.2e-4 against 7.3e-4), fixture A TM at 7 and 8 (both more
+than 6 % off) and fixture B TM at 11 (6.5e-3 against 5.0e-3, a dip of the
+plain basis's own scatter).  At 5 and below the solve is the standard
 one.  A fixed `eta < 1` is for studies only (item 3).  The guard against the
 ill-conditioned extreme: the Toeplitz matrix of `f` (whose inverse square root
 builds every uniform mode) is refused above condition number 1e13 (measured
