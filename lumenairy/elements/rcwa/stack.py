@@ -565,6 +565,27 @@ def _normalize_formulation(fn_name, formulation):
     return f
 
 
+def _host_array_or_none(x):
+    """``x`` read back as a host NumPy array, or ``None`` when it has no
+    concrete value.
+
+    THE one broad ``except`` of this module's host probes (the eig-dedup key,
+    the ``'li'`` contrast test, the ``'auto'`` resolution's permittivity read,
+    the out-of-plane tensor probe and ``rcwa_convergence``'s amplitude read
+    all go through it).  The case it exists for is a JAX tracer under
+    ``jax.grad`` / ``jax.jit``: reading it raises
+    ``TracerArrayConversionError``, ``ConcretizationTypeError`` or
+    ``TypeError`` depending on the jax version, and none of those can be named
+    without importing jax at module scope, which this module must not do (jax
+    is optional).  Every caller treats ``None`` conservatively: no eigenmode
+    dedup, ``'laurent'`` for ``'auto'``, the general (out-of-plane) cascade,
+    an amplitude left out of a convergence report."""
+    try:
+        return np.asarray(to_numpy(x))
+    except Exception:
+        return None
+
+
 def _li_cell_contrast(cell, *, traced_ok=True):
     """Does an isotropic cell carry contrast, i.e. does the ``'li'`` rule build
     its inverse-rule blocks for it?  ``False`` for a cell uniform to ``1e-12``
@@ -582,12 +603,12 @@ def _li_cell_contrast(cell, *, traced_ok=True):
 
     A traced cell cannot be inspected: ``traced_ok=True`` returns ``None`` for
     it, ``traced_ok=False`` lets the host read raise."""
-    try:
+    if traced_ok:
+        e_np = _host_array_or_none(cell)
+        if e_np is None:
+            return None
+    else:
         e_np = np.asarray(to_numpy(cell))
-    except Exception:
-        if not traced_ok:
-            raise
-        return None
     scale = max(1.0, float(np.max(np.abs(e_np))))
     return bool(float(np.max(np.abs(e_np - e_np.flat[0]))) > 1e-12 * scale)
 
@@ -601,9 +622,12 @@ def _concrete_eps_values(values):
             continue
         if callable(v):
             return None
+        a = _host_array_or_none(v)
+        if a is None:
+            return None
         try:
-            out.append(np.asarray(to_numpy(v), dtype=_C).ravel())
-        except Exception:
+            out.append(np.asarray(a, dtype=_C).ravel())
+        except (TypeError, ValueError):       # not a number: not inspectable
             return None
     return np.concatenate(out) if out else np.zeros(0, dtype=_C)
 
@@ -798,10 +822,10 @@ def _layer_offplane_or_traced(data):
     if _tensor_offplane_present(data):
         return True
     if is_jax_array(data):
-        try:
-            return _tensor_offplane_present(np.asarray(to_numpy(data)))
-        except Exception:
+        host = _host_array_or_none(data)
+        if host is None:
             return True                       # tracer -> general path
+        return _tensor_offplane_present(host)
     return False
 
 
@@ -958,9 +982,8 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
     def _rung(out):
         amps = []
         for x in tuple(out)[3:]:
-            try:
-                a = np.asarray(to_numpy(x))
-            except Exception:
+            a = _host_array_or_none(x)
+            if a is None:
                 continue
             if np.iscomplexobj(a) and a.size and len(amps) < 2:
                 amps.append(("R" if not amps else "T", a))
@@ -3820,18 +3843,21 @@ class RCWAStack:
                     complex(eps_bg),
                     tuple(tuple(sorted((k, repr(v)) for k, v in s.items()))
                           for s in shapes))
-        try:                                   # iso / tensor: hash the cell
-            arr = np.ascontiguousarray(to_numpy(data))
-            # The INVERSE-RULE companion pair is part of the eigenproblem (audit
-            # W9): two layers with the SAME eps_cell but different companions
-            # factorize differently, so the pair must enter the key or the second
-            # one would silently reuse the first one's modes.
-            comp = ()
-            for c in (getattr(layer, "normal_cells", None) or ()):
-                ca = np.ascontiguousarray(to_numpy(c))
-                comp += (ca.shape, str(ca.dtype), ca.tobytes())
-        except Exception:                      # traced array -> no dedup
+        arr = _host_array_or_none(data)        # iso / tensor: hash the cell
+        if arr is None:                        # traced array -> no dedup
             return None
+        arr = np.ascontiguousarray(arr)
+        # The INVERSE-RULE companion pair is part of the eigenproblem (audit
+        # W9): two layers with the SAME eps_cell but different companions
+        # factorize differently, so the pair must enter the key or the second
+        # one would silently reuse the first one's modes.
+        comp = ()
+        for c in (getattr(layer, "normal_cells", None) or ()):
+            ca = _host_array_or_none(c)
+            if ca is None:
+                return None
+            ca = np.ascontiguousarray(ca)
+            comp += (ca.shape, str(ca.dtype), ca.tobytes())
         return (kind, getattr(layer, "formulation", "laurent"), arr.shape,
                 str(arr.dtype), arr.tobytes()) + comp
 
