@@ -419,7 +419,7 @@ def test_the_sliver_hazard_band_is_empty_with_the_fix():
     1.5e-5 of the period) tracks the physical shift.  MEASURED 2026-11-14:
     0 wrong rows on Windows/MKL and on WSL/OpenBLAS with the fix (11 sliver
     tests that need the wrong population now restore the pre-fix selector
-    through ``_core.PMM_EIG_ROUNDOFF_BAR``; with it restored the band is
+    through ``_core._PMM_EIG_ROUNDOFF_BAR``; with it restored the band is
     non-empty again and those tests pass)."""
     wrong = []
     for deg in (12, 14, 20):
@@ -430,3 +430,57 @@ def test_the_sliver_hazard_band_is_empty_with_the_fix():
             if e > 100.0 * d:
                 wrong.append((deg, float(d), e))
     assert wrong == [], wrong
+
+
+def test_the_sliver_guard_does_no_harm_in_the_production_configuration():
+    """The sliver refusal is kept as defence in depth after the selector fix;
+    its own test modules exercise it with the pre-fix selector restored.
+    Here it runs as shipped (fix on, guard on): hazard-band rows of the
+    ladder above must solve without a refusal and track the physical
+    shift (review finding B4, 2026-11-14)."""
+    assert S.PMM_SLIVER_GUARD
+    for deg in (12, 20):
+        st0 = PMMStack(_SL_P, n_superstrate=1.0, n_substrate=1.0,
+                       degree=deg, min_feature=_SL_P * 1e-5)
+        for a, b in ((_SL_A0, _SL_B0), (_SL_A0, _SL_B0)):
+            st0.add_layer(_SL_DZ, segments=[(a, 2.25), (b - a, 9.0),
+                                            (1.0 - b, 2.25)])
+        st0.set_source(_SL_WL, theta=_SL_TH)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            o0, R0, T0, _J0 = st0.solve()
+        for d in (1e-4, 3e-5):
+            st = PMMStack(_SL_P, n_superstrate=1.0, n_substrate=1.0,
+                          degree=deg, min_feature=_SL_P * 1e-5)
+            for a, b in ((_SL_A0, _SL_B0), (_SL_A0 - d, _SL_B0 + d)):
+                st.add_layer(_SL_DZ, segments=[(a, 2.25), (b - a, 9.0),
+                                               (1.0 - b, 2.25)])
+            st.set_source(_SL_WL, theta=_SL_TH)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                o, R, T, _J = st.solve()            # no refusal
+            e = max(float(np.max(np.abs(R - R0))),
+                    float(np.max(np.abs(T - T0))))
+            assert e <= 100.0 * d, (deg, d, e)
+
+
+def test_selector_switch_is_private_and_single_sourced():
+    """``_core._PMM_EIG_ROUNDOFF_BAR`` is private and not re-exported (a
+    re-exported copy would be dead: setting it would change nothing).  The
+    modules that flip it never import JAX, so no traced computation can
+    capture the pre-fix mask (the switch is read at trace time)."""
+    import pathlib
+
+    import lumenairy.elements.pmm as pmm
+    import lumenairy.elements.pmm._core as core
+    assert not hasattr(pmm, "PMM_EIG_ROUNDOFF_BAR")
+    assert not hasattr(pmm, "_PMM_EIG_ROUNDOFF_BAR")
+    assert not hasattr(core, "PMM_EIG_ROUNDOFF_BAR")
+    assert core._PMM_EIG_ROUNDOFF_BAR is True
+    here = pathlib.Path(__file__).parent
+    for p in here.glob("test_*.py"):
+        if p.name == pathlib.Path(__file__).name:
+            continue
+        txt = p.read_text(encoding="utf-8")
+        if "_PMM_EIG_ROUNDOFF_BAR = False" in txt:
+            assert "import jax" not in txt and "from jax" not in txt, p.name

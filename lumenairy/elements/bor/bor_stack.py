@@ -771,10 +771,10 @@ class BORStack:
             k = self.elements_per_segment
             if k == 1:
                 return bnd
-            if self.grade:
-                sloc = 0.5 * (1.0 - np.cos(np.pi * np.arange(k + 1) / k))
-            else:
-                sloc = np.linspace(0.0, 1.0, k + 1)
+            # the ONE grading rule of the spectral-element solvers (uniform
+            # or Chebyshev-Lobatto, bit-identical to the former inline copy)
+            from ..pmm._core import _graded_fractions
+            sloc = _graded_fractions(k, bool(self.grade))
             out = [bnd[0]]
             for lo, hi in zip(bnd[:-1], bnd[1:]):
                 out.extend(lo + (hi - lo) * sloc[1:])

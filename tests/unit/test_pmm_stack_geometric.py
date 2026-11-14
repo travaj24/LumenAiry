@@ -51,12 +51,13 @@ def _J(st):
 # --------------------------------------------------------------------------- #
 def test_grade_is_normalized_and_validated():
     st = PMMStack(P, elements_per_region=12, grade="geometric")
-    assert st.grade == ("geometric", C.GEOMETRIC_DEFAULT_RATIO,
-                        C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P)
+    # the DEFAULT floor is stored unresolved (None): each solve resolves it
+    # from its own wavelength, and the stored spec is a fixed point
+    assert st.grade == ("geometric", C.GEOMETRIC_DEFAULT_RATIO, None)
     assert PMMStack(P, grade="chebyshev").grade is True
     assert PMMStack(P, grade=0).grade is False
     st2 = PMMStack(P, elements_per_region=4, grade=("geometric", 0.2))
-    assert st2.grade == ("geometric", 0.2, C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P)
+    assert st2.grade == ("geometric", 0.2, None)
     spec = ("geometric", 0.25, 2e-11)
     assert PMMStack(P, elements_per_region=4, grade=spec).grade == spec
     with pytest.raises(ValueError, match="unknown grade"):
@@ -175,8 +176,9 @@ def test_the_floor_turns_a_bad_ratio_into_a_good_layout():
 # --------------------------------------------------------------------------- #
 # the JAX twin and the conical path pick the spec up
 # --------------------------------------------------------------------------- #
-#: NumPy (uniform layers from the shared geometric eig) vs the JAX twin (full
-#: eig for every layer -- decision D10 keeps the fast path out of the trace).
+#: NumPy (uniform layers from the shared geometric eig) vs the JAX twin (the
+#: same fast path since 2026-11-14; this bar was derived when the twin ran the
+#: full eig for every layer and stays as an upper bound).
 #: MEASURED 2026-11-14 on fixture A, geometric degree 6 x 4 el, theta 0.2,
 #: max over R / T / J: 2.96e-13 (Windows/MKL), 3.11e-13 (WSL/OpenBLAS);
 #: against the DENSE NumPy path the same twin reads 1.43e-13 / 1.33e-13, so
@@ -212,17 +214,23 @@ _CONICAL_LAYERS = [(50e-9, E_AU, 1.0 + 0j), (21e-9, E_HF, E_HF),
                    (70e-9, E_AL, E_AL)]
 
 
-def test_conical_incidence_refuses_geometric():
-    """Geometric grading is refused at conical incidence (phi != 0) -- kept
-    after the 2026-11-14 selector fix, which leaves these readings unchanged
-    (see ``conical._refuse_geometric_conical`` for the separate mechanism).
+def test_conical_incidence_refuses_geometric(monkeypatch):
+    """Geometric grading at conical incidence (phi != 0) is refused only with
+    the structured conical solves switched off
+    (``conical.PMM_CONICAL_STRUCTURED = False``, the fail-before switch): the
+    dense conical eig it restores cannot carry the small elements.  With the
+    structured solves (the default since 2026-11-14) it is accepted and
+    validated in ``test_pmm_conical_structured.py``.
 
-    MEASURED 2026-11-14 (both builds) on the strip / 21 nm spacer / mirror
-    stack, theta 0.2, phi 0.3, 12 geometric elements at the default floor
-    (37 pm): the cross-polarized J_xy drifts 0.00596 + 0.00742i ->
-    0.00544 + 0.00833i over degree 8 .. 24 while the planar solve of the same
-    layout converges by ~1e-6 per step, and the ky0 = 0 conical cascade
-    reproduces the classical solve only to 5e-8 (Chebyshev 3 el: 4.5e-13)."""
+    MEASURED 2026-11-14 (both builds) with the dense eig, on the strip /
+    21 nm spacer / mirror stack, theta 0.2, phi 0.3, 12 geometric elements at
+    the default floor (37 pm): the cross-polarized J_xy drifts 0.00596 +
+    0.00742i -> 0.00544 + 0.00833i over degree 8 .. 24 while the planar solve
+    of the same layout converges by ~1e-6 per step, and the ky0 = 0 conical
+    cascade reproduces the classical solve only to 5e-8 (Chebyshev 3 el:
+    4.5e-13)."""
+    import lumenairy.elements.pmm.conical as CO
+    monkeypatch.setattr(CO, "PMM_CONICAL_STRUCTURED", False)
     st = _fixture(8, 12, "geometric", theta=0.2, phi=0.3,
                   layers=_CONICAL_LAYERS)
     with pytest.raises(NotImplementedError, match="conical incidence"):
@@ -237,6 +245,7 @@ def test_conical_incidence_refuses_geometric():
         pmm_jones_1d_conical_tensor(P, cell, N_SUB, 1.0, 50e-9, WL, theta=0.2,
                                     phi=0.3, degree=8, elements_per_region=12,
                                     grade="geometric")
+    monkeypatch.setattr(CO, "PMM_CONICAL_STRUCTURED", True)
     # the normalizer still runs first: an invalid value is a ValueError
     with pytest.raises(ValueError, match="unknown grade"):
         pmm_jones_1d_conical(*args, theta=0.2, phi=0.3, degree=8,
@@ -307,11 +316,13 @@ def test_default_geometric_floor_follows_the_wavelength():
     explicit floor is kept."""
     st = _fixture(8, 12, "geometric")
     stored = st.grade
-    assert stored[2] == C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P    # 11.1 pm
+    assert stored[2] is None                          # the default floor
     assert st._effective_grade(WL) == ("geometric", stored[1],
                                        S._SMALL_ELEMENT_SUGGEST_FRAC * WL)
-    assert st._effective_grade(100e-9) == stored          # period part wins
-    assert st._effective_grade(None) == stored
+    assert st._effective_grade(100e-9) == (                # period part wins
+        "geometric", stored[1], C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P)
+    with pytest.raises(ValueError, match="concrete positive number"):
+        st._effective_grade(None)                     # no wavelength: refused
     seen = []
     orig = S._build_sem_tensor_segments
 
@@ -375,9 +386,12 @@ def test_opt_out_solves_and_the_backstop_refuses_super_unity():
     T = np.array([[0.4, 0.0], [0.3, 0.0]])            # max R+T = 1.1
     with pytest.raises(ValueError, match="energy not conserved"):
         S._warn_stack_energy(R, T, stack=st)
-    st._small_element_note = None                     # not armed -> a warning
+    # not armed (the note is derived from the geometry: a stack without a
+    # small layout-made element) -> a warning
+    st_ok = _fixture(6, 3, True)
+    assert st_ok._small_element_watch(WL) is None
     with pytest.warns(UserWarning, match="energy not conserved"):
-        S._warn_stack_energy(R, T, stack=st)
+        S._warn_stack_energy(R, T, stack=st_ok)
 
 
 #: Configurations that returned O(1) wrong, super-unity answers on the

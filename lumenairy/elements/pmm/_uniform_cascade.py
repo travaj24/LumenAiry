@@ -2,7 +2,10 @@
 lumenairy.elements.pmm._uniform_cascade -- the laterally-uniform-layer fast
 path of :class:`~lumenairy.elements.pmm.stack.PMMStack`'s vertical cascade.
 
-Two pieces, both exact rewrites of what the dense path computes:
+Two pieces, both exact rewrites (in exact arithmetic) of what the dense path
+computes; in floating point they agree with it to the grid's round-off --
+<= 5e-12 on Chebyshev / single-element grids, about 1e-6 at the default
+geometric floor, where the dense path carries that much itself:
 
 1. **Uniform-layer modes from the shared geometric eig.**  For a layer whose
    permittivity is the same isotropic scalar ``eps`` in every union cell, the
@@ -52,6 +55,7 @@ from __future__ import annotations
 import numpy as np
 
 from ...backend import is_jax_array
+from ._core import _interface_from_ab, _safe_lam
 
 __all__ = []                      # private module
 
@@ -59,11 +63,10 @@ __all__ = []                      # private module
 #: shared geometric eig (the half-spaces keep ``_sem_modes_uniform``'s default).
 UNIFORM_LAYER_LABEL = "PMM modal solve (uniform layer)"
 
-#: The small-eigenvalue clamp the dense modal solvers apply when they form
-#: ``V = Q W / lam`` (``_sem_modes_tensor`` / ``_sem_modes_uniform``).  The
-#: diagonal interface MUST use the same clamped value, or a uniform layer sitting
-#: on a Rayleigh anomaly of its own medium (``lam = 0``) divides by zero.
-_LAM_CLAMP = 1e-12
+# The small-eigenvalue clamp is the dense modal solvers' own
+# (``_core._LAM_CLAMP`` / ``_core._safe_lam``): the diagonal interface MUST use
+# the same clamped value, or a uniform layer sitting on a Rayleigh anomaly of
+# its own medium (``lam = 0``) divides by zero.
 
 
 def _uniform_iso_eps(eps_u):
@@ -103,12 +106,7 @@ def _uniform_iso_eps(eps_u):
     return complex(e0)
 
 
-def _safe_lam(lam):
-    """``lam`` with the dense path's small-eigenvalue clamp applied."""
-    return np.where(np.abs(lam) < _LAM_CLAMP, _LAM_CLAMP, lam)
-
-
-def _uniform_medium_diag(eps, lam, mu):
+def _uniform_medium_diag(eps, lam, mu, xp=np):
     """The diagonal ``D`` (length ``2n``) of a uniform medium's modal partner
     relative to the shared eigenvector matrix (see the module docstring):
     ``D[:n] = -eps / safe[:n]``, ``D[n:] = (eps - mu) / safe[n:]``.
@@ -116,9 +114,13 @@ def _uniform_medium_diag(eps, lam, mu):
     ``lam`` is the medium's modal ``lam`` as returned by
     :func:`_sem_modes_uniform` (forward selector applied) and ``mu`` the
     geometric spectrum it was built from; ``eps - mu`` is the same ``q2`` that
-    function multiplies into ``V``."""
-    eps = complex(eps)
+    function multiplies into ``V``.  ``xp`` selects the array module (the
+    JAX twin passes ``jax.numpy`` and a possibly traced ``eps``)."""
     n = mu.shape[0]
+    if xp is not np:
+        safe = _safe_lam(lam, xp)
+        return xp.concatenate([-eps / safe[:n], (eps - mu) / safe[n:]])
+    eps = complex(eps)
     safe = _safe_lam(lam)
     D = np.empty(2 * n, dtype=complex)
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
@@ -127,43 +129,53 @@ def _uniform_medium_diag(eps, lam, mu):
     return D
 
 
-def _diag_interface(Da, Db):
+def _diag_interface(Da, Db, xp=np):
     """Elementwise interface S-matrix from medium ``a`` into medium ``b`` (both
-    uniform on one grid), or ``None`` when it is not finite."""
+    uniform on one grid), or ``None`` when it is not finite (NumPy; a traced
+    value cannot be screened, the JAX twin's caller runs no fallback)."""
+    if xp is not np:
+        b = Da / Db
+        return _interface_from_ab(1.0 + b, 1.0 - b, xp.reciprocal,
+                                  xp.multiply)
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
         b = Da / Db
-        apb = 1.0 + b
-        amb = 1.0 - b
-        S = (-amb / apb, 2.0 / apb, 2.0 * b / apb, amb / apb)
+        # a = 1 between two uniform media on one grid: the dense formula,
+        # elementwise (one implementation, _core._interface_from_ab)
+        S = _interface_from_ab(1.0 + b, 1.0 - b, np.reciprocal, np.multiply)
     if not all(np.all(np.isfinite(x)) for x in S):
         return None
     return S
 
 
-def _diag_propagate(S, lam, k0_t):
+def _diag_propagate(S, lam, k0_t, xp=np):
     """``S`` starred with the propagation S-matrix of ``(lam, k0 t)`` (the
     elementwise :func:`_propagation_star`)."""
     A11, A12, A21, A22 = S
+    if xp is not np:
+        X = xp.exp(-lam * k0_t)
+        return (A11, A12 * X, X * A21, X * A22 * X)
     with np.errstate(over="ignore", invalid="ignore"):
         X = np.exp(-lam * k0_t)
     return (A11, A12 * X, X * A21, X * A22 * X)
 
 
-def _diag_star(A, B):
+def _diag_star(A, B, xp=np):
     """Elementwise Redheffer star of two diagonal S-matrices, or ``None`` when
-    a denominator vanishes or the result is not finite."""
+    a denominator vanishes or the result is not finite (NumPy only)."""
     A11, A12, A21, A22 = A
     B11, B12, B21, B22 = B
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
         D = A12 / (1.0 - B11 * A22)
         F = B21 / (1.0 - A22 * B11)
         S = (A11 + D * B11 * A21, D * B12, F * A21, B22 + F * A22 * B12)
+    if xp is not np:
+        return S
     if not all(np.all(np.isfinite(x)) for x in S):
         return None
     return S
 
 
-def _diag_run(D_list, lam_list, k0_t_list):
+def _diag_run(D_list, lam_list, k0_t_list, xp=np):
     """The S-matrix of one RUN of consecutive uniform media, elementwise.
 
     ``D_list`` / ``lam_list`` hold the media in cascade order (``m >= 2``);
@@ -173,26 +185,28 @@ def _diag_run(D_list, lam_list, k0_t_list):
     run is ``iface(0, 1), prop(1), iface(1, 2), prop(2), ...`` -- exactly the
     order the dense loop applies.  Returns the four diagonals, or ``None`` when
     any step is not finite."""
-    S = _diag_interface(D_list[0], D_list[1])
+    S = _diag_interface(D_list[0], D_list[1], xp)
     if S is None:
         return None
     for j in range(1, len(D_list)):
         if j > 1:
-            Si = _diag_interface(D_list[j - 1], D_list[j])
+            Si = _diag_interface(D_list[j - 1], D_list[j], xp)
             if Si is None:
                 return None
-            S = _diag_star(S, Si)
+            S = _diag_star(S, Si, xp)
             if S is None:
                 return None
         if k0_t_list[j] is not None:
-            S = _diag_propagate(S, lam_list[j], k0_t_list[j])
+            S = _diag_propagate(S, lam_list[j], k0_t_list[j], xp)
+    if xp is not np:
+        return S
     if not all(np.all(np.isfinite(x)) for x in S):
         return None
     return S
 
 
 def _cascade_vertical(media, k0_t, *, interface, star, propagation_star,
-                      collapse=True, stats=None):
+                      collapse=True, stats=None, xp=np):
     """The symmetric (``+/-q``) Redheffer cascade ``sup -> layers -> sub`` with
     every run of consecutive uniform media collapsed into one diagonal
     S-matrix.
@@ -208,7 +222,9 @@ def _cascade_vertical(media, k0_t, *, interface, star, propagation_star,
     A run whose elementwise cascade is not finite is cascaded by the dense
     kernels instead, layer by layer, so the result never depends on the fast
     path having succeeded.  ``stats`` (a dict, optional) counts the collapsed
-    runs and the dense fallbacks for the tests."""
+    runs and the dense fallbacks for the tests.  ``xp`` selects the array
+    module: the JAX twin runs this same cascade with ``jax.numpy`` (no
+    finiteness screen under a trace, so no fallback there)."""
     nmed = len(media)
 
     def _k0t(j):                 # medium j's propagation (None for sub)
@@ -229,9 +245,9 @@ def _cascade_vertical(media, k0_t, *, interface, star, propagation_star,
             run = list(range(j - 1, end + 1))
             Sd = _diag_run([media[m][3] for m in run],
                            [media[m][2] for m in run],
-                           [None] + [_k0t(m) for m in run[1:]])
+                           [None] + [_k0t(m) for m in run[1:]], xp)
             if Sd is not None:
-                S = _append(tuple(np.diag(v) for v in Sd))
+                S = _append(tuple(xp.diag(v) for v in Sd))
                 if stats is not None:
                     stats["runs"] = stats.get("runs", 0) + 1
                     stats["collapsed_media"] = (stats.get("collapsed_media", 0)

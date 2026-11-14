@@ -88,12 +88,12 @@ from lumenairy.elements.pmm._core import _pmm_union_grid  # noqa: E402
 @pytest.fixture(autouse=True, scope="module")
 def _pre_fix_selector():
     from lumenairy.elements.pmm import _core as _sel
-    was = _sel.PMM_EIG_ROUNDOFF_BAR
-    _sel.PMM_EIG_ROUNDOFF_BAR = False
+    was = _sel._PMM_EIG_ROUNDOFF_BAR
+    _sel._PMM_EIG_ROUNDOFF_BAR = False
     try:
         yield
     finally:
-        _sel.PMM_EIG_ROUNDOFF_BAR = was
+        _sel._PMM_EIG_ROUNDOFF_BAR = was
 
 # ---- the O-11 fixture, verbatim from validation/probe_pmm2d_staggered_mortar
 # /f5f_attrib.py: two slices of a taper, the second's walls opened by ``delta``.

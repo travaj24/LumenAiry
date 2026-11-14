@@ -1165,9 +1165,12 @@ def _conical_cell(degree):
     ``dict(degree, r0, close, fired, n_grow, spread, n_risky, margin)`` -- both
     verdict channels read straight off ``_MODE_CUT_CENSUS`` so the adjudication
     below is a measurement and not an inference."""
-    # both selector switches in the key -- see ``_t34_cell``
+    # both selector switches in the key -- see ``_t34_cell`` -- and the
+    # structured-conical-solve switch (2026-11-14), which changes the modes
+    import lumenairy.elements.pmm.conical as _CO
     key = (degree, bool(PC.PMM_FORWARD_GROWTH_REPAIR),
-           bool(PC.PMM_FORWARD_GROWTH_PASSIVE))
+           bool(PC.PMM_FORWARD_GROWTH_PASSIVE),
+           bool(_CO.PMM_CONICAL_STRUCTURED))
     if key in _CONICAL_SCAN:
         return _CONICAL_SCAN[key]
     st = PMMStack(PERIOD, n_substrate=N_SUB, n_superstrate=N_SUP,
@@ -1218,8 +1221,20 @@ def _conical_table(degrees):
 
 
 @pytest.mark.parametrize("degree", [10, 12, 14])
-def test_t34_bar_is_REFUTED_on_the_conical_family(degree, t34_armed):
+def test_t34_bar_is_REFUTED_on_the_conical_family(degree, t34_armed,
+                                                   monkeypatch):
     """THE REFUTATION, pinned -- the reason the guard ships disarmed.
+
+    **2026-11-14 -- RE-PINNED AGAINST THE FIX, as this test asks.**  The
+    structured conical modal solves (``conical._conical_modes``) removed the
+    round-off modes that carried the false positive: with them every rung of
+    the family reads ``n_grow`` = 0, ``spread`` = 0, no at-risk mode, and the
+    verdict is quiet (``test_t34_conical_family_is_clean_with_structured_
+    solves`` below).  The refutation is a statement about the INSTRUMENT on
+    that population, so it now runs on the population that carried it -- the
+    dense conical eig, restored through the fail-before switch
+    ``conical.PMM_CONICAL_STRUCTURED = False`` -- with every assertion as
+    before.
 
     On the CONICAL (phi != 0) cascade at ``min_feature`` = 3 nm the degree
     ladder is stationary to 0.52 % and the answers are right, yet the
@@ -1249,6 +1264,8 @@ def test_t34_bar_is_REFUTED_on_the_conical_family(degree, t34_armed):
     at-risk modes inside the cut's decade, or growing forward modes, but the
     verdict stayed quiet) from "the conical family is clean on this build"
     (every rung reads ``n_grow`` = 0 and no at-risk mode at all)."""
+    import lumenairy.elements.pmm.conical as _CO
+    monkeypatch.setattr(_CO, "PMM_CONICAL_STRUCTURED", False)
     cell = _conical_cell(degree)
     # the cell IS correct: it sits on the stationary plateau (0.1335 +/- 0.1%)
     assert abs(cell["r0"] / _CONICAL_PLATEAU - 1.0) < 0.01, cell["r0"]
@@ -1288,6 +1305,23 @@ def test_t34_bar_is_REFUTED_on_the_conical_family(degree, t34_armed):
         "the conical FALSE POSITIVE stopped reproducing -- if the instrument "
         "was improved, re-pin this against the fix, do not delete it.  "
         + why + ".\n    " + _conical_table(scanned))
+
+
+@pytest.mark.parametrize("degree", [10, 12, 14, 16])
+def test_t34_conical_family_is_clean_with_structured_solves(degree, t34_armed):
+    """With the structured conical modal solves (the default since
+    2026-11-14) the family that refuted the T3-4 bar is clean: no growing
+    forward mode, no count spread, no at-risk mode, no verdict, and the
+    answer on the plateau.  MEASURED 2026-11-14 (Windows/MKL): degrees
+    10 / 12 / 14 / 16 all read n_grow 0, spread 0, n_risky 0, quiet, r0
+    within 4e-4 of the plateau (degree 18 reads 4 at-risk modes at margin
+    7.5, quiet)."""
+    cell = _conical_cell(degree)
+    assert abs(cell["r0"] / _CONICAL_PLATEAU - 1.0) < 0.01, cell["r0"]
+    assert not cell["fired"], _conical_table([degree])
+    assert cell["n_grow"] == 0 and cell["spread"] == 0, _conical_table(
+        [degree])
+    assert cell["n_risky"] == 0, _conical_table([degree])
 
 
 def test_t34_guard_warnings_come_out_in_WAVELENGTH_ORDER_on_the_sweep(

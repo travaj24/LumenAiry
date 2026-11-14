@@ -276,7 +276,9 @@ def test_normalizer_accepted_forms_round_trip():
 
 def test_default_floor_is_completed_by_the_wavelength():
     """max(3e-5 x period, 1.25e-5 x wavelength); the longest wavelength of an
-    array binds; no / a non-numeric wavelength -> the period part alone; an
+    array binds; no wavelength -> the period part alone; a non-numeric,
+    non-finite or non-positive one raises (it used to drop the wavelength
+    part silently, changing the layout -- review finding A5, 2026-11-14); an
     explicit floor is never touched."""
     P = 370e-9
     f = C._normalize_grade("geometric", period=P, where="t",
@@ -288,8 +290,10 @@ def test_default_floor_is_completed_by_the_wavelength():
     f = C._normalize_grade("geometric", period=P, where="t",
                            wavelength=200e-9)[2]             # period part wins
     assert f == 3e-5 * P
-    for wl in (None, "x", float("nan"), -1.0):
-        assert C._geometric_default_floor(P, wl) == 3e-5 * P
+    assert C._geometric_default_floor(P, None) == 3e-5 * P
+    for wl in ("x", float("nan"), -1.0, 0.0):
+        with pytest.raises(ValueError, match="wavelength"):
+            C._geometric_default_floor(P, wl)
     spec = ("geometric", 0.2, 5e-12)
     assert C._normalize_grade(spec, period=P, where="t",
                               wavelength=1300e-9) == spec
@@ -413,14 +417,24 @@ def test_unnormalized_string_reaching_the_kernel_raises():
             C._graded_boundaries(0.0, 1.0, 1, bad)
     with pytest.raises(ValueError, match="invalid geometric spec"):
         C._graded_boundaries(0.0, 1.0, 4, ("geometric", 1.5, 1e-12))
-    # the conical 1-D entry and pmm_jones_2d now normalize ``grade`` at entry
-    # and refuse the geometric spec explicitly (conical: measured inaccurate
-    # there, see tests/unit/test_pmm_stack_geometric.py; 2-D: not validated)
-    with pytest.raises(NotImplementedError, match="conical incidence"):
-        lum.elements.pmm.pmm_jones_1d_conical(
-            370e-9, EPS_METAL, 1.0, N_SUB, 1.0, DEPTH, 0.47, 1300e-9,
-            theta=0.1, phi=0.2, degree=6, elements_per_region=4,
-            grade="geometric")
+    # the conical 1-D entry and pmm_jones_2d normalize ``grade`` at entry.
+    # Conical accepts the geometric spec since the structured conical solves
+    # (tests/unit/test_pmm_conical_structured.py) and refuses it only with
+    # their fail-before switch off; 2-D refuses it (not validated).
+    import lumenairy.elements.pmm.conical as CO
+    lum.elements.pmm.pmm_jones_1d_conical(
+        370e-9, EPS_METAL, 1.0, N_SUB, 1.0, DEPTH, 0.47, 1300e-9,
+        theta=0.1, phi=0.2, degree=6, elements_per_region=4,
+        grade="geometric")
+    CO.PMM_CONICAL_STRUCTURED = False
+    try:
+        with pytest.raises(NotImplementedError, match="conical incidence"):
+            lum.elements.pmm.pmm_jones_1d_conical(
+                370e-9, EPS_METAL, 1.0, N_SUB, 1.0, DEPTH, 0.47, 1300e-9,
+                theta=0.1, phi=0.2, degree=6, elements_per_region=4,
+                grade="geometric")
+    finally:
+        CO.PMM_CONICAL_STRUCTURED = True
     cell = np.ones((4, 4, 3, 3)) * np.eye(3)
     cell[:2, :2] = 4.0 * np.eye(3)
     with pytest.raises(NotImplementedError, match="1-D PMM family"):
