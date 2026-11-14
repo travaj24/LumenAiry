@@ -392,3 +392,26 @@ def test_li_layer_absorption_is_the_face_flux_and_closes():
     vol = _absorber("laurent").layer_absorption(nz_per_layer=128,
                                                 return_raw=True)
     assert np.max(np.abs(raw[1] / vol[1] - 1)) < 1e-4
+
+
+def test_li_layer_absorption_closes_on_a_2d_metal_layer():
+    """The face-flux attribution on a 2-D stack ('auto' -> 'li' for the metal
+    rectangle; the lossy spacer keeps the volume integral): the 'li' layer's
+    share is exact, so the raw split misses the absorptance only by the
+    spacer's midpoint depth rule (measured 8.0e-7 / 3.5e-7 relative for the
+    two incident polarizations at nz_per_layer 256, Windows/MKL)."""
+    p = 0.6e-6
+    st = RCWAStack(p, period_y=p, n_substrate=1.5, n_orders=3, n_orders_y=3)
+    st.add_layer(0.05e-6, shapes=[dict(shape="rectangle", eps=-10 + 1j,
+                                       center=(0.35 * p, 0.6 * p),
+                                       size=(0.3 * p, 0.4 * p))],
+                 eps_background=1.0)
+    st.add_layer(0.05e-6, eps=complex(2.1, 0.1))
+    st.set_source(1.31e-6, theta=0.2, phi=0.5)
+    assert st.layers[0].formulation == "li"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = st.solve(retain_internal=True, symmetry=False)
+    raw = res.layer_absorption(nz_per_layer=256, return_raw=True)
+    assert np.all(raw > 0)
+    assert np.max(np.abs(raw.sum(axis=1) / res.absorptance() - 1)) < 1e-4
