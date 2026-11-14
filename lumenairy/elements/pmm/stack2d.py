@@ -47,6 +47,7 @@ from ._core import (
     _frame_anchor_phase,
     _freeze_cached,
     _interface_smatrix,
+    _normalize_grade,
     _propagation_smatrix,
     _redheffer_star,
     _resolve_incidence,
@@ -357,7 +358,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                       else complex(n_substrate))
         self.degree = int(degree)
         self.n_el = int(elements_per_strip)
-        self.grade = bool(grade)
+        self.grade = grade          # validated by the property setter
         self.n_orders = int(n_orders)
         self.formulation = formulation
         # F8: Lalanne-1997 circular truncation, the same option the single-cell
@@ -475,6 +476,25 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
     @formulation.setter
     def formulation(self, value):
         self._formulation = _check_formulation(value)
+
+    @property
+    def grade(self):
+        """Element grading inside each strip, RESOLVED to a bool by
+        :func:`~lumenairy.elements.pmm._core._normalize_grade`: ``True`` (or
+        ``'chebyshev'``) = Chebyshev-Lobatto clustering toward the walls,
+        ``False`` = uniform.  Guarded on assignment like ``formulation``: the
+        solve and the cache keys read a bool, so an arbitrary truthy value
+        (in particular the 1-D family's ``'geometric'``, which is not
+        validated on the 2-D hybrid) would otherwise run Chebyshev grading
+        and say nothing.  ``'geometric'`` raises ``NotImplementedError``,
+        anything else that is not bool-like raises ``ValueError``."""
+        return self._grade
+
+    @grade.setter
+    def grade(self, value):
+        self._grade = _normalize_grade(value, period=self._period_x,
+                                       where="PMM2DStackHybrid",
+                                       allow_geometric=False)
 
     @property
     def cascade(self):
@@ -606,7 +626,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 tuple(np.ravel(L["xw"])), tuple(np.ravel(L["yw"])),
                 tuple(np.ravel(L["el_x"])), tuple(np.ravel(L["el_y"])),
                 float(self.period_x), float(self.period_y),
-                int(self.degree), bool(self.grade), int(self.n_orders),
+                int(self.degree), self.grade, int(self.n_orders),
                 self.formulation,
                 # SLANT (2026-08-16): two layers identical except for their
                 # slant vector have DIFFERENT modes and must not share a

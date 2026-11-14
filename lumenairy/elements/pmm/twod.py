@@ -98,6 +98,7 @@ from ._core import (
     _interface_smatrix,
     _lagrange_derivative_matrix,
     _lossy_incidence,
+    _normalize_grade,
     _propagation_smatrix,
     _propagation_star,
     _redheffer_star,
@@ -1315,7 +1316,12 @@ def pmm_efficiency_2d(
     elements_per_strip : int, optional
         Spectral elements per strip (per axis).  Default 1.
     grade : bool, optional
-        Graded element boundaries within each strip (clustering toward walls).
+        Graded element boundaries within each strip (clustering toward walls):
+        ``True`` (alias ``'chebyshev'``) = Chebyshev-Lobatto clustering, inert
+        at 1 or 2 elements per strip.  The 1-D family's ``'geometric'`` layout
+        is not validated on the 2-D entry points and raises
+        ``NotImplementedError`` here (as does any value other than a
+        bool-like or ``'chebyshev'``, with ``ValueError``).
     polarization : {"te", "tm"}, optional
         Incident linear polarization.
     theta, phi : float, optional
@@ -1358,6 +1364,9 @@ def pmm_efficiency_2d(
            ``res = pmm_efficiency_2d(...); o, R, T = res; dof = res.dof`` or
            ``o, R, T = pmm_efficiency_2d(...)[:3]``.
     """
+    grade = _normalize_grade(
+        grade, period=period_x, where="pmm_efficiency_2d",
+        allow_geometric=False)
     n_nodes_axis = 3 * degree * elements_per_strip
     if n_nodes_axis % 2 == 0:
         raise ValueError(
@@ -1545,6 +1554,9 @@ def pmm_efficiency_2d_cell(
     result : :class:`~lumenairy.elements.rcwa.Efficiency2D`
         Unpacks as ``orders, R, T``; ``.dof = 2 * (2*n_orders+1)**2``.
     """
+    grade = _normalize_grade(
+        grade, period=period_x, where="pmm_efficiency_2d_cell",
+        allow_geometric=False)
     if polarization not in ("te", "tm"):
         raise ValueError("polarization must be 'te' or 'tm'")
     _jx = (eps_cell, n_substrate, n_superstrate, depth, wavelength, theta,
@@ -1801,6 +1813,9 @@ def prepare_pmm_2d(
     even-parity fold inside every :meth:`PreparedPMM2D.solve`, and every solve
     runs the lossless-closure tripwire.
     """
+    grade = _normalize_grade(
+        grade, period=period_x, where="prepare_pmm_2d",
+        allow_geometric=False)
     n_nodes_axis = 3 * degree * elements_per_strip
     if n_nodes_axis % 2 == 0:
         raise ValueError(
@@ -1950,6 +1965,9 @@ def prepare_pmm_2d_cell(
     :func:`prepare_pmm_2d`).  NON-DISPERSIVE indices and a FIXED
     ``(theta, phi)`` assumed.  ``truncation`` / ``symmetry`` / ``energy_tol``
     are as in :func:`prepare_pmm_2d`."""
+    grade = _normalize_grade(
+        grade, period=period_x, where="prepare_pmm_2d_cell",
+        allow_geometric=False)
     if polarization not in ("te", "tm"):
         raise ValueError("polarization must be 'te' or 'tm'")
     x_walls, y_walls, tile = _cell_to_walls_tile(
@@ -2012,6 +2030,9 @@ def pmm_efficiency_2d_vs_wavelength(
     R, T : (n_wavelengths, Nf) float ndarray
         Reflected / transmitted efficiency per order at each wavelength.
     """
+    grade = _normalize_grade(
+        grade, period=period_x, where="pmm_efficiency_2d_vs_wavelength",
+        allow_geometric=False)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0:
         raise ValueError("pmm_efficiency_2d_vs_wavelength: wavelengths is "
@@ -2064,6 +2085,9 @@ def pmm_efficiency_2d_cell_vs_wavelength(
     geometry-only assembly (the :func:`pmm_efficiency_2d_cell` companion of
     :func:`pmm_efficiency_2d_vs_wavelength`; same returns).  ``truncation`` /
     ``symmetry`` / ``energy_tol`` are as in :func:`pmm_efficiency_2d_cell`."""
+    grade = _normalize_grade(
+        grade, period=period_x, where="pmm_efficiency_2d_cell_vs_wavelength",
+        allow_geometric=False)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0:
         raise ValueError("pmm_efficiency_2d_cell_vs_wavelength: wavelengths "

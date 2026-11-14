@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/twod.py
-ast_sha256: 7ae3b785dde39f0c53e74cb11c07347c9b3726750e7025e7dff95176b5b35029
-token_sha256: 9d9072cf38084e819cb836dad7c81ce5c2048eb7f81240d58e27e7e06258944a
+ast_sha256: 15f23fc46cd0e1991caf4e167ea2ab8c7b36eb521cffffe1149cb2c3d77468a8
+token_sha256: f4009d668b8775121efd65a7a9c6525f5a10f1406aff856bb7d71e230d17ded5
 pre_relocation_lines: 2029
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -9,6 +9,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-11-03 -- audit L-8/L-9 (A-2): clearer hybrid DOF refusal (max_nodal_dof, PMM2DStackPure pointer) and Granet map-quadrature cusp warning -- diagnostic text only, R/T bit-identical to 5.50.0
 re_recorded: 2026-11-03 -- point-mirror fix (v5.50.1): PMM paths solved eps(-x,-y); registration bridges (_internal_mirror_1d full x-mirror for the covariant core, _build_axis internal frame + _internal_slant for the hybrid, _stag_bloch_tau public carrier for the staggered family), slant-convection sign and frame-anchor sign (_frame_anchor_phase) corrected
 re_recorded: 2026-11-03 -- release 5.50.1 merge: PMM point-mirror fix (hybrid internal frame _build_axis / _internal_slant) combined with the L-8/L-9 diagnostic text
+re_recorded: 2026-11-14 -- G-1 geometric grading spec: the 2-D public entry points normalize grade and refuse the geometric spec (NotImplementedError; validated on the 1-D family only); bool grades bit-identical
 -->
 
 # Version history -- `lumenairy/elements/pmm/twod.py`
