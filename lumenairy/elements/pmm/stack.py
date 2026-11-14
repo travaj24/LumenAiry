@@ -5749,19 +5749,27 @@ class _PreparedPMMStack:
         lmodes = [self._layer_eig(i, materials, k0, kx0, wl, angle, mats_sup)
                   for i in range(len(st._layers))]
         # out-of-plane resolved tensors are not supported on this path
-        S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
-        for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
-            S = _propagation_star(S, lam_l, k0 * st._layers[i][0])
-            nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
-                      else (lmodes[i + 1][0], lmodes[i + 1][1]))
-            S = _redheffer_star(S, _interface_smatrix(Wl_, Vl_, nW, nV))
-        S11, _S12, S21, _S22 = S
-
-        # far field (mirrors PMMStack.solve)
         resolved_all = [self._resolve(eps_u, materials, wl)
                         if ks else [st._as_tensor(e) for e in eps_u]
                         for eps_u, ks in zip(self._layer_eps_u,
                                              self._layer_keys)]
+        # the SAME cascade as PMMStack.solve (uniform runs collapsed), so a
+        # prepared solve stays bit-identical to the rebuilt one; the uniform
+        # classification is the one _layer_eig made on the same resolved
+        # tensors.
+        uni = [(_uniform_iso_eps(r) if _UNIFORM_FAST_PATH else None)
+               for r in resolved_all]
+        media = _vertical_media(
+            (Wsup, Vsup, sup_modes[2], eps_sup),
+            (Wsub, Vsub, sub_modes[2], eps_sub), lmodes, uni,
+            _uniform_geo_eig(mats_sup, k0, kx0)[0])
+        S = _cascade_vertical(
+            media, [k0 * st._layers[i][0] for i in range(len(lmodes))],
+            interface=_interface_smatrix, star=_redheffer_star,
+            propagation_star=_propagation_star, collapse=_UNIFORM_FAST_PATH)
+        S11, _S12, S21, _S22 = S
+
+        # far field (mirrors PMMStack.solve)
         n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))
                      for eps_u in resolved_all for e in eps_u]
                     + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))

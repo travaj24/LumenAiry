@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: 87c37860f058b63ca783596efb2ad1b4989997ccb45e93aee11658aaa1db2021
-token_sha256: e036da8ec69ac64fd16abbaede9935d221fc6fc061f38a07563aef5edd495dbc
+ast_sha256: ccb0c6c055377f24d7dfe0a5f59d1d3e77070012c152902ba20b03c1016ee9f1
+token_sha256: e8912422ad228c46855af8f8ef082f95400d594ce08cd68e522f25278f98b98a
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -10,6 +10,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-11-03 -- point-mirror fix (v5.50.1): PMM paths solved eps(-x,-y); registration bridges (_internal_mirror_1d full x-mirror for the covariant core, _build_axis internal frame + _internal_slant for the hybrid, _stag_bloch_tau public carrier for the staggered family), slant-convection sign and frame-anchor sign (_frame_anchor_phase) corrected
 re_recorded: 2026-11-14 -- G-2: laterally uniform isotropic layers solved from the shared geometric eig; runs of uniform media cascaded elementwise (pmm/_uniform_cascade.py)
 re_recorded: 2026-11-14 -- G-1 wiring (grade through _normalize_grade, validated property, geometric refused at conical incidence), small-element guard + energy backstop, wavelength-completed default geometric floor
+re_recorded: 2026-11-14 -- prepare().solve cascades with the same uniform-run collapse as solve(), restoring prepared == rebuilt bit identity
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
