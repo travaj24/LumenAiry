@@ -116,6 +116,28 @@ class RCWAYAverageWarning(UserWarning):
     """
 
 
+def _cell_y_spread(cell):
+    """Largest per-row spread of a CONCRETE ``(Sx, Sy[, 3, 3])`` cell along y
+    (peak-to-peak of the real part plus that of the imaginary part, per
+    ``(x, component)``), ``0.0`` for a cell with ``Sy <= 1``.
+
+    The ONE y-variance test of the stack: :func:`_warn_if_y_averaged` warns on
+    it and the ``formulation='auto'`` resolver (:func:`_resolve_formulation`)
+    keeps a y-varying cell of a 1-D stack on the direct rule because of it.
+    It is the same per-component test as the ``strict_y`` branch of
+    :func:`~lumenairy.elements.rcwa._core._validate_cell_sampling`."""
+    Sx, Sy = int(cell.shape[0]), int(cell.shape[1])
+    if Sy <= 1:
+        return 0.0                            # already a 1-D cell, nothing lost
+    xpc = array_namespace(cell)
+    arr = xpc.asarray(cell)
+    spatial = arr.reshape(Sx, Sy, -1)
+    yspread = xpc.ptp(spatial.real, axis=1)
+    if xpc.iscomplexobj(spatial):
+        yspread = yspread + xpc.ptp(spatial.imag, axis=1)
+    return float(xpc.max(yspread))
+
+
 def _warn_if_y_averaged(fn_name, cell, n_orders_y, *, strict_y, stacklevel=3):
     """Emit :class:`RCWAYAverageWarning` when a 1-D stack is about to y-average
     a genuinely y-VARYING 2-D cell.
@@ -149,15 +171,7 @@ def _warn_if_y_averaged(fn_name, cell, n_orders_y, *, strict_y, stacklevel=3):
     if is_jax_array(cell):
         return False                          # tracer: not inspectable
     Sx, Sy = int(cell.shape[0]), int(cell.shape[1])
-    if Sy <= 1:
-        return False                          # already a 1-D cell, nothing lost
-    xpc = array_namespace(cell)
-    arr = xpc.asarray(cell)
-    spatial = arr.reshape(Sx, Sy, -1)
-    yspread = xpc.ptp(spatial.real, axis=1)
-    if xpc.iscomplexobj(spatial):
-        yspread = yspread + xpc.ptp(spatial.imag, axis=1)
-    ysp = float(xpc.max(yspread))
+    ysp = _cell_y_spread(cell)
     if ysp == 0.0:
         return False                          # y-INVARIANT: the average is exact
     warnings.warn(
@@ -460,14 +474,15 @@ def _raster_wants_companions(fn_name, raster, formulation):
     factorization.  Under ``'laurent'`` the pair would be dead weight, so
     ``'harmonic'`` degenerates to ``'area'`` -- bit-for-bit, deliberately: the
     mode is then a no-op rather than a trap, and it can be swept across
-    formulations without special-casing (audit W9)."""
+    formulations without special-casing (audit W9).  ``formulation`` is the
+    RESOLVED one: the builders resolve ``'auto'`` before asking."""
     f = str(formulation).lower()
     if f == "fff":
         f = "li"
     if f not in ("laurent", "li"):
         raise ValueError(
-            f"{fn_name}: formulation must be 'laurent' (default) or 'li'/'fff', "
-            f"got {formulation!r}.")
+            f"{fn_name}: formulation must be 'laurent' or 'li'/'fff' here "
+            f"(resolve 'auto' first), got {formulation!r}.")
     return raster == "harmonic" and f == "li"
 
 
@@ -524,6 +539,157 @@ def _check_li_shapes_2d(fn_name, shapes, eps_background):
             f"{fn_name}: formulation='li' needs a non-zero eps_background "
             f"(got {complex(_C(eps_background))}); the inverse rule reads "
             f"1/eps_background.")
+
+
+def _normalize_formulation(fn_name, formulation):
+    """``'auto' | 'laurent' | 'li'`` from a user spelling (``'fff'`` is an
+    alias of ``'li'``); anything else raises with a ``fn_name:`` lead."""
+    f = str(formulation).lower()
+    if f == "fff":
+        f = "li"
+    if f not in ("auto", "laurent", "li"):
+        raise ValueError(
+            f"{fn_name}: formulation must be 'auto' (default), 'laurent' or "
+            f"'li'/'fff', got {formulation!r}.")
+    return f
+
+
+def _li_cell_contrast(cell, *, traced_ok=True):
+    """Does an isotropic cell carry contrast, i.e. does the ``'li'`` rule build
+    its inverse-rule blocks for it?  ``False`` for a cell uniform to ``1e-12``
+    relative: every factorization coincides there and the layer takes the
+    scalar path, whose analytic uniform modes avoid a degenerate eig.
+
+    THE single definition of that test.  :class:`_RCWALayer` evaluates it once,
+    when the layer is added, on the concrete cell, so the solve never has to
+    pull a cell back to the host: inside a ``jax.jit`` trace, or under
+    ``jax.grad`` with respect to the wavelength, every array of the solve is a
+    tracer and a host read would raise.  The cell's point mirror and
+    conjugation (``_core._internal_cell``) only permute the samples and flip
+    the sign of their imaginary parts, so the verdict on the public cell is the
+    verdict on the internal one.
+
+    A traced cell cannot be inspected: ``traced_ok=True`` returns ``None`` for
+    it, ``traced_ok=False`` lets the host read raise."""
+    try:
+        e_np = np.asarray(to_numpy(cell))
+    except Exception:
+        if not traced_ok:
+            raise
+        return None
+    scale = max(1.0, float(np.max(np.abs(e_np))))
+    return bool(float(np.max(np.abs(e_np - e_np.flat[0]))) > 1e-12 * scale)
+
+
+def _concrete_eps_values(values):
+    """Concrete complex permittivities from scalars / arrays, or ``None`` when
+    any of them is a callable (dispersive) or a traced array."""
+    out = []
+    for v in values:
+        if v is None:
+            continue
+        if callable(v):
+            return None
+        try:
+            out.append(np.asarray(to_numpy(v), dtype=_C).ravel())
+        except Exception:
+            return None
+    return np.concatenate(out) if out else np.zeros(0, dtype=_C)
+
+
+def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
+                         shapes=None, eps_background=None, period_y=None,
+                         eps_values=None, has_normal_pair=False):
+    """The factorization a layer is solved with, from the request.
+
+    An explicit ``'laurent'`` / ``'li'`` (``'fff'``) is returned unchanged --
+    the existing validation downstream decides whether the layer accepts it.
+    ``'auto'`` (the default) resolves as follows:
+
+    * uniform and tensor layers -> ``'laurent'`` (they have their own
+      factorizations and ignore the setting);
+    * an ``eps_cell_normal`` companion pair -> ``'li'`` (the pair is read only
+      by the inverse rule);
+    * a JAX ``eps_cell``, traced or not -> ``'laurent'``: the ``'li'`` branch
+      tests the cell for contrast on the host, which a tracer cannot answer,
+      and a concrete JAX cell resolves the same way so that a function
+      evaluated eagerly and under ``jax.grad`` / ``jax.jit`` solves one
+      factorization;
+    * a cell or a background holding an exact zero permittivity -> ``'laurent'``
+      (the inverse rule reads ``1/eps``);
+    * 1-D stack: an ``eps_cell`` -> ``'li'``, except a y-VARYING cell, which a
+      1-D stack sees only through its y-average and which stays on the direct
+      rule (bit-identical to pre-averaging the cell, as
+      :class:`RCWAYAverageWarning` documents); a ``shapes`` list -> ``'li'``
+      when it is y-invariant (full-``period_y`` rectangles), else
+      ``'laurent'``;
+    * 2-D stack: ``'li'`` only for a METALLIC layer (``Re(eps) < 0`` somewhere
+      in the cell, the shapes or the background) that ``'li'`` supports (an
+      ``eps_cell``; a ``shapes`` list of axis-aligned rectangles); otherwise
+      ``'laurent'``.  A dispersive (callable) 2-D layer -> ``'laurent'``: a
+      per-wavelength choice would switch the factorization inside a spectrum.
+
+    ``eps_values`` (builders) is the list of concrete permittivities of a
+    rasterised layer, used instead of ``cell``."""
+    f = _normalize_formulation(fn_name, requested)
+    if f != "auto":
+        return f
+    if kind in ("uniform", "tensor"):
+        return "laurent"
+    if has_normal_pair:
+        return "li"
+    if kind == "iso":
+        if eps_values is not None:
+            vals = _concrete_eps_values(eps_values)
+        elif callable(cell):
+            # dispersive cell: inspected per wavelength only, so the 1-D stack
+            # takes 'li' and the 2-D stack keeps the direct rule
+            return "li" if is_1d else "laurent"
+        elif is_jax_array(cell):
+            # A JAX cell -- traced or not -- keeps the direct rule, so a
+            # function evaluated eagerly and under jax.grad / jax.jit solves
+            # the SAME factorization (a concrete jnp cell resolved to 'li'
+            # would differentiate a different function than it evaluates).
+            return "laurent"
+        else:
+            vals = _concrete_eps_values([cell])
+            if vals is None:                  # not inspectable
+                return "laurent"
+        if vals is None:
+            return "li" if is_1d else "laurent"
+        if vals.size and float(np.min(np.abs(vals))) < 1e-12:
+            return "laurent"
+        if is_1d:
+            if cell is not None and not callable(cell):
+                c = np.asarray(to_numpy(cell))
+                if c.ndim >= 2 and _cell_y_spread(c) != 0.0:
+                    return "laurent"
+            return "li"
+        return "li" if bool(np.any(vals.real < 0.0)) else "laurent"
+    if kind == "shapes":
+        try:
+            if is_1d:
+                if _shapes_y_varying(shapes, period_y) is not None:
+                    return "laurent"
+                if callable(eps_background):
+                    return "li"
+                if abs(_C(eps_background)) < 1e-12:
+                    return "laurent"
+                return "li"
+            if _li_rect_shapes_problem(shapes) is not None:
+                return "laurent"
+            vals = _concrete_eps_values(
+                [eps_background] + [sh.get("eps") for sh in shapes])
+            if vals is None:                  # dispersive 2-D layer
+                return "laurent"
+            if abs(_C(eps_background)) < 1e-12:
+                return "laurent"
+            return "li" if bool(np.any(vals.real < 0.0)) else "laurent"
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+            # malformed shape list: the shapes validation that follows names
+            # the problem; the resolution does not try to
+            return "laurent"
+    raise ValueError(f"{fn_name}: unknown layer kind {kind!r}.")
 
 
 def _raster_companions(features, eps_bg, n_x, n_y):
@@ -1621,19 +1787,31 @@ class RCWAResult:
 
 class _RCWALayer:
     __slots__ = ("thickness", "kind", "data", "formulation", "dispersive",
-                 "normal_cells")
+                 "normal_cells", "formulation_requested", "li_contrast")
 
     def __init__(self, thickness, kind, data, formulation="laurent",
-                 dispersive=False, normal_cells=None):
+                 dispersive=False, normal_cells=None,
+                 formulation_requested=None):
         # keep a traced (JAX) thickness native so layer DEPTH is differentiable
         self.thickness = thickness if is_jax_array(thickness) else float(thickness)
         self.kind = kind          # 'uniform' | 'iso' | 'shapes' | 'tensor'
         self.data = data
-        self.formulation = formulation   # 'laurent' | 'li' (iso; shapes)
+        # What RUNS: 'laurent' | 'li' (iso; shapes) -- 'auto' never lands here.
+        self.formulation = formulation
+        # What was ASKED: 'auto' | 'laurent' | 'li' (the add_layer argument,
+        # normalized; 'fff' reads 'li').
+        self.formulation_requested = (formulation if formulation_requested
+                                      is None else formulation_requested)
         self.dispersive = dispersive     # data holds wl -> value callable(s)
         # (exx, eyy) INVERSE-RULE companion cells of an iso 'li' layer, or None
         # (audit W9: raster='harmonic' subpixel smoothing -- see add_layer).
         self.normal_cells = normal_cells
+        # The 'li' contrast test of a concrete iso cell, taken HERE so the solve
+        # never reads the cell back to the host (see _li_cell_contrast); None
+        # for a dispersive or traced cell, which the solve then tests itself.
+        self.li_contrast = (_li_cell_contrast(data)
+                            if (kind == "iso" and formulation == "li"
+                                and not dispersive) else None)
 
 
 
@@ -1801,8 +1979,13 @@ class RCWAStack:
           normalized it (``kind``-dependent: the scalar eps, the
           ``(Sx, Sy)`` cell, the ``(eps_background, shapes)`` pair, or the
           ``(Sx, Sy, 3, 3)`` tensor cell; wl-callables when dispersive);
-        * ``formulation`` -- ``'laurent' | 'li'`` (iso layers, and shapes
-          layers -- on a 2-D stack, rectangles only);
+        * ``formulation`` -- the factorization that RUNS, ``'laurent' | 'li'``
+          (``'li'`` only on iso layers, and shapes layers -- on a 2-D stack,
+          rectangles only); never ``'auto'``, which :meth:`add_layer`
+          resolves when the layer is added;
+        * ``formulation_requested`` -- what was asked, ``'auto' | 'laurent' |
+          'li'`` (``'fff'`` reads ``'li'``; a builder records its own
+          argument on every layer it adds);
         * ``dispersive`` -- True when ``data`` holds ``wl ->`` callables
           (solve via :meth:`solve_vs_wavelength`).
 
@@ -1845,7 +2028,7 @@ class RCWAStack:
 
     def add_layer(self, thickness, *, eps=None, eps_cell=None,
                   eps_tensor_cell=None, shapes=None, eps_background=None,
-                  formulation="laurent", eps_cell_normal=None):
+                  formulation="auto", eps_cell_normal=None):
         """Append a layer.  Provide exactly one layer specification:
 
         * ``eps`` (scalar) -- uniform isotropic spacer; a ``(3, 3)`` array is a
@@ -1885,8 +2068,65 @@ class RCWAStack:
         stack is solved with :meth:`solve_vs_wavelength` (a plain
         :meth:`solve` raises, since no single wavelength is defined).
 
-        ``formulation`` (audit GAP3, v5.14.1): ``'laurent'`` (default,
-        unchanged) or ``'li'``/``'fff'`` for an ISOTROPIC patterned layer --
+        ``formulation``: ``'auto'`` (the default), ``'laurent'`` or
+        ``'li'``/``'fff'``.  ``'auto'`` picks, per layer:
+
+        ==============================================  ==============
+        layer                                           resolves to
+        ==============================================  ==============
+        uniform ``eps``, tensor (ignore the setting)    ``'laurent'``
+        ``eps_cell`` with ``eps_cell_normal``           ``'li'``
+        1-D stack, ``eps_cell``                         ``'li'``
+        1-D stack, ``eps_cell`` varying along y         ``'laurent'``
+        1-D stack, ``shapes`` (y-flat)                  ``'li'``
+        1-D stack, ``shapes`` varying along y           ``'laurent'``
+        2-D stack, METALLIC ``eps_cell``                ``'li'``
+        2-D stack, METALLIC rectangle ``shapes``        ``'li'``
+        2-D stack, any other layer (dielectric; disks,  ``'laurent'``
+        ellipses; dispersive)
+        a JAX ``eps_cell`` (traced or not)              ``'laurent'``
+        an exact zero permittivity in the cell or the   ``'laurent'``
+        background
+        ==============================================  ==============
+
+        "Metallic" means ``Re(eps) < 0`` somewhere in the layer.  The value
+        that RAN is ``layers[i].formulation``; the request is
+        ``layers[i].formulation_requested``.  Pass ``formulation='laurent'``
+        to reproduce results computed with earlier releases, whose default it
+        was.  Why the default is not ``'laurent'``: on a resonant metal-strip
+        stack (a 175 nm strip, eps -74+6i, 50 nm thick, on a 21 nm dielectric
+        spacer over a metal mirror, eps -160+30i; period 370 nm, 1300 nm, TM)
+        the zeroth-order reflection errs, against a converged
+        ``PMMStack`` reference,
+
+        ============  ===========  ===========
+        ``n_orders``  'laurent'    'li'
+        ============  ===========  ===========
+        25            3.36e-1      3.28e-2
+        50            2.57e-1      3.92e-2
+        100           1.67e-1      1.06e-2
+        200           4.58e-2      4.88e-3
+        400           5.67e-2      2.30e-3
+        800           1.11e-2      1.00e-3
+        ============  ===========  ===========
+
+        (at ``n_orders`` 50 the direct rule returns the wrong sign of
+        ``Re(r)``), while TE (``E_y``, tangential to every wall of a 1-D
+        grating) is the same under both rules to round-off (measured 4.5e-13).
+        The default is NOT ``'li'`` on 2-D dielectric layers: there the two
+        rules differ by a few 1e-3 at practical truncations and the 2-D
+        single-layer functions default to ``'laurent'``, so those results stay
+        where they were; pass ``'li'`` explicitly for them, and for a
+        dispersive metal layer on a 2-D stack.  ``'li'`` does not trace a JAX
+        ``eps_cell`` (its contrast test reads the cell on the host), so a JAX
+        cell resolves to ``'laurent'`` -- a concrete one too, so that a
+        function evaluated eagerly and under ``jax.grad`` / ``jax.jit`` sees
+        the same factorization.  A NumPy cell resolved to ``'li'``
+        differentiates and jits like any other layer when the trace starts
+        elsewhere (a traced wavelength, angle, thickness or uniform eps): its
+        contrast test is taken when the layer is added.
+
+        ``'li'``/``'fff'`` applies to ISOTROPIC patterned layers --
         the Li-1997 sequential rule (inverse along each E-component's own
         axis, direct along the other, direct-rule ``E_z``), the
         fast-converging factorization for metal / high-contrast layers.
@@ -1909,8 +2149,8 @@ class RCWAStack:
         It is the ``S -> inf`` limit of the ``eps_cell`` 'li' path on a raster
         of the same cell.  Disks, ellipses and rotated rectangles raise (Li's
         rule for curved shapes is future work); a band whose ``[[1/eps]]`` is
-        singular raises ``LinAlgError``.  Uniform and tensor layers accept only
-        the default.
+        singular raises ``LinAlgError``.  Uniform and tensor layers accept
+        ``'auto'`` and ``'laurent'`` only.
 
         ``eps_cell_normal`` (audit W9, ``formulation='li'`` only): the
         INVERSE-RULE companion pair ``(exx, eyy)``, two cells of the SAME shape
@@ -1952,6 +2192,21 @@ class RCWAStack:
         REFERENCE value use PMM degree extrapolation (its windows agree to
         1e-7 from degree 64 up); for ``'li'`` report the spread of the last
         two extrapolation windows as its uncertainty.
+
+        RESONANT METAL STRIPS SCATTER FROM ONE ``n_orders`` TO THE NEXT.  On
+        the metal-strip stack of the ``formulation`` table above, ``'li'``
+        converges as N^-1.1..1.2 and, below N of about 100, consecutive
+        truncations scatter by a factor 2-3 around that trend (errors
+        1.85e-2 / 3.50e-2 / 4.54e-2 / 1.71e-2 / 3.92e-2 / 1.41e-2 / 2.36e-2 /
+        1.22e-2 at N = 40 / 41 / 44 / 45 / 50 / 57 / 69 / 70).  It is a
+        property of the truncated strip operator (the same strip on a bare
+        substrate shows it about 25x weaker; the resonance amplifies it), not
+        of the cascade (``symmetry='auto'`` and ``False`` agree to 1e-12).  So
+        step N GEOMETRICALLY (x1.5 or x2, never by a few orders) and use
+        :func:`rcwa_convergence`'s default step, which does; and for a 1-D
+        metal REFERENCE use ``PMMStack`` with ``grade='geometric'`` (1.5e-6 in
+        about 2 s on that stack, where ``'li'`` is still 1.0e-3 off at
+        N = 800, about 70 s).
         """
         # Uniform ANISOTROPIC entry (audit S1-14 / S5-11): a (3, 3) permittivity
         # tensor passed as ``eps`` is a spatially-uniform tensor layer.  Left in
@@ -1973,13 +2228,14 @@ class RCWAStack:
                 "eps_tensor_cell, shapes.")
         if not is_jax_array(thickness):       # traced depth -> skip the guard
             _validate_geometry("add_layer", depth=thickness)
-        f = str(formulation).lower()
-        if f == "fff":
-            f = "li"
-        if f not in ("laurent", "li"):
-            raise ValueError(
-                f"add_layer: formulation must be 'laurent' or 'li'/'fff', "
-                f"got {formulation!r}.")
+        f_req = _normalize_formulation("add_layer", formulation)
+        kind = ("uniform" if eps is not None else "iso" if eps_cell is not None
+                else "shapes" if shapes is not None else "tensor")
+        f = _resolve_formulation(
+            "add_layer", f_req, kind=kind, is_1d=self.is_1d, cell=eps_cell,
+            shapes=shapes, eps_background=eps_background,
+            period_y=self.period_y,
+            has_normal_pair=eps_cell_normal is not None)
         if f != "laurent" and eps_cell is None:
             if shapes is None:
                 raise ValueError(
@@ -2022,19 +2278,23 @@ class RCWAStack:
         if eps is not None:
             if callable(eps):
                 self._layers.append(_RCWALayer(thickness, "uniform", eps,
-                                               dispersive=True))
+                                               dispersive=True,
+                                               formulation_requested=f_req))
             elif is_jax_array(eps):
                 # D1 (AUDIT_DYNAMETA_CONSUMER_API_GAPS): a traced uniform eps
                 # stays RAW so its gradient flows (complex() severed it,
                 # forcing consumers to lift a physically-uniform slab into a
                 # constant patterned cell and pay a full eigensolve).
-                self._layers.append(_RCWALayer(thickness, "uniform", eps))
+                self._layers.append(_RCWALayer(thickness, "uniform", eps,
+                                               formulation_requested=f_req))
             else:
-                self._layers.append(_RCWALayer(thickness, "uniform", _C(eps)))
+                self._layers.append(_RCWALayer(thickness, "uniform", _C(eps),
+                                               formulation_requested=f_req))
         elif eps_cell is not None:
             if callable(eps_cell):
                 self._layers.append(_RCWALayer(thickness, "iso", eps_cell,
-                                               formulation=f, dispersive=True))
+                                               formulation=f, dispersive=True,
+                                               formulation_requested=f_req))
                 return self
             # Keep a JAX cell native (a np.asarray would materialise the tracer
             # and break the differentiable RCWAStack path); NumPy/list inputs
@@ -2065,7 +2325,8 @@ class RCWAStack:
                     pair.append(cc)
                 pair = tuple(pair)
             self._layers.append(_RCWALayer(thickness, "iso", cell,
-                                           formulation=f, normal_cells=pair))
+                                           formulation=f, normal_cells=pair,
+                                           formulation_requested=f_req))
         elif shapes is not None:
             if eps_background is None:
                 raise ValueError(
@@ -2096,16 +2357,19 @@ class RCWAStack:
                                            strict_y=not self.is_1d)
                 self._layers.append(
                     _RCWALayer(thickness, "shapes",
-                               (_C(eps_background), shapes), formulation=f))
+                               (_C(eps_background), shapes), formulation=f,
+                               formulation_requested=f_req))
             else:
                 self._layers.append(
                     _RCWALayer(thickness, "shapes", (eps_background, shapes),
-                               formulation=f, dispersive=True))
+                               formulation=f, dispersive=True,
+                               formulation_requested=f_req))
         else:
             if callable(eps_tensor_cell):
                 self._layers.append(_RCWALayer(thickness, "tensor",
                                                eps_tensor_cell,
-                                               dispersive=True))
+                                               dispersive=True,
+                                               formulation_requested=f_req))
                 return self
             tcell = (eps_tensor_cell.astype(_C) if is_jax_array(eps_tensor_cell)
                      else np.asarray(eps_tensor_cell, dtype=_C))
@@ -2129,11 +2393,12 @@ class RCWAStack:
                         "add_layer: an out-of-plane tensor layer requires "
                         "|e_zz| > 0 everywhere (the E_z elimination divides "
                         f"by it); min |e_zz| = {ezz_min:.3e}.")
-            self._layers.append(_RCWALayer(thickness, "tensor", tcell))
+            self._layers.append(_RCWALayer(thickness, "tensor", tcell,
+                                           formulation_requested=f_req))
         return self
 
     def add_graded_layer(self, thickness, profile, *, n_slices=8,
-                         rule="midpoint", formulation="laurent"):
+                         rule="midpoint", formulation="auto"):
         """Append a continuously-graded ``eps(z)`` layer as an auto-sliced
         z-staircase of ``n_slices`` thin layers (audit GAP4 / P4).
 
@@ -2157,15 +2422,19 @@ class RCWAStack:
         rule : {'midpoint', 'trapezoid'}, optional
             Sample each slice at its centre (``'midpoint'``, default) or average
             its two edges (``'trapezoid'``).
-        formulation : {'laurent', 'li'}, optional
+        formulation : {'auto', 'laurent', 'li'}, optional
             Factorization handed to :meth:`add_layer` for every ``(Sx, Sy)``
-            slice (audit W9; ``'laurent'`` is the DEFAULT and bit-preserving).
+            slice (audit W9).  ``'auto'`` (the default) is resolved by
+            :meth:`add_layer` slice by slice, with its table: on a 1-D stack a
+            y-invariant cell is ``'li'``, on a 2-D stack a cell is ``'li'``
+            when it is metallic, and a slice returned with its companion pair
+            is ``'li'``.  Pass ``'laurent'`` to reproduce earlier releases.
             ``'li'`` is what makes ``raster='harmonic'`` in the tapered builders
             do anything -- the companion pair it emits is read only by the
             inverse Toeplitz.  Scalar (uniform) and ``(Sx, Sy, 3, 3)`` tensor
             slices IGNORE it and are added as before: a uniform slice has no
             factorization to choose (every rule coincides on it) and a tensor
-            slice has its own, so :meth:`add_layer` -- which REJECTS the keyword
+            slice has its own, so :meth:`add_layer` -- which REJECTS ``'li'``
             for both -- is never handed it.
 
         Notes
@@ -2192,6 +2461,8 @@ class RCWAStack:
             raise ValueError(
                 f"add_graded_layer: rule must be 'midpoint' or 'trapezoid', "
                 f"got {rule!r}.")
+        f_req = _normalize_formulation("add_graded_layer", formulation)
+        first = len(self._layers)
         dz = float(thickness) / n
         for k in range(n):
             # A profile may return the cell alone, or -- for raster='harmonic'
@@ -2213,7 +2484,7 @@ class RCWAStack:
             if eps_k.ndim == 0:
                 self.add_layer(dz, eps=complex(eps_k))
             elif eps_k.ndim == 2:
-                self.add_layer(dz, eps_cell=eps_k, formulation=formulation,
+                self.add_layer(dz, eps_cell=eps_k, formulation=f_req,
                                eps_cell_normal=comp)
             elif eps_k.ndim == 4:
                 self.add_layer(dz, eps_tensor_cell=eps_k)
@@ -2222,11 +2493,31 @@ class RCWAStack:
                     f"add_graded_layer: profile must return a scalar, an "
                     f"(Sx, Sy) cell, or an (Sx, Sy, 3, 3) tensor cell; got "
                     f"shape {eps_k.shape}.")
+        self._set_requested(first, f_req)
         return self
+
+    def _set_requested(self, first, f_req):
+        """Record the builder's own ``formulation`` request on the layers it
+        added (``self._layers[first:]``): a builder resolves ``'auto'`` itself
+        and hands :meth:`add_layer` the resolved value, which would otherwise
+        be what ``formulation_requested`` reads."""
+        for L in self._layers[first:]:
+            L.formulation_requested = f_req
+
+    def _builder_formulation(self, fn_name, formulation, eps_values):
+        """Resolve a tapered builder's ``formulation`` ONCE per call, from the
+        concrete permittivities it rasterises (``'auto'`` -> the
+        :meth:`add_layer` rule for an isotropic cell: ``'li'`` on a 1-D stack,
+        ``'li'`` on a 2-D stack only when a value is metallic).  Returns
+        ``(requested, resolved)``."""
+        f_req = _normalize_formulation(fn_name, formulation)
+        return f_req, _resolve_formulation(
+            fn_name, f_req, kind="iso", is_1d=self.is_1d,
+            eps_values=list(eps_values))
 
     def add_tapered_grating(self, thickness, *, eps_ridge, eps_groove,
                             duty_bottom, duty_top=None, n_slices=12, n_x=256,
-                            shear=0.0, raster="hard", formulation="laurent"):
+                            shear=0.0, raster="hard", formulation="auto"):
         """Append a 1-D grating with SLANTED (trapezoidal) sidewalls as an
         auto-sliced z-staircase (audit GAP4 -- fab realism).
 
@@ -2273,12 +2564,15 @@ class RCWAStack:
             something only with ``formulation='li'``, where it is the one mode
             that is right for BOTH polarizations.  See the PIXEL CELL CONTRACT
             note at the top of this module and the measured table in the Notes.
-        formulation : {'laurent', 'li'}, optional
-            Factorization the emitted slices are solved with (audit W9;
-            ``'laurent'`` is the DEFAULT and bit-preserving).  Before W9 the
-            builder could only emit ``'laurent'`` layers and reaching ``'li'``
-            meant rasterizing by hand; passing ``'li'`` here is what activates
-            ``raster='harmonic'``.
+        formulation : {'auto', 'laurent', 'li'}, optional
+            Factorization the emitted slices are solved with (audit W9).
+            ``'auto'`` (the default) is resolved ONCE for the whole call from
+            ``eps_ridge`` / ``eps_groove`` with the :meth:`add_layer` rule for
+            an isotropic cell: ``'li'`` on a 1-D stack; on a 2-D stack ``'li'``
+            only when one of them is metallic (``Re(eps) < 0``), else
+            ``'laurent'``.  Pass ``'laurent'`` to reproduce earlier releases.
+            ``'li'`` is what activates ``raster='harmonic'``; the ``raster``
+            default stays ``'hard'``.
 
         Notes
         -----
@@ -2367,11 +2661,13 @@ class RCWAStack:
                     f"duty_top={dt}, duty_bottom={db}.")
         rst = _validate_raster("add_tapered_grating", raster)
         er, eg = _C(eps_ridge), _C(eps_groove)
+        f_req, form = self._builder_formulation("add_tapered_grating",
+                                                formulation, (er, eg))
         sh = float(shear)
         x = (np.arange(int(n_x)) + 0.5) / int(n_x)
         n_y = max(1, 4 * self.noy + 1)              # grating is uniform in y
         companions = _raster_wants_companions("add_tapered_grating", rst,
-                                              formulation)
+                                              form)
 
         def _profile(zeta):
             duty = dt + (db - dt) * zeta            # top (0) -> bottom (1)
@@ -2395,13 +2691,15 @@ class RCWAStack:
             exx, eyy = _raster_companions([(cov, None, er)], eg, int(n_x), n_y)
             return cell, exx, eyy
 
-        return self.add_graded_layer(thickness, _profile, n_slices=n_slices,
-                                     rule="midpoint",
-                                     formulation=formulation)
+        first = len(self._layers)
+        self.add_graded_layer(thickness, _profile, n_slices=n_slices,
+                              rule="midpoint", formulation=form)
+        self._set_requested(first, f_req)
+        return self
 
     def add_tapered_ridges(self, thickness, *, ridges, eps_groove,
                            n_slices=12, n_x=256, n_y=None, raster="hard",
-                           formulation="laurent"):
+                           formulation="auto"):
         """Append a MULTI-RIDGE tapered grating as an auto-sliced z-staircase
         (device-geometry roadmap item 1, 2026-06-10) -- the N-feature,
         center-anchored generalization of :meth:`add_tapered_grating`.
@@ -2413,7 +2711,8 @@ class RCWAStack:
         NOT overlap earlier ones (raises).  ``eps_groove`` fills the rest.
 
         ``raster`` is ``'hard'`` (default, bit-preserved), ``'area'`` or
-        ``'harmonic'``, and ``formulation`` is ``'laurent'`` (default) or
+        ``'harmonic'``, and ``formulation`` is ``'auto'`` (default, resolved
+        once from the ridge and groove permittivities), ``'laurent'`` or
         ``'li'``, exactly as in :meth:`add_tapered_grating` (whose Notes carry
         the measured per-formulation recommendation): each ridge occupies the
         HALF-OPEN interval ``[center - w/2, center + w/2)`` (audit W8 -- a wall
@@ -2433,11 +2732,13 @@ class RCWAStack:
         rid = [(float(c), float(wt), float(wb), _C(e))
                for c, wt, wb, e in ridges]
         eg = _C(eps_groove)
+        f_req, form = self._builder_formulation(
+            "add_tapered_ridges", formulation, [eg] + [r[3] for r in rid])
         nx = int(n_x)
         ny = int(n_y) if n_y is not None else max(1, 4 * self.noy + 1)
         x = (np.arange(nx) + 0.5) / nx          # period fractions
         companions = _raster_wants_companions("add_tapered_ridges", rst,
-                                              formulation)
+                                              form)
         wgt = "area" if rst == "harmonic" else rst
 
         def _profile(zeta):
@@ -2468,13 +2769,15 @@ class RCWAStack:
             exx, eyy = _raster_companions(feats, eg, nx, ny)
             return cell, exx, eyy
 
-        return self.add_graded_layer(thickness, _profile, n_slices=n,
-                                     rule="midpoint",
-                                     formulation=formulation)
+        first = len(self._layers)
+        self.add_graded_layer(thickness, _profile, n_slices=n,
+                              rule="midpoint", formulation=form)
+        self._set_requested(first, f_req)
+        return self
 
     def add_tapered_pillars(self, thickness, *, pillars, eps_host,
                             n_slices=8, n_x=None, n_y=None, raster="hard",
-                            formulation="laurent"):
+                            formulation="auto"):
         """Append MULTI-PILLAR tapered 2-D layers as an auto-sliced
         z-staircase (device-geometry roadmap item 1; the 2-D RCWA stack had
         NO tapered builder at all).
@@ -2486,8 +2789,11 @@ class RCWAStack:
         overlapping pillars raise.
 
         ``raster`` is ``'hard'`` (default, bit-preserved), ``'area'`` or
-        ``'harmonic'``, and ``formulation`` is ``'laurent'`` (default) or
-        ``'li'``, exactly as in :meth:`add_tapered_grating`.  Each pillar
+        ``'harmonic'``, and ``formulation`` is ``'auto'`` (default),
+        ``'laurent'`` or ``'li'``, exactly as in :meth:`add_tapered_grating`
+        -- on this 2-D builder ``'auto'`` is ``'li'`` only when a pillar or
+        the host is metallic (``Re(eps) < 0``), so dielectric pillar layers
+        keep the direct rule.  Each pillar
         occupies the HALF-OPEN box
         ``[cx - wx/2, cx + wx/2) x [cy - wy/2, cy + wy/2)`` (audit W8), and the
         rectangle is SEPARABLE so the ``'area'`` weight is the exact product of
@@ -2524,8 +2830,10 @@ class RCWAStack:
         pil = [((float(c[0]), float(c[1])), (float(wt[0]), float(wt[1])),
                 (float(wb[0]), float(wb[1])), _C(e))
                for c, wt, wb, e in pillars]
+        f_req, form = self._builder_formulation(
+            "add_tapered_pillars", formulation, [eh] + [p[3] for p in pil])
         companions = _raster_wants_companions("add_tapered_pillars", rst,
-                                              formulation)
+                                              form)
         wgt = "area" if rst == "harmonic" else rst
 
         def _profile(zeta):
@@ -2560,9 +2868,11 @@ class RCWAStack:
             exx, eyy = _raster_companions(feats, eh, nx, ny)
             return cell, exx, eyy
 
-        return self.add_graded_layer(thickness, _profile, n_slices=n,
-                                     rule="midpoint",
-                                     formulation=formulation)
+        first = len(self._layers)
+        self.add_graded_layer(thickness, _profile, n_slices=n,
+                              rule="midpoint", formulation=form)
+        self._set_requested(first, f_req)
+        return self
 
     def plot_geometry(self, ax=None, material_names=None):
         """Draw the stack cross-section as the solver sees it (device-geometry
@@ -2748,7 +3058,8 @@ class RCWAStack:
                 out.append(L)
                 continue
             if L.kind == "uniform":
-                out.append(_RCWALayer(L.thickness, "uniform", _C(L.data(wl))))
+                out.append(_RCWALayer(L.thickness, "uniform", _C(L.data(wl)),
+                                      formulation_requested=L.formulation_requested))
             elif L.kind == "iso":
                 cell = np.asarray(L.data(wl), dtype=_C)
                 if cell.ndim == 1:
@@ -2759,7 +3070,8 @@ class RCWAStack:
                 _warn_if_y_averaged("solve_vs_wavelength", cell, self.noy,
                                     strict_y=not self.is_1d, stacklevel=5)
                 out.append(_RCWALayer(L.thickness, "iso", cell,
-                                      formulation=L.formulation))
+                                      formulation=L.formulation,
+                                      formulation_requested=L.formulation_requested))
             elif L.kind == "shapes":
                 bg, shapes = L.data
                 bgv = _C(bg(wl)) if callable(bg) else _C(bg)
@@ -2779,7 +3091,8 @@ class RCWAStack:
                 elif L.formulation == "li":
                     _check_li_shapes_2d("solve_vs_wavelength", sh, bgv)
                 out.append(_RCWALayer(L.thickness, "shapes", (bgv, sh),
-                                      formulation=L.formulation))
+                                      formulation=L.formulation,
+                                      formulation_requested=L.formulation_requested))
             else:
                 tcell = np.asarray(L.data(wl), dtype=_C)
                 _validate_cell_sampling("solve_vs_wavelength", tcell, self.nox,
@@ -2801,7 +3114,8 @@ class RCWAStack:
                             "(the E_z elimination divides by it); min "
                             f"|e_zz| = {ezz_min:.3e} at wavelength "
                             f"{wl:.6g} m.")
-                out.append(_RCWALayer(L.thickness, "tensor", tcell))
+                out.append(_RCWALayer(L.thickness, "tensor", tcell,
+                                      formulation_requested=L.formulation_requested))
         return out
 
     def solve_vs_wavelength(self, wavelengths, *, stabilize=False,
@@ -2978,9 +3292,7 @@ class RCWAStack:
             cell_c = _internal_cell(layer.data, xp)
             EPS = _eps_convolution_2d(cell_c, orders, self.nox, self.noy)
             if getattr(layer, "formulation", "laurent") == "li":
-                e_np = to_numpy(cell_c)
-                scale = max(1.0, float(np.max(np.abs(e_np))))
-                if float(np.max(np.abs(e_np - e_np.flat[0]))) > 1e-12 * scale:
+                if self._li_has_contrast(layer, cell_c):
                     Cxx, Cyy = self._li_blocks(layer, cell_c, orders, xp)
                     Z = xp.zeros_like(Cxx)
                     P, Q = _tensor_PQ(Kx, Ky, Cxx, Z, Z, Cyy, EPS, xp)
@@ -3042,6 +3354,18 @@ class RCWAStack:
             eps_bg, shapes, orders, self.nox, self.noy, self.period_x,
             self.period_y)
         return EPS, None, None
+
+    @staticmethod
+    def _li_has_contrast(layer, cell_c):
+        """The ``'li'`` contrast verdict of an iso layer: the one taken when
+        the layer was added (:attr:`_RCWALayer.li_contrast`), or -- for a
+        dispersive or traced cell, which has none -- the same test
+        (:func:`_li_cell_contrast`) on the internal cell now.  A traced cell
+        still cannot answer it, and raises."""
+        c = getattr(layer, "li_contrast", None)
+        if c is None:
+            c = _li_cell_contrast(cell_c, traced_ok=False)
+        return c
 
     def _li_blocks(self, layer, cell_c, orders, xp):
         """The Li wall-normal blocks ``(Cxx, Cyy)`` of an ``'li'`` iso layer --
@@ -3117,9 +3441,7 @@ class RCWAStack:
                 # (Sy = 1) reduces exactly to the 1-D 'li' placement.  A
                 # uniform cell falls through to the scalar path (all rules
                 # coincide; its analytic uniform modes avoid degenerate eig).
-                e_np = to_numpy(cell_c)
-                scale = max(1.0, float(np.max(np.abs(e_np))))
-                if float(np.max(np.abs(e_np - e_np.flat[0]))) > 1e-12 * scale:
+                if self._li_has_contrast(layer, cell_c):
                     Cxx, Cyy = self._li_blocks(layer, cell_c, orders, xp)
                     Zli = xp.zeros_like(Cxx)
                     W, V, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Zli,

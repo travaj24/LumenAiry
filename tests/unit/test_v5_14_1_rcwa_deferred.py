@@ -116,7 +116,8 @@ def _stripe_1d_cell(S=256):
 
 def test_stack_li_layer_matches_direct_1d():
     """A 1-D stack metal layer with formulation='li' reproduces the direct
-    1-D 'li' solver per-order (TM = row 0); 'laurent' stays the default."""
+    1-D 'li' solver per-order (TM = row 0).  Both formulations are passed
+    explicitly (the stack default is 'auto', which is 'li' for this layer)."""
     n_metal = np.sqrt(-8.97 + 1.08j)
     for form, tol in (("laurent", 1e-3), ("li", 2e-4)):
         st = RCWAStack(1.0e-6, n_superstrate=1.0, n_substrate=1.45, n_orders=8)
@@ -197,8 +198,18 @@ def test_stack_dispersive_materials():
         st.solve()
     wls = (0.5e-6, 0.7e-6)
     o, R, T, J = st.solve_vs_wavelength(wls)
-    a = [1.0 - float(R[i, 0].sum() + T[i, 0].sum()) for i in range(2)]
-    assert 0.0 < a[0] < a[1] < 1.0      # loss grows with wavelength
+    # Re-pinned 2026-11-14 for the formulation='auto' default ('li' on this
+    # 1-D cell).  The claim "loss grows with wavelength" is carried by the TE
+    # row (E_y, where both factorizations coincide): A = 0.5741 -> 0.5881 at
+    # every n_orders from 5 to 80.  The TM row (E_x) used to be asserted
+    # instead; it rose (0.712 -> 0.738) only through the direct rule's
+    # truncation error at n_orders = 5.  Converged (n_orders = 80, both rules)
+    # it FALLS, 0.6563 -> 0.6289, and 'li' at n_orders = 5 already shows that
+    # ordering (0.660 -> 0.636).
+    a_te = [1.0 - float(R[i, 1].sum() + T[i, 1].sum()) for i in range(2)]
+    assert 0.0 < a_te[0] < a_te[1] < 1.0      # loss grows with wavelength
+    a_tm = [1.0 - float(R[i, 0].sum() + T[i, 0].sum()) for i in range(2)]
+    assert 1.0 > a_tm[0] > a_tm[1] > 0.0      # the converged TM ordering
     # hand-materialized control at wls[1]
     st2 = RCWAStack(1.0e-6, n_superstrate=1.0, n_substrate=1.45, n_orders=5)
     st2.add_layer(0.3e-6, eps=(1.45 + 0.05 * 0.7) ** 2)

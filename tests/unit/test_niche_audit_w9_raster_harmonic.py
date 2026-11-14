@@ -205,7 +205,12 @@ def test_w9_default_raster_is_still_hard_and_bit_preserved():
         assert np.array_equal(np.asarray(la_.data), np.asarray(lb.data))
         assert set(np.unique(np.real(np.asarray(la_.data)))) == {1.0, 4.0}
         assert la_.kind == "iso"
-        assert getattr(la_, "formulation", "laurent") == "laurent"
+        # The FORMULATION default is 'auto' (re-pinned 2026-11-14): on this
+        # 1-D stack it resolves to 'li' for the rasterised cell; the raster
+        # default ('hard', no companion) is what this guard is about and is
+        # unchanged.  formulation='laurent' gives the earlier layer exactly.
+        assert la_.formulation == "li"
+        assert la_.formulation_requested == "auto"
         assert getattr(la_, "normal_cells", None) is None
     r_kw = dict(ridges=[(0.3e-6, 0.2e-6, 0.25e-6, 4.0)], eps_groove=1.0,
                 n_slices=2, n_x=64)
@@ -371,8 +376,12 @@ def test_w9_companion_misuse_is_rejected_up_front():
     silent-wrong-answer this audit family exists to remove."""
     c = np.asarray(_grating(n_x=64, raster="area")._layers[0].data)
     st = RCWAStack(_P, n_orders=_M)
+    # an EXPLICIT 'laurent' with the pair (the formulation default 'auto'
+    # resolves a layer carrying the pair to 'li', so it must be spelled out;
+    # re-pinned 2026-11-14)
     with pytest.raises(ValueError, match="eps_cell_normal requires"):
-        st.add_layer(_D, eps_cell=c, eps_cell_normal=(c, c))    # laurent
+        st.add_layer(_D, eps_cell=c, eps_cell_normal=(c, c),
+                     formulation="laurent")
     with pytest.raises(ValueError, match="eps_cell_normal"):
         st.add_layer(_D, eps=2.0, eps_cell_normal=(c, c))       # not a cell
     with pytest.raises(ValueError, match="DISPERSIVE"):
@@ -454,8 +463,10 @@ def test_w9_add_graded_layer_forwards_the_formulation_and_the_pair():
 
     for rule in ("midpoint", "trapezoid"):
         plain = RCWAStack(_P, n_orders=_M)
+        # explicit 'laurent': the formulation default 'auto' would resolve
+        # these 1-D cells to 'li' (re-pinned 2026-11-14)
         plain.add_graded_layer(_D, lambda z: _prof(z, False), n_slices=3,
-                              rule=rule)
+                              rule=rule, formulation="laurent")
         assert all(L.formulation == "laurent" and L.normal_cells is None
                    for L in plain._layers)
         li = RCWAStack(_P, n_orders=_M)
