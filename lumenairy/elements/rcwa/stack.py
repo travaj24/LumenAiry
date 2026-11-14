@@ -658,11 +658,18 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
       :class:`RCWAYAverageWarning` documents); a ``shapes`` list -> ``'li'``
       when it is y-invariant (full-``period_y`` rectangles), else
       ``'laurent'``;
-    * 2-D stack: ``'li'`` only for a METALLIC layer (``Re(eps) < 0`` somewhere
-      in the cell, the shapes or the background) that ``'li'`` supports (an
-      ``eps_cell``; a ``shapes`` list of axis-aligned rectangles); otherwise
-      ``'laurent'``.  A dispersive (callable) 2-D layer -> ``'laurent'``: a
-      per-wavelength choice would switch the factorization inside a spectrum.
+    * 2-D stack: ``'li'`` for every layer ``'li'`` supports -- an ``eps_cell``
+      (any pattern, dispersive included) and a ``shapes`` list of axis-aligned
+      rectangles -- whatever its material; ``'laurent'`` for a ``shapes`` list
+      holding a disk or an ellipse (``'li'`` takes rectangles only).  The rule
+      is per SHAPE class, not per material: measured against the pure 2-D
+      polynomial modal solver on dielectric, weak-metal and strong-metal
+      cells, Li's rule is the more accurate of the two at the truncations a
+      2-D stack can afford on every rectangle cell and every rasterized cell
+      measured, and much more accurate on high-index dielectrics and strong
+      metals (``docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md``).
+      The 5.51 staging rule ('li' for metallic layers only) left high-index
+      dielectric pillars on the direct rule, 15x-60x less accurate.
 
     ``eps_values`` (builders) is the list of concrete permittivities of a
     rasterised layer, used instead of ``cell``."""
@@ -677,9 +684,10 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
         if eps_values is not None:
             vals = _concrete_eps_values(eps_values)
         elif callable(cell):
-            # dispersive cell: inspected per wavelength only, so the 1-D stack
-            # takes 'li' and the 2-D stack keeps the direct rule
-            return "li" if is_1d else "laurent"
+            # dispersive cell: inspected per wavelength only; the rule does
+            # not depend on the material, so no factorization switch can
+            # happen inside a spectrum
+            return "li"
         elif is_jax_array(cell):
             # A JAX cell -- traced or not -- keeps the direct rule, so a
             # function evaluated eagerly and under jax.grad / jax.jit solves
@@ -690,8 +698,8 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
             vals = _concrete_eps_values([cell])
             if vals is None:                  # not inspectable
                 return "laurent"
-        if vals is None:
-            return "li" if is_1d else "laurent"
+        if vals is None:                      # builders: a dispersive value
+            return "li"
         if vals.size and float(np.min(np.abs(vals))) < 1e-12:
             return "laurent"
         if is_1d:
@@ -699,8 +707,7 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
                 c = np.asarray(to_numpy(cell))
                 if c.ndim >= 2 and _cell_y_spread(c) != 0.0:
                     return "laurent"
-            return "li"
-        return "li" if bool(np.any(vals.real < 0.0)) else "laurent"
+        return "li"
     if kind == "shapes":
         try:
             if is_1d:
@@ -712,14 +719,13 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
                     return "laurent"
                 return "li"
             if _li_rect_shapes_problem(shapes) is not None:
-                return "laurent"
-            vals = _concrete_eps_values(
-                [eps_background] + [sh.get("eps") for sh in shapes])
-            if vals is None:                  # dispersive 2-D layer
-                return "laurent"
+                return "laurent"              # a disk / ellipse: no 2-D 'li'
+            # (a zero shape eps is refused by the shapes validation)
+            if callable(eps_background):
+                return "li"
             if abs(_C(eps_background)) < 1e-12:
                 return "laurent"
-            return "li" if bool(np.any(vals.real < 0.0)) else "laurent"
+            return "li"
         except (KeyError, IndexError, TypeError, ValueError, AttributeError):
             # malformed shape list: the shapes validation that follows names
             # the problem; the resolution does not try to
@@ -1768,7 +1774,7 @@ class RCWAResult:
         Only the depth rule (``nz_per_layer``) is approximate there.
 
         A layer solved with ``formulation='li'`` (the default resolves 1-D
-        patterned layers and 2-D metallic ones to it) is instead attributed
+        patterned layers and every 2-D layer it supports to it) is instead attributed
         the POYNTING-FLUX DIFFERENCE between its two faces -- by Poynting's
         theorem that IS its absorbed power (the lateral flux cancels over a
         period) -- evaluated exactly from the retained modal fields, with no
@@ -2319,16 +2325,16 @@ class RCWAStack:
         1-D stack, ``eps_cell`` varying along y         ``'laurent'``
         1-D stack, ``shapes``/``segments`` (y-flat)     ``'li'``
         1-D stack, ``shapes`` varying along y           ``'laurent'``
-        2-D stack, METALLIC ``eps_cell``                ``'li'``
-        2-D stack, METALLIC rectangle ``shapes``        ``'li'``
-        2-D stack, any other layer (dielectric; disks,  ``'laurent'``
-        ellipses; dispersive)
+        2-D stack, ``eps_cell`` (any material)          ``'li'``
+        2-D stack, rectangle ``shapes`` (any material)  ``'li'``
+        2-D stack, ``shapes`` with a disk / ellipse     ``'laurent'``
         a JAX ``eps_cell`` (traced or not)              ``'laurent'``
         an exact zero permittivity in the cell or the   ``'laurent'``
         background
         ==============================================  ==============
 
-        "Metallic" means ``Re(eps) < 0`` somewhere in the layer.  The value
+        Dispersive layers resolve like concrete ones (the rule never reads
+        the material, so it cannot switch inside a spectrum).  The value
         that RAN is ``layers[i].formulation``; the request is
         ``layers[i].formulation_requested``.  Pass ``formulation='laurent'``
         to reproduce results computed with earlier releases, whose default it
@@ -2352,11 +2358,42 @@ class RCWAStack:
         (at ``n_orders`` 50 the direct rule returns the wrong sign of
         ``Re(r)``), while TE (``E_y``, tangential to every wall of a 1-D
         grating) is the same under both rules to round-off (measured 4.5e-13).
-        The default is NOT ``'li'`` on 2-D dielectric layers: there the two
-        rules differ by a few 1e-3 at practical truncations and the 2-D
-        single-layer functions default to ``'laurent'``, so those results stay
-        where they were; pass ``'li'`` explicitly for them, and for a
-        dispersive metal layer on a 2-D stack.  ``'li'`` does not trace a JAX
+        On a 2-D stack the rule is per SHAPE class, not per material,
+        because that is what was measured (zeroth-order Jones error against
+        the pure 2-D polynomial modal solver ``PMM2DStackPure``, a 300 nm
+        square or disk of 60-200 nm in a 600 nm cell at 1310 nm;
+        ``docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md``):
+
+        ================================  ===========  ===========  =======
+        cell (normal incidence)           'laurent'    'li'         N
+        ================================  ===========  ===========  =======
+        square, eps 4                     2.9e-3       7.2e-5       20
+        square, eps 12                    1.77e-2      2.8e-4       16
+        checkerboard, eps 2.25            1.25e-3      8.5e-5       14
+        square, eps -70+5i (on a mirror)  2.8e-1       1.4e-2       24
+        square, eps -10+1i                3.3e-2       1.7e-2       20
+        square, eps -3+1i                 1.1e-3       2.0e-3       16
+        disk, eps 12                      1.85e-2      3.2e-3       16
+        disk, eps -70+5i (on a mirror)    2.1e-1       1.8e-1       16
+        disk, eps -10+1i                  3.2e-2       2.0e-2       16
+        disk, eps -3+1i                   1.7e-3       1.7e-3       16
+        ================================  ===========  ===========  =======
+
+        (On the disks 'laurent' is the ANALYTIC disk and 'li' a 1024 x 1024
+        raster of it, Li's staircase.  The reference's own uncertainty is
+        3e-4 .. 6e-3 on the metal cells, 4e-5 .. 3e-4 on the dielectric
+        ones.)  Oblique incidence (0.3 rad, both polarizations) orders the
+        rules the same way.  The one cell where Laurent's rule overtakes is
+        the weak metal (``eps`` near -3, where the corner of a rectangle sits
+        at the border of the irregular field singularity of Li and Granet,
+        J. Opt. Soc. Am. A 28, 738 (2011)): ``'li'`` leads below
+        ``n_orders`` of about 14 and trails above it (at 24: 1.8e-3 against
+        1.6e-4), both within 2e-3 of a reference uncertain to 4e-4.  On the
+        metal cells both rules converge slowly, and erratically on the
+        strong metal below ``n_orders`` 20 (``'li'`` 3x-50x closer on every
+        rung there).  The 2-D single-layer
+        functions (``rcwa_efficiency_2d`` ...) keep their ``'laurent'``
+        default.  ``'li'`` does not trace a JAX
         ``eps_cell`` (its contrast test reads the cell on the host), so a JAX
         cell resolves to ``'laurent'`` -- a concrete one too, so that a
         function evaluated eagerly and under ``jax.grad`` / ``jax.jit`` sees
@@ -2387,8 +2424,13 @@ class RCWAStack:
         exactly (direct rule along y) into ``Cxx``; ``Cyy`` swaps the axes.
         It is the ``S -> inf`` limit of the ``eps_cell`` 'li' path on a raster
         of the same cell.  Disks, ellipses and rotated rectangles raise (Li's
-        rule for curved shapes is future work); a band whose ``[[1/eps]]`` is
-        singular raises ``LinAlgError``.  Uniform and tensor layers accept
+        rule for curved shapes is future work; a disk rasterized into an
+        ``eps_cell`` takes ``'li'`` as Li's staircase and measured closer to
+        the reference than the analytic disk under ``'laurent'`` -- table
+        above); a band whose ``[[1/eps]]`` is singular raises
+        ``LinAlgError``.  An EXPLICIT ``'li'`` on a 2-D cell with sharp
+        corners of a weak metal (``eps`` near -3) is measured less accurate
+        than ``'laurent'`` above ``n_orders`` of about 14 (table above).  Uniform and tensor layers accept
         ``'auto'`` and ``'laurent'`` only.
 
         ``eps_cell_normal`` (audit W9, ``formulation='li'`` only): the
@@ -2732,9 +2774,9 @@ class RCWAStack:
             Factorization handed to :meth:`add_layer` for every ``(Sx, Sy)``
             slice (audit W9).  ``'auto'`` (the default) is resolved by
             :meth:`add_layer` slice by slice, with its table: on a 1-D stack a
-            y-invariant cell is ``'li'``, on a 2-D stack a cell is ``'li'``
-            when it is metallic, and a slice returned with its companion pair
-            is ``'li'``.  Pass ``'laurent'`` to reproduce earlier releases.
+            y-invariant cell is ``'li'``, on a 2-D stack every cell is
+            ``'li'`` (whatever its material), and a slice returned with its
+            companion pair is ``'li'``.  Pass ``'laurent'`` to reproduce earlier releases.
             ``'li'`` is what makes ``raster='harmonic'`` in the tapered builders
             do anything -- the companion pair it emits is read only by the
             inverse Toeplitz.  Scalar (uniform) and ``(Sx, Sy, 3, 3)`` tensor
@@ -2813,8 +2855,8 @@ class RCWAStack:
     def _builder_formulation(self, fn_name, formulation, eps_values):
         """Resolve a tapered builder's ``formulation`` ONCE per call, from the
         concrete permittivities it rasterises (``'auto'`` -> the
-        :meth:`add_layer` rule for an isotropic cell: ``'li'`` on a 1-D stack,
-        ``'li'`` on a 2-D stack only when a value is metallic).  Returns
+        :meth:`add_layer` rule for an isotropic cell: ``'li'`` on a 1-D stack and
+        on a 2-D stack, ``'laurent'`` for an exact zero or a JAX value).  Returns
         ``(requested, resolved)``."""
         f_req = _normalize_formulation(fn_name, formulation)
         return f_req, _resolve_formulation(
@@ -2874,9 +2916,8 @@ class RCWAStack:
             Factorization the emitted slices are solved with (audit W9).
             ``'auto'`` (the default) is resolved ONCE for the whole call from
             ``eps_ridge`` / ``eps_groove`` with the :meth:`add_layer` rule for
-            an isotropic cell: ``'li'`` on a 1-D stack; on a 2-D stack ``'li'``
-            only when one of them is metallic (``Re(eps) < 0``), else
-            ``'laurent'``.  Pass ``'laurent'`` to reproduce earlier releases.
+            an isotropic cell: ``'li'`` on a 1-D and on a 2-D stack, whatever
+            the material (``'laurent'`` for an exact zero).  Pass ``'laurent'`` to reproduce earlier releases.
             ``'li'`` is what activates ``raster='harmonic'``; the ``raster``
             default stays ``'hard'``.
 
@@ -3097,9 +3138,9 @@ class RCWAStack:
         ``raster`` is ``'hard'`` (default, bit-preserved), ``'area'`` or
         ``'harmonic'``, and ``formulation`` is ``'auto'`` (default),
         ``'laurent'`` or ``'li'``, exactly as in :meth:`add_tapered_grating`
-        -- on this 2-D builder ``'auto'`` is ``'li'`` only when a pillar or
-        the host is metallic (``Re(eps) < 0``), so dielectric pillar layers
-        keep the direct rule.  Each pillar
+        -- on this 2-D builder ``'auto'`` is ``'li'`` for dielectric and
+        metal pillars alike (the 2-D rule is per shape class; see
+        :meth:`add_layer`).  Each pillar
         occupies the HALF-OPEN box
         ``[cx - wx/2, cx + wx/2) x [cy - wy/2, cy + wy/2)`` (audit W8), and the
         rectangle is SEPARABLE so the ``'area'`` weight is the exact product of
