@@ -1952,7 +1952,11 @@ class PMMStack:
     Chebyshev / single-element grids, about 1e-6 at the default geometric
     floor, where both paths carry that much round-off); 13x faster
     on a stack with 52 graded oxide sub-layers at degree 12, about 25x at
-    degree 20).
+    degree 20).  The differentiable (JAX) twin takes the same path with the
+    same kernels for concrete uniform isotropic layers and for layers added
+    with a TRACED scalar ``eps`` (a traced ``(3, 3)`` tensor keeps the full
+    eig: it cannot be inspected for isotropy); measured forward + gradient
+    w.r.t. one uniform eps on 44 layers: 68.5 s -> 1.05 s.
     """
 
     def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
@@ -2126,6 +2130,9 @@ class PMMStack:
         # The small-element guard's opt-out (see _guard_small_elements).
         self.allow_small_elements = bool(allow_small_elements)
         self._small_element_note = None
+        # id(tensor) -> (tensor, scalar) for layers added with a TRACED scalar
+        # eps (the JAX twin's uniform-layer fast path, _jstack_uniform_eps)
+        self._iso_scalar = {}
         self._layers = []                          # (thickness, segments)
         self._taper_recipes = []                   # (i0, count, method, kwargs)
         self._src = None
@@ -2407,6 +2414,13 @@ class PMMStack:
         if eps is not None:
             segs = [(1.0, eps if (callable(eps) or isinstance(eps, str))
                      else self._as_tensor(eps))]
+            if is_jax_array(eps) and getattr(eps, "ndim", None) == 0:
+                # a TRACED scalar: the tensor built from it is isotropic by
+                # construction; recorded so the JAX twin can take the
+                # uniform-layer fast path without inspecting the tracer
+                import jax.numpy as jnp
+                self._iso_scalar[id(segs[0][1])] = (
+                    segs[0][1], jnp.asarray(eps, dtype=jnp.complex128))
         else:
             if len(segments) < 1:
                 raise ValueError("PMMStack.add_layer: empty segments.")

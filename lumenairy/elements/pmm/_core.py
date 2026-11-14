@@ -3316,7 +3316,7 @@ def _uniform_geo_eig(mats, k0, kx0=0.0):
 
 
 def _sem_modes_uniform(mats, k0, kx0, eps, geo=None,
-                       label="PMM modal solve (uniform half-space)"):
+                       label="PMM modal solve (uniform half-space)", xp=np):
     """Uniform-isotropic modes from the SHARED geometric eig (see
     :func:`_uniform_geo_eig`): same return contract as
     :func:`_sem_modes_tensor` -- ``(W2, V2, lam, q)`` with the IDENTICAL
@@ -3332,51 +3332,61 @@ def _sem_modes_uniform(mats, k0, kx0, eps, geo=None,
     ``(w, 0)`` / ``(0, w)`` columns instead of arbitrary degenerate
     mixtures) -- physically equivalent; downstream interface solves are
     basis-agnostic.  Cross-path contracts follow docs/TOLERANCE_POLICY.md.
+
+    ``xp`` selects the array module: the JAX twin of ``PMMStack`` calls this
+    same kernel with ``xp=jax.numpy``, a TRACED ``eps`` and its own traced
+    geometric eig ``geo = (mu, w)`` (``mats`` then needs only ``n_glob`` and
+    ``S0``); the mode-cut census is NumPy-only.
     """
     n = mats["n_glob"]
-    eps = _C(eps)
+    if xp is np:
+        eps = _C(eps)
     if geo is None:
         geo = _uniform_geo_eig(mats, k0, kx0)
-    mu, w, _Kx2 = geo
+    mu, w = geo[0], geo[1]
     q2 = eps - mu
-    q = np.sqrt(np.concatenate([q2, q2]))
-    Z = np.zeros((n, n), dtype=_C)
-    W2 = np.block([[w, Z], [Z, w]])
+    q = xp.sqrt(xp.concatenate([q2, q2]))
+    Z = xp.zeros((n, n), dtype=_C)
+    W2 = xp.block([[w, Z], [Z, w]])
     # Q @ W2 for the uniform medium: Q = [[0, eps I - Kx2], [-eps I, 0]] and
     # Kx2 w = w diag(mu)  =>  (eps I - Kx2) w = w diag(q2)
-    QW = np.block([[Z, w * q2[None, :]], [-eps * w, Z]])
+    QW = xp.block([[Z, w * q2[None, :]], [-eps * w, Z]])
     # a uniform half-space's medium is the SCALAR ``eps`` argument, not the
     # grid it is discretised on (that grid is a patterned layer's).
-    return _select_forward_modes(mats, W2, QW, q, _eps_is_passive(eps),
-                                 label, False)
+    passive = (_eps_is_passive(eps) if xp is np
+               else _jeps_is_passive(eps, xp))
+    return _select_forward_modes(mats, W2, QW, q, passive, label, False, xp)
 
 
-def _select_forward_modes(mats, W2, QW, q, passive, label, patterned):
+def _select_forward_modes(mats, W2, QW, q, passive, label, patterned,
+                          xp=np):
     """The z-Poynting-flux forward selector of the structured modal solves
     (``_sem_modes_uniform`` and the conical ones below): the
     :func:`_sem_modes_tensor` policy verbatim -- flux of the probe partner
     ``QW / lam``, :func:`_mass_flux_threshold`, :func:`_forward_growth_flip`,
     the mode-cut census -- applied to modes whose ``Q @ W`` the caller formed
-    analytically.  Returns ``(W2, V2, lam, q)`` with the forward branch."""
+    analytically.  Returns ``(W2, V2, lam, q)`` with the forward branch.
+    ``xp`` selects the array module (the JAX twin shares this kernel; the
+    mode-cut census is NumPy-only)."""
     n = mats["n_glob"]
     S0 = mats["S0"]
     lam0 = -1j * q
-    safe0 = _safe_lam(lam0)
+    safe0 = _safe_lam(lam0, xp)
     V0 = QW * (1.0 / safe0)[None, :]
-    SVt = S0 @ np.conj(V0[:n])          # S0 conj(Hx)
-    SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
-    flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
-                   - np.einsum("in,in->n", W2[n:], SVt))
-    thr = _mass_flux_threshold(flux, W2, SVt, SVb, n)
-    prop = np.abs(flux) > thr                        # W7 B2: unit-safe cut
-    flip = _forward_growth_flip(flux, q, thr, prop, np, passive)
-    if _mode_cut_armed():
+    SVt = S0 @ xp.conj(V0[:n])          # S0 conj(Hx)
+    SVb = S0 @ xp.conj(V0[n:])          # S0 conj(Hy)
+    flux = xp.imag(xp.einsum("in,in->n", W2[:n], SVb)
+                   - xp.einsum("in,in->n", W2[n:], SVt))
+    thr = _mass_flux_threshold(flux, W2, SVt, SVb, n, xp)
+    prop = xp.abs(flux) > thr                        # W7 B2: unit-safe cut
+    flip = _forward_growth_flip(flux, q, thr, prop, xp, passive)
+    if xp is np and _mode_cut_armed():
         _record_mode_cut(flux, q, thr, prop, mats,
                          label, patterned,
                          flip=flip, passive=passive)
-    q = np.where(flip, -q, q)
+    q = xp.where(flip, -q, q)
     lam = -1j * q
-    safe = _safe_lam(lam)
+    safe = _safe_lam(lam, xp)
     V2 = QW * (1.0 / safe)[None, :]
     return W2, V2, lam, q
 

@@ -176,8 +176,9 @@ def test_the_floor_turns_a_bad_ratio_into_a_good_layout():
 # --------------------------------------------------------------------------- #
 # the JAX twin and the conical path pick the spec up
 # --------------------------------------------------------------------------- #
-#: NumPy (uniform layers from the shared geometric eig) vs the JAX twin (full
-#: eig for every layer -- decision D10 keeps the fast path out of the trace).
+#: NumPy (uniform layers from the shared geometric eig) vs the JAX twin (the
+#: same fast path since 2026-11-14; this bar was derived when the twin ran the
+#: full eig for every layer and stays as an upper bound).
 #: MEASURED 2026-11-14 on fixture A, geometric degree 6 x 4 el, theta 0.2,
 #: max over R / T / J: 2.96e-13 (Windows/MKL), 3.11e-13 (WSL/OpenBLAS);
 #: against the DENSE NumPy path the same twin reads 1.43e-13 / 1.33e-13, so

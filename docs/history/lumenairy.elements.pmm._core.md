@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 6923c627e69e242ed007875beacb2c108c96c3a6df64c1927e8915000c32a663
-token_sha256: 2103190e7f8cae236c16ab2bb28f06f18c47040562858c4c1a941bb31d95b5df
+ast_sha256: 3543fc65bc2b761ca2799d55f014e80b66d71b64acfe935b35622c8ad853a5f5
+token_sha256: 9f056ee241e311792303218af73907025da413e23f7a92b04e5d09e40a219bbe
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -20,6 +20,7 @@ re_recorded: 2026-11-14 -- geometric default floor max(3e-5 x period, 1.25e-5 x 
 re_recorded: 2026-11-14 -- PMM_EIG_ROUNDOFF_BAR: fail-before switch of the _growth_mask round-off term (False restores the historical growth test bit for bit); the sliver-guard tests use it to reproduce the population they guard
 re_recorded: 2026-11-14 -- 2026-11-14 -- structured conical modal solves (_sem_modes_uniform_conical, _sem_modes_conical, _conical_khat, _conical_dpq) and the shared forward selector _select_forward_modes (_sem_modes_uniform unchanged bit for bit)
 re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: deferred default floor in _normalize_grade (defer_floor), narrowed wavelength handling in _geometric_default_floor, private _PMM_EIG_ROUNDOFF_BAR, shared _LAM_CLAMP/_safe_lam and _interface_from_ab
+re_recorded: 2026-11-14 -- 2026-11-14 -- _sem_modes_uniform and _select_forward_modes parametrized over the array namespace (xp): the JAX twin of PMMStack runs the same kernels
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`

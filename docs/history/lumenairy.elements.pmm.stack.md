@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: 2eac0e92c0c8fa64e6db24008def7844e3aaa3d12a5a143cdebbb048954c6e18
-token_sha256: 86699a82c38d8afe164f1c2595ec3f5d8786e0bcd3100d8a0bf51c0289edde60
+ast_sha256: 72a6ebfd166d4122b4795013b721bef1c68c9855da94ca17f1585ca07a9582ea
+token_sha256: 5ec9ddbbe73a8f19208235130bd413bd38357ef2c34511c7c1454a5d5d468397
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -13,6 +13,7 @@ re_recorded: 2026-11-14 -- G-1 wiring (grade through _normalize_grade, validated
 re_recorded: 2026-11-14 -- prepare().solve cascades with the same uniform-run collapse as solve(), restoring prepared == rebuilt bit identity
 re_recorded: 2026-11-14 -- small-element guard re-derived after the selector root-cause fix: refusal 3e-5 -> 1e-5 x wavelength (measured round-off can exceed 1e-6 below it), opted-out solves below it warn, default geometric floor from _core._geometric_default_floor; pre-fix guard block moved to this document
 re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: no per-solve grade state (_grade_scope removed; resolved spec passed down), fixed-point grade, prepared caches keyed by and refusing a changed layout, Chebyshev/uniform small-element bar 3e-6 x wavelength, backstop note derived from geometry
+re_recorded: 2026-11-14 -- 2026-11-14 -- add_layer records traced scalar eps (_iso_scalar) for the JAX twin's uniform-layer fast path
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
@@ -583,3 +584,18 @@ _SMALL_ELEMENT_SUGGEST_FRAC = 4.0e-5
   `solve_vs_wavelength` documents that its default floor is resolved at the
   longest wavelength.  The wall-clock speed-up test moved to the slow marker
   and an eig-count test replaced it in the fast suite.
+
+### 2026-11-14 -- the JAX twin takes the uniform-layer fast path
+
+The 5.51 staging plan kept the fast path out of the JAX twin (decision D10:
+a traced angle makes the geometric operator traced, with degenerate +/-m
+pairs).  The geometric eig of the half-spaces already runs through the
+cluster rule, so the uniform layers now take their modes from it too, with
+the SAME kernels as NumPy (`_core._sem_modes_uniform` and
+`_uniform_cascade._cascade_vertical`, both parametrized over the array
+namespace); each uniform medium's eps is an anchor of the rule.  A traced
+layer qualifies only when it was added as a traced scalar eps
+(`add_layer` records it in `_iso_scalar`).  Twin forward vs NumPy 9.4e-14;
+gradients (uniform eps real/imag, thickness, angle) vs the dense twin
+<= 1.6e-12 and vs central differences at the FD truncation; forward +
+gradient on 44 layers 68.5 s -> 1.05 s.

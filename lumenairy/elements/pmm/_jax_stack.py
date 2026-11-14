@@ -21,6 +21,12 @@ Scope (matches the single-layer twin's in-plane vertical surface):
   are IGNORED -- exactly the single-layer twin's ``_t3`` contract.  Concrete
   tensors ARE inspected and raise on out-of-plane coupling.
 
+Laterally uniform isotropic layers take the NumPy stack's fast path with the
+SAME kernels run under ``jax.numpy`` (``_core._sem_modes_uniform`` on the
+shared geometric eig, ``_uniform_cascade._cascade_vertical`` for the
+elementwise run collapse); see :func:`_jstack_uniform_eps` for which layers
+qualify under a trace.
+
 The order set / far-field sizing mirrors the NumPy ``PMMStack.solve`` policy
 (concrete numbers only -- a traced wavelength or permittivity falls back to
 the ``far_field_orders`` floor with the documented Wood-anomaly caveat:
@@ -31,9 +37,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._core import (
-    _forward_growth_flip,
     _gll_nodes_weights,
-    _jeps_is_passive,
     _jpmm_fourier_projection,
     _jpmm_order_set,
     _jpmm_sem_modes_tensor,
@@ -41,11 +45,10 @@ from ._core import (
     _kz_forward,
     _l2g_periodic,
     _lagrange_derivative_matrix,
-    _mass_flux_threshold,
     _pmm_union_grid,
     _require_concrete_wavelength,
-    _safe_lam,
     _segment_elem_bnds,
+    _sem_modes_uniform,
 )
 
 __all__ = ["_pmm_stack_solve_jax"]
@@ -159,45 +162,34 @@ def _jstack_geo_ops(static):
 
 
 def _jstack_modes_uniform(S0, mu, w, jnp, eps):
-    """Uniform-isotropic half-space modes from the SHARED geometric eig -- the
-    traced twin of :func:`_core._sem_modes_uniform` (v5.14.2 backlog A2,
-    ported per audit P3-27).  For a uniform ``eps`` the coupled operator
-    collapses exactly to ``Mbig(eps) = eps I - blockdiag(Kx2, Kx2)``, so the
-    eps-free ``(mu, w)`` eig of ``Kx2`` serves every half-space with the
-    ANALYTIC spectrum shift ``q^2 = eps - mu`` (eps gradients flow through the
-    shift; k0/kx0 gradients through the one shared eig).  Same return contract
-    and z-Poynting forward selector as :func:`_jpmm_sem_modes_tensor`."""
-    cj = jnp.complex128
-    n = w.shape[0]
-    q2 = eps - mu
-    q = jnp.sqrt(jnp.concatenate([q2, q2]))
-    Zn = jnp.zeros((n, n), cj)
-    W2 = jnp.block([[w, Zn], [Zn, w]])
-    # Q @ W2 for the uniform medium: Q = [[0, eps I - Kx2], [-eps I, 0]] and
-    # Kx2 w = w diag(mu)  =>  (eps I - Kx2) w = w diag(q2)
-    QW = jnp.block([[Zn, w * q2[None, :]], [-eps * w, Zn]])
-    # --- the _jpmm_sem_modes_tensor forward selector, verbatim policy -------
-    lam0 = -1j * q
-    safe0 = _safe_lam(lam0, jnp)
-    V0 = QW * (1.0 / safe0)[None, :]
-    SVt = S0 @ jnp.conj(V0[:n])             # S0 conj(Hx)
-    SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
-    flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
-                    - jnp.einsum("in,in->n", W2[n:], SVt))
-    thr = _mass_flux_threshold(flux, W2, SVt, SVb, n, jnp)
-    prop = jnp.abs(flux) > thr                        # W7 B2: unit-safe cut
-    flip = _forward_growth_flip(flux, q, thr, prop, jnp,
-                                _jeps_is_passive(eps, jnp))
-    q = jnp.where(flip, -q, q)
-    lam = -1j * q
-    safe = _safe_lam(lam, jnp)
-    V2 = QW * (1.0 / safe)[None, :]
-    return W2, V2, lam, q
+    """Uniform-isotropic modes from the SHARED geometric eig -- the NumPy
+    kernel :func:`_core._sem_modes_uniform` itself, run with ``xp=jnp`` (one
+    implementation; the eps gradients flow through ``q^2 = eps - mu``, the
+    k0 / kx0 gradients through the shared eig)."""
+    return _sem_modes_uniform(dict(n_glob=w.shape[0], S0=S0), None, None,
+                              eps, (mu, w), xp=jnp)
 
 
 # ---------------------------------------------------------------------------
 # the traced multilayer solve
 # ---------------------------------------------------------------------------
+
+def _jstack_uniform_eps(stack, eps_u):
+    """The scalar permittivity of a laterally uniform ISOTROPIC layer of the
+    twin, or ``None``: a concrete layer through the NumPy classifier
+    (:func:`_uniform_cascade._uniform_iso_eps`), a TRACED one only when it was
+    added as a scalar ``eps`` (``PMMStack.add_layer`` records it; a traced
+    ``(3, 3)`` tensor cannot be inspected without severing the trace).  Every
+    union cell must hold that one object, so a perturbation of it keeps the
+    layer uniform and the analytic modes' derivative is the exact one."""
+    from ._uniform_cascade import _uniform_iso_eps
+    e0 = eps_u[0]
+    if all(e is e0 for e in eps_u):
+        rec = getattr(stack, "_iso_scalar", {}).get(id(e0))
+        if rec is not None and rec[0] is e0:
+            return rec[1]
+    return _uniform_iso_eps(eps_u)
+
 
 def _concrete_real(v):
     """``float(Re(v))`` when ``v`` is concrete, else ``None`` (a traced value
@@ -347,7 +339,18 @@ def _pmm_stack_solve_jax(stack, grade):
             Cwj = jnp.asarray(Cwg, cj)
             op = op - 1j * kx0 * (Cwj - Cwj.T) + (kx0 * kx0) * S0j
         Kx2 = (1.0 / (k0 * k0)) * (jnp.linalg.inv(S0j) @ op)
-        mu_geo, w_geo = eig(Kx2, None, S0j, (0.0, eps_sup, eps_sub))
+        # the uniform-layer fast path of the NumPy stack, with the SAME
+        # kernels (_sem_modes_uniform, _uniform_cascade) run under jnp
+        from . import stack as _stack_mod
+        from ._uniform_cascade import _cascade_vertical, _uniform_medium_diag
+        fast = bool(_stack_mod._UNIFORM_FAST_PATH)
+        uni = [(_jstack_uniform_eps(stack, eu) if fast else None)
+               for eu in layer_eps_u]
+        # every uniform medium's modal sqrt(eps - mu) is an anchor of the
+        # cluster rule (a Rayleigh anomaly of that medium)
+        anchors = (0.0, eps_sup, eps_sub) + tuple(
+            e for e in uni if e is not None)
+        mu_geo, w_geo = eig(Kx2, None, S0j, anchors)
         Wsup, Vsup, _ls, _qs = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
                                                      eps_sup)
         Wsub, Vsub, _lb, _qb = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
@@ -355,9 +358,14 @@ def _pmm_stack_solve_jax(stack, grade):
 
         lmodes = []
         for i, (thk, _segs, _slant) in enumerate(stack._layers):
-            mats = _jstack_assemble(static, jnp,
-                                    [_t5(e) for e in layer_eps_u[i]])
-            Wl, Vl, lam, _q = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
+            if uni[i] is not None:
+                Wl, Vl, lam, _q = _jstack_modes_uniform(S0j, mu_geo, w_geo,
+                                                        jnp, uni[i])
+            else:
+                mats = _jstack_assemble(static, jnp,
+                                        [_t5(e) for e in layer_eps_u[i]])
+                Wl, Vl, lam, _q = _jpmm_sem_modes_tensor(mats, jnp, eig, k0,
+                                                         kx0)
             lmodes.append((Wl, Vl, lam, jnp.asarray(thk)))
 
         # ---- Redheffer cascade (verbatim the single-layer twin's blocks) ------
@@ -385,14 +393,17 @@ def _pmm_stack_solve_jax(stack, grade):
             return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
                     B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
 
-        nlay = len(lmodes)
-        S = _ismat(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
-        for i, (Wl, Vl, lam, thk) in enumerate(lmodes):
-            S = _star(S, _psmat(lam, k0 * thk))
-            if i == nlay - 1:
-                S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
-            else:
-                S = _star(S, _ismat(Wl, Vl, lmodes[i + 1][0], lmodes[i + 1][1]))
+        def _D(e, lam):
+            return _uniform_medium_diag(e, lam, mu_geo, jnp) if fast else None
+        media = ([(Wsup, Vsup, _ls, _D(eps_sup, _ls))]
+                 + [(Wl, Vl, lam, (_D(e, lam) if e is not None else None))
+                    for (Wl, Vl, lam, _t), e in zip(lmodes, uni)]
+                 + [(Wsub, Vsub, _lb, _D(eps_sub, _lb))])
+        # with the fast path off this is the plain per-layer loop, op for op
+        S = _cascade_vertical(
+            media, [k0 * L[3] for L in lmodes], interface=_ismat, star=_star,
+            propagation_star=lambda S_, lam_, k0t: _star(S_, _psmat(lam_, k0t)),
+            collapse=fast, xp=jnp)
         S11, _S12, S21, _S22 = S
 
         # ---- far field (verbatim the single-layer twin's tail; mirrors
