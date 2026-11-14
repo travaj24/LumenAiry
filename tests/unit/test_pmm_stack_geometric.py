@@ -212,17 +212,23 @@ _CONICAL_LAYERS = [(50e-9, E_AU, 1.0 + 0j), (21e-9, E_HF, E_HF),
                    (70e-9, E_AL, E_AL)]
 
 
-def test_conical_incidence_refuses_geometric():
-    """Geometric grading is refused at conical incidence (phi != 0) -- kept
-    after the 2026-11-14 selector fix, which leaves these readings unchanged
-    (see ``conical._refuse_geometric_conical`` for the separate mechanism).
+def test_conical_incidence_refuses_geometric(monkeypatch):
+    """Geometric grading at conical incidence (phi != 0) is refused only with
+    the structured conical solves switched off
+    (``conical.PMM_CONICAL_STRUCTURED = False``, the fail-before switch): the
+    dense conical eig it restores cannot carry the small elements.  With the
+    structured solves (the default since 2026-11-14) it is accepted and
+    validated in ``test_pmm_conical_structured.py``.
 
-    MEASURED 2026-11-14 (both builds) on the strip / 21 nm spacer / mirror
-    stack, theta 0.2, phi 0.3, 12 geometric elements at the default floor
-    (37 pm): the cross-polarized J_xy drifts 0.00596 + 0.00742i ->
-    0.00544 + 0.00833i over degree 8 .. 24 while the planar solve of the same
-    layout converges by ~1e-6 per step, and the ky0 = 0 conical cascade
-    reproduces the classical solve only to 5e-8 (Chebyshev 3 el: 4.5e-13)."""
+    MEASURED 2026-11-14 (both builds) with the dense eig, on the strip /
+    21 nm spacer / mirror stack, theta 0.2, phi 0.3, 12 geometric elements at
+    the default floor (37 pm): the cross-polarized J_xy drifts 0.00596 +
+    0.00742i -> 0.00544 + 0.00833i over degree 8 .. 24 while the planar solve
+    of the same layout converges by ~1e-6 per step, and the ky0 = 0 conical
+    cascade reproduces the classical solve only to 5e-8 (Chebyshev 3 el:
+    4.5e-13)."""
+    import lumenairy.elements.pmm.conical as CO
+    monkeypatch.setattr(CO, "PMM_CONICAL_STRUCTURED", False)
     st = _fixture(8, 12, "geometric", theta=0.2, phi=0.3,
                   layers=_CONICAL_LAYERS)
     with pytest.raises(NotImplementedError, match="conical incidence"):
@@ -237,6 +243,7 @@ def test_conical_incidence_refuses_geometric():
         pmm_jones_1d_conical_tensor(P, cell, N_SUB, 1.0, 50e-9, WL, theta=0.2,
                                     phi=0.3, degree=8, elements_per_region=12,
                                     grade="geometric")
+    monkeypatch.setattr(CO, "PMM_CONICAL_STRUCTURED", True)
     # the normalizer still runs first: an invalid value is a ValueError
     with pytest.raises(ValueError, match="unknown grade"):
         pmm_jones_1d_conical(*args, theta=0.2, phi=0.3, degree=8,

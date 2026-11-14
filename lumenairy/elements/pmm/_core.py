@@ -3281,8 +3281,21 @@ def _sem_modes_uniform(mats, k0, kx0, eps, geo=None,
     # Q @ W2 for the uniform medium: Q = [[0, eps I - Kx2], [-eps I, 0]] and
     # Kx2 w = w diag(mu)  =>  (eps I - Kx2) w = w diag(q2)
     QW = np.block([[Z, w * q2[None, :]], [-eps * w, Z]])
+    # a uniform half-space's medium is the SCALAR ``eps`` argument, not the
+    # grid it is discretised on (that grid is a patterned layer's).
+    return _select_forward_modes(mats, W2, QW, q, _eps_is_passive(eps),
+                                 label, False)
+
+
+def _select_forward_modes(mats, W2, QW, q, passive, label, patterned):
+    """The z-Poynting-flux forward selector of the structured modal solves
+    (``_sem_modes_uniform`` and the conical ones below): the
+    :func:`_sem_modes_tensor` policy verbatim -- flux of the probe partner
+    ``QW / lam``, :func:`_mass_flux_threshold`, :func:`_forward_growth_flip`,
+    the mode-cut census -- applied to modes whose ``Q @ W`` the caller formed
+    analytically.  Returns ``(W2, V2, lam, q)`` with the forward branch."""
+    n = mats["n_glob"]
     S0 = mats["S0"]
-    # --- the _sem_modes_tensor forward selector, verbatim policy ----------
     lam0 = -1j * q
     safe0 = np.where(np.abs(lam0) < 1e-12, 1e-12, lam0)
     V0 = QW * (1.0 / safe0)[None, :]
@@ -3292,19 +3305,171 @@ def _sem_modes_uniform(mats, k0, kx0, eps, geo=None,
                    - np.einsum("in,in->n", W2[n:], SVt))
     thr = _mass_flux_threshold(flux, W2, SVt, SVb, n)
     prop = np.abs(flux) > thr                        # W7 B2: unit-safe cut
-    # a uniform half-space's medium is the SCALAR ``eps`` argument, not the
-    # grid it is discretised on (that grid is a patterned layer's).
-    passive = _eps_is_passive(eps)
     flip = _forward_growth_flip(flux, q, thr, prop, np, passive)
     if _mode_cut_armed():
         _record_mode_cut(flux, q, thr, prop, mats,
-                         label, False,
+                         label, patterned,
                          flip=flip, passive=passive)
     q = np.where(flip, -q, q)
     lam = -1j * q
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
     V2 = QW * (1.0 / safe)[None, :]
     return W2, V2, lam, q
+
+
+# ===========================================================================
+# CONICAL (ky0 != 0) structured modal solves (2026-11-14)
+# ===========================================================================
+# WHY.  The conical layer operator of :func:`_sem_modes_tensor` is formed as
+# the PRODUCT ``M = -(P @ Q)`` of two factors that each carry the
+# ``1 / (k0 h)^2`` scale of the smallest element (the weak ``Kx^2`` and
+# ``G = I - Kx (1/ezz) Kx`` blocks), times the first-derivative ``ky0``
+# coupling blocks.  Every entry of that product near a small element is a sum
+# of terms of size ``~ (degree^2 / (k0 h))^3`` whose round-off is ABSOLUTE,
+# so the eigenvalues of the resolved (O(1)) modes inherit it.  The classical
+# (ky0 = 0) operator needs no such product -- ``Mbig`` is assembled from the
+# factors times DIAGONAL nodal operators only -- which is why the planar
+# solve keeps its accuracy on a geometric grid and the conical one did not
+# (measured, fixture strip 50 nm / 21 nm spacer / mirror, 370 nm period,
+# 1300 nm, theta 0.2, phi 0.3, geometric 12 el.: the cross-polarized J_xy
+# moved 1e-4 under a 1e-10 relative change of phi at degree 16, and drifted
+# 3e-2 over degree 8 .. 24; on Chebyshev grids the same round-off is ~1e-11).
+#
+# THE CURE has two parts, both exact rewrites in exact arithmetic:
+#
+# 1. LAYERS -- the operator in the CLASSICAL modal basis.  The classical
+#    eigendecomposition ``(W0, V0, lam0)`` (accurate: no products) satisfies
+#    ``Q0 W0 = V0 safe0`` and ``P0 V0 = -W0 q0^2 / safe0``.  The conical
+#    factors are ``P = P0 + dP``, ``Q = Q0 + dQ`` with
+#    ``dP = [[kyn KxEZI, 0], [kyn^2 EZI, -kyn EZIKx]]`` and
+#    ``dQ = [[kyn Kx1, 0], [kyn^2 I, -kyn Kx1]]`` -- first-derivative and
+#    diagonal operators only.  Hence, exactly,
+#
+#        W0^-1 M W0 = -(Ph @ Qh),  Ph = diag(-q0^2 / safe0) + W0^-1 dP V0,
+#                                  Qh = diag(safe0) + V0^-1 dQ W0,
+#
+#    and no product with a ``1 / (k0 h)^2`` operator is ever formed.  Its
+#    eigenvectors ``Z`` give ``W = W0 Z`` and ``Q W = V0 (Qh Z)``.  At
+#    ``ky0 -> 0`` ``Ph Qh -> -diag(q0^2)`` and the solve reduces continuously to
+#    the classical one (measured 2.8e-10 at phi = 1e-9 on the geometric grid,
+#    against 3.4e-11 for the physical cross-polarized term itself).
+#
+# 2. UNIFORM ISOTROPIC MEDIA -- exactly structured modes.  With ``A`` the
+#    geometric ``Kx^2`` of :func:`_uniform_geo_eig` and ``K`` the Bloch-shifted
+#    first-derivative operator, the conical operator of a uniform medium is
+#    ``M = [[B, C], [0, B]]`` with ``B = (eps - kyn^2) - (1 - kyn^2/eps) A -
+#    (kyn^2/eps) K^2`` and ``C = c [K, B]``, ``c = -kyn / (eps - kyn^2)``.  So
+#    its eigenvectors are EXACTLY ``[y; 0]`` (E_y = 0) and ``[c K y; y]``
+#    (H_y = 0) for every eigenpair ``B y = b y``: an exactly degenerate pair
+#    per ``b``, resolved analytically (the round-off split of these pairs by the
+#    dense eig was the first defect found).  The partners follow without
+#    cancellation: ``E_y = 0`` mode: ``V = [kyn K y; (kyn^2 - eps) y] / lam``;
+#    ``H_y = 0`` mode: ``V = [eps b y / (eps - kyn^2); 0] / lam``.  ``B`` is
+#    eigen-solved IN THE SHARED GEOMETRIC EIGENBASIS ``w`` of ``A``
+#    (``B^ = (eps - kyn^2) - (1 - kyn^2/eps) diag(mu) - (kyn^2/eps) K^2``,
+#    ``K^ = w^-1 K w``), never multiplying ``A`` into anything, and reducing to
+#    the classical uniform modes at ``ky0 -> 0``.  The eigenvectors of ``B``
+#    depend on ``eps`` (``K^2 != A`` on a multi-element grid), so unlike the
+#    planar case one ``n x n`` eig per uniform medium remains; the ``2n``
+#    eig is gone.
+#
+# Validated against RCWAStack(asr=True) (tests/unit/test_pmm_conical_structured.py).
+
+
+def _conical_khat(mats, k0, kx0):
+    """``(mu, w, Kh)``: the shared geometric eig ``(mu, w)`` of
+    :func:`_uniform_geo_eig` and the Bloch-shifted first-derivative operator
+    in that basis, ``Kh = w^-1 K w`` with ``K = (-i/k0) S0^-1 conv + kx0/k0``.
+    Cached with the geometric eig (same digest discipline)."""
+    mu, w, A = _uniform_geo_eig(mats, k0, kx0)
+    n = mats["n_glob"]
+    _apply, _ = _row_scale_apply(mats["S0"])
+    K = (-1j / k0) * _apply(mats["conv"]["one"]) + (kx0 / k0) * np.eye(
+        n, dtype=_C)
+    Kh = _cached_geo_eig(_geo_eig_key(b"conical-khat", A, K),
+                         lambda: (np.linalg.solve(w, K @ w),))[0]
+    return mu, w, Kh
+
+
+def _sem_modes_uniform_conical(mats, k0, kx0, ky0, eps,
+                               label="PMM modal solve (uniform, conical)"):
+    """Exactly structured conical modes of a UNIFORM ISOTROPIC medium on the
+    grid ``mats`` (see the block comment above): same return contract as
+    :func:`_sem_modes_tensor` -- ``(W2, V2, lam, q)``.  ``kx0`` / ``ky0`` are
+    DIMENSIONAL (rad/m).  Raises ``FloatingPointError`` when ``eps`` sits at
+    ``kyn^2`` (the ``H_y = 0`` family degenerates) or the result is not
+    finite; the caller decides the fallback."""
+    n = mats["n_glob"]
+    eps = _C(eps)
+    kyn = ky0 / k0
+    den = eps - kyn * kyn
+    if abs(den) <= 1e-12 * max(abs(eps), 1.0):
+        raise FloatingPointError("uniform conical modes: eps == kyn^2")
+    mu, w, Kh = _conical_khat(mats, k0, kx0)
+    Bh = (-(kyn * kyn) / eps) * (Kh @ Kh)
+    Bh[np.diag_indices(n)] += den - (1.0 - kyn * kyn / eps) * mu
+    b, Zb = np.linalg.eig(Bh)
+    Y = w @ Zb
+    KY = w @ (Kh @ Zb)
+    c = -kyn / den
+    Zn = np.zeros((n, n), dtype=_C)
+    W2 = np.block([[Y, c * KY], [Zn, Y]])
+    QW = np.block([[kyn * KY, (eps / den) * (Y * b[None, :])],
+                   [(kyn * kyn - eps) * Y, Zn]])
+    if not (np.all(np.isfinite(W2)) and np.all(np.isfinite(QW))):
+        raise FloatingPointError("uniform conical modes: not finite")
+    q = np.sqrt(np.concatenate([b, b]))
+    return _select_forward_modes(mats, W2, QW, q, _eps_is_passive(eps),
+                                 label, False)
+
+
+def _conical_dpq(mats, k0, kx0, ky0):
+    """The ``ky0``-dependent parts ``(dP, dQ)`` of the conical factors of
+    :func:`_sem_modes_tensor` (``P = P0 + dP``, ``Q = Q0 + dQ``, ``P0`` /
+    ``Q0`` the classical ones): first-derivative and diagonal nodal
+    operators only."""
+    n = mats["n_glob"]
+    _apply, _ = _row_scale_apply(mats["S0"])
+    kxn, kyn = kx0 / k0, ky0 / k0
+    I_n = np.eye(n, dtype=_C)
+    EZI = _apply(mats["mass"]["inv_ezz"])
+    Kx1 = (-1j / k0) * _apply(mats["conv"]["one"]) + kxn * I_n
+    KxEZI = (1j / k0) * _apply(mats["conv"]["inv_ezz"].T) + kxn * EZI
+    EZIKx = (-1j / k0) * _apply(mats["conv"]["inv_ezz"]) + kxn * EZI
+    Z = np.zeros((n, n), dtype=_C)
+    dP = np.block([[kyn * KxEZI, Z], [(kyn * kyn) * EZI, -kyn * EZIKx]])
+    dQ = np.block([[kyn * Kx1, Z], [(kyn * kyn) * I_n, -kyn * Kx1]])
+    return dP, dQ
+
+
+def _sem_modes_conical(mats, k0, kx0, ky0,
+                       label="PMM modal solve (patterned, conical)"):
+    """Conical (``ky0 != 0``) modes of an in-plane layer, solved in the
+    classical modal basis (see the block comment above): same return contract
+    as :func:`_sem_modes_tensor`.  ``kx0`` / ``ky0`` DIMENSIONAL.  Raises
+    ``FloatingPointError`` when the classical basis is singular or the result
+    is not finite; the caller decides the fallback."""
+    n2 = 2 * mats["n_glob"]
+    W0, V0, lam0, q0 = _sem_modes_tensor(mats, k0, kx0, True)
+    safe0 = np.where(np.abs(lam0) < 1e-12, 1e-12, lam0)
+    dP, dQ = _conical_dpq(mats, k0, kx0, ky0)
+    with np.errstate(over="raise", invalid="raise", divide="raise"):
+        try:
+            Ph = np.linalg.solve(W0, dP @ V0)
+            Qh = np.linalg.solve(V0, dQ @ W0)
+        except (np.linalg.LinAlgError, FloatingPointError) as exc:
+            raise FloatingPointError(f"conical modes: {exc}") from None
+    idx = np.diag_indices(n2)
+    Ph[idx] += -(q0 * q0) / safe0
+    Qh[idx] += safe0
+    q2, Zm = np.linalg.eig(-(Ph @ Qh))
+    W2 = W0 @ Zm
+    QW = V0 @ (Qh @ Zm)
+    if not (np.all(np.isfinite(W2)) and np.all(np.isfinite(QW))
+            and np.all(np.isfinite(q2))):
+        raise FloatingPointError("conical modes: not finite")
+    return _select_forward_modes(mats, W2, QW, np.sqrt(q2),
+                                 _grid_is_passive(mats), label, None)
 
 
 def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,

@@ -1848,8 +1848,14 @@ class PMMStack:
         where a metal corner's error bottoms out, the wavelength part keeps
         the eigensolve's round-off (which grows like ``1 / (k0 h)^2``) below
         about 4e-7.  The stored :attr:`grade` is the normalized spec (a
-        bool or that tuple).  Geometric grading is refused at conical
-        incidence (``phi != 0``), where it was measured inaccurate.
+        bool or that tuple).  Geometric grading works at conical incidence
+        (``phi != 0``) too: the conical cascade solves its uniform media with
+        exactly structured modes and its layers in the classical modal basis
+        (``_core._sem_modes_uniform_conical`` / ``_sem_modes_conical``); on
+        the metal-strip / spacer / mirror stack at theta 0.2, phi 0.3,
+        degree 8 x 12 elements reads the cross-polarized Jones within 3e-8 of
+        ``RCWAStack(asr=True)`` and the co-polarized one within 3e-6 (the
+        planar accuracy of the same layout).
     far_field_orders, n_orders : int, optional
         How many Rayleigh orders the FAR FIELD projects onto (``n_orders`` is
         the cross-suite alias; it is auto-grown to cover every propagating
