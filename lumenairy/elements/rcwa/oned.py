@@ -192,23 +192,17 @@ def _asr_metric_profile(duty_cycle, eta, n_samples):
     the Floquet lattice), and ``eta = 0`` gives ``f == 1``, ``x(u) = u``.
     Returns ``(u, f_u, x_u, in_ridge)`` on the uniform grid
     ``u = (i + 0.5)/n_samples``.  Host NumPy (pure geometry).
+
+    The map is :class:`~._asr_stack._AsrMap` (profile ``'sine'``), the one
+    coordinate-map implementation, shared with the ``RCWAStack`` ASR solve.
     """
+    from ._asr_stack import _AsrMap  # local: keeps oned's line layout
+
     u = (np.arange(n_samples) + 0.5) / n_samples
     u1 = float(duty_cycle)
-    f = np.ones(n_samples)
-    x = u.copy()
-    tp = 2.0 * np.pi
-    in_ridge = u < u1
-    if u1 > 0.0:                                  # ridge sub-interval [0, u1)
-        a = u[in_ridge]
-        f[in_ridge] = 1.0 - eta * np.cos(tp * a / u1)
-        x[in_ridge] = a - (eta * u1 / tp) * np.sin(tp * a / u1)
-    w = 1.0 - u1
-    if w > 0.0:                                   # groove sub-interval [u1, 1)
-        b = u[~in_ridge] - u1
-        f[~in_ridge] = 1.0 - eta * np.cos(tp * b / w)
-        x[~in_ridge] = u[~in_ridge] - (eta * w / tp) * np.sin(tp * b / w)
-    return u, f, x, in_ridge
+    walls = [0.0] if u1 in (0.0, 1.0) else [0.0, u1]
+    x, f = _AsrMap(walls, float(eta), "sine").samples(u)
+    return u, f, x, u < u1
 
 
 
@@ -461,6 +455,12 @@ def rcwa_efficiency_1d(
         Combined with the inverse rule (``formulation='li'`` / metals) this is
         the matched-coordinate FFF.  **Normal incidence only** (raises for
         ``angle != 0``); NumPy / CuPy only (raises on the JAX path).
+
+        The floor comes from the ``G^{-1}`` bridge to the half-spaces (the
+        high-order plane waves are not representable in the stretched basis)
+        and from this map's linear clustering at the walls.
+        ``RCWAStack(asr=True)`` (a one-layer stack is valid) has no such floor
+        and takes oblique incidence; see ``docs/rcwa_stack_asr.md``.
     asr_samples : int, optional
         Uniform ``u``-grid sample count for the ASR metric / permittivity /
         bridge FFTs (default 16384).  Only used when ``asr_eta > 0``.

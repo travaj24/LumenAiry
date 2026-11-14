@@ -15,6 +15,12 @@ from ...backend import (
     is_jax_array,
     to_numpy,
 )
+from ._asr_stack import (
+    _asr_carriers,
+    _asr_face_fluxes,
+    _asr_solve,
+    _normalize_asr,
+)
 from ._core import (
     _C,
     _CONV_FACTOR_1AXIS,
@@ -1489,7 +1495,13 @@ class RCWAResult:
         # CONJUGATED incident, i.e. the OPPOSITE handedness (found by the PMM
         # internal-field co-registration oracle, 2026-06-11).
         ex0, ey0 = np.conj(incident[0]), np.conj(incident[1])
-        cinc = np.concatenate([ex0 * delta, ey0 * delta]).astype(_C)
+        asr = info.get("asr")
+        if asr is None:
+            cinc = np.concatenate([ex0 * delta, ey0 * delta]).astype(_C)
+        else:
+            # ASR (_asr_stack): the superstrate amplitudes are u coefficients,
+            # so the incident wave enters as its exact u representation.
+            cinc = (ex0 * asr["inc"][0] + ey0 * asr["inc"][1]).astype(_C)
         sigma = self._lanczos_sigma() if filter == "lanczos" else None
 
         ny_i = (1 if info["is_1d"] else int(nx)) if ny is None else int(ny)
@@ -1500,9 +1512,26 @@ class RCWAResult:
         yg = (np.arange(ny_i) - ny_i // 2) * dy_f
         # all-order carriers (internal field INCLUDES evanescent orders, unlike
         # the propagating-only far field) -- precompute once and reuse.
-        carriers = np.stack([np.asarray(self._order_carrier(idx, nx_i, ny_i,
-                                                            dx_f, dy_f))
-                             for idx in range(N)])           # (N, ny, nx)
+        if asr is None:
+            carriers = np.stack([np.asarray(self._order_carrier(
+                idx, nx_i, ny_i, dx_f, dy_f)) for idx in range(N)])
+        else:
+            # u-harmonic carriers at u(x); the covariant E_u, U_u are f times
+            # the Cartesian E_x, H_x (divided out below).  Same centred grid
+            # as _plane_wave_carrier.
+            m_ = self._require_modal()
+            xg_c = (np.arange(nx_i) - nx_i / 2) * dx_f
+            carriers = _asr_carriers(
+                asr, xg_c, (np.arange(ny_i) - ny_i / 2) * dy_f,
+                info["period_x"], complex(np.asarray(to_numpy(m_["ky"]))[0]),
+                m_["wavelength"])
+            _inv_eps_cache = {}
+
+            def inv_eps_grid(i):
+                if i not in _inv_eps_cache:
+                    _inv_eps_cache[i] = asr["inv_eps"][i](
+                        xg_c / info["period_x"])[None, :]
+                return _inv_eps_cache[i]
 
         # cache c+/c- per layer for this incident vector
         cpm = {}
@@ -1550,6 +1579,16 @@ class RCWAResult:
                 rhs = rhs - EZX @ Sx - EZY @ Sy
             Sz = np.linalg.solve(EPS, rhs)                   # curl-H z-comp
             Hz = Kx @ Sy - Ky @ Sx                           # curl-E z-comp
+            if asr is not None:
+                # Covariant -> Cartesian without dividing by f (which vanishes
+                # at the walls): f H_z and f H_x (= U_u) through [[f]]^-1;
+                # E_x from the CONTINUOUS D_x (inverse-rule operator DX on
+                # E_u), divided by eps(x) after reconstruction below.  EPS
+                # holds [[eps f]] for the E_z solve above (eps'_zz = eps f).
+                Fi_ = np.asarray(asr["Fi"])
+                Hz = Fi_ @ Hz
+                Hx = Fi_ @ Hx
+                Sx = np.asarray(asr["DX"][i]) @ Sx
             return dict(Ex=Sx, Ey=Sy, Ez=Sz, Hx=Hx, Hy=Hy, Hz=Hz)
 
         zs = np.atleast_1d(np.asarray(z, dtype=float))
@@ -1567,6 +1606,8 @@ class RCWAResult:
                 if sigma is not None:
                     amp = amp * sigma
                 out[c][zi] = np.tensordot(amp, carriers, axes=([0], [0]))
+                if asr is not None and c == "Ex":
+                    out[c][zi] = out[c][zi] * inv_eps_grid(i)
         result = {c: (out[c][:, 0, :] if ny_i == 1 else out[c]) for c in want}
         result["z"] = zs
         result["x"] = xg
@@ -1798,7 +1839,7 @@ class RCWAResult:
         # declared structure (an off-centre shape's split is pinned against
         # the frame-free Poynting flux difference in
         # tests/unit/test_c2_shapes_layer_absorption.py).
-        im_eps = [None if L.kind == "tensor"
+        im_eps = [None if (L.kind == "tensor" or info.get("asr") is not None)
                   else (self._layer_im_eps(L, grid[i][4], grid[i][5], px, py,
                                            n_orders=(nox, noy))
                         if L.kind == "shapes"
@@ -1817,6 +1858,13 @@ class RCWAResult:
         for p, inc in enumerate(((1.0, 0.0), (0.0, 1.0))):
             raw = np.zeros(nlay)
             for i in range(nlay):
+                if info.get("asr") is not None:
+                    # ASR: EVERY layer takes its face-flux difference,
+                    # summed exactly over the u harmonics (Parseval holds in
+                    # u, not on a uniform x grid) -- _asr_stack._asr_face_fluxes.
+                    s_top, s_bot = _asr_face_fluxes(self, info, i, inc)
+                    raw[i] = (s_top - s_bot) / info["k0"]
+                    continue
                 if li_layer[i]:
                     fl = self.internal_field([0.0, thick[i]], component="all",
                                              nx=fnx, ny=fny, layer=i,
@@ -1991,11 +2039,60 @@ class RCWAStack:
         Retained orders per side along x.
     n_orders_y : int, optional
         Retained orders per side along y (2-D only; default = ``n_orders``).
+    asr : None, bool, float or dict, optional
+        ADAPTIVE SPATIAL RESOLUTION for a 1-D stack (default ``None``: off,
+        and every result is bit-for-bit what it is without the argument).
+        ``asr=True`` solves the whole stack in one stretched lateral
+        coordinate whose lines carry the walls of every patterned layer, with
+        the harmonics clustered at the walls (map ``'sine4'``, stretch
+        ``eta='auto'``: ``eta = clip((n_orders - 5) / 10, 0, 1)``, i.e. the
+        full stretch from ``n_orders`` 15 on and the standard solve at 5 and
+        below); a number sets ``eta`` in ``(0, 1]``; a dict
+        ``dict(eta=..., profile='sine4' | 'sine')`` sets both.  It is a
+        STACK property (not a per-solve option) because the one map is built
+        from all the layers, and so that :meth:`solve_vs_wavelength`,
+        ``stabilize`` and :func:`rcwa_convergence` all run with it.
+
+        What it buys (TM on metal strips, where the uniform basis converges
+        only as ``N^-1.1``): on a 175 nm metal strip (eps -74+6i, 50 nm) over
+        a 21 nm spacer stack and a metal mirror, period 370 nm, 1300 nm, the
+        zeroth-order reflection errs 4.7e-6 / 2.0e-6 / 1.3e-7 at
+        ``n_orders`` 20 / 40 / 100 against 4.2e-2 / 1.9e-2 / 1.1e-2 for
+        ``'li'`` (the last ASR value is the reference's own accuracy), and
+        ``n_orders`` 150 and 200 agree to 1.3e-8.  TE and
+        lossless dielectric gratings converge faster too.  The full stretch
+        clusters so hard that the middle of each segment is resolved 2.7
+        times more coarsely than by the plain basis, which is why ``'auto'``
+        ramps it in: a fixed ``eta = 1`` at ``n_orders`` 10 was measured
+        LESS accurate than the plain basis on a dielectric lamellar grating
+        (TE 2.1e-3 against 2.9e-4), where ``'auto'`` (``eta`` 0.5 there)
+        gives 1.9e-5.  ``eta < 1`` keeps a linear zone at the walls in which
+        the corner singularity survives (plateau 2e-6 .. 1e-5 on the strip
+        stack at ``eta`` 0.999), so a fixed ``eta`` below 1 is for studies
+        only.  A lossless stack closes ``sum R + T = 1`` to the truncation
+        error, not to round-off as the plain basis does (measured 4e-6 /
+        4e-8 / 2.5e-10 at ``n_orders`` 15 / 20 / 40 on a three-layer
+        dielectric stack): far below the error of the solve itself, but at
+        ``n_orders`` below about 12 the library's lossless-closure warning
+        fires, correctly flagging an unconverged truncation.
+
+        Supported layers: uniform, and ``shapes=`` / ``segments=`` layers
+        solved with ``'li'`` (the 1-D default); classical and conical
+        incidence; :meth:`RCWAResult.internal_field` and
+        :meth:`RCWAResult.layer_absorption` (face fluxes for every layer).
+        Refused with a ``ValueError``: 2-D stacks, ``eps_cell`` rasters (no
+        exact wall positions -- pass the layer as ``segments=``), tensor
+        layers, ``'laurent'`` patterned layers, JAX and GPU solves.  The
+        even-parity fold of :meth:`solve` does not engage (the solve is the
+        full one).  A stack with no patterned layer has nothing to adapt and
+        is solved exactly as without ``asr``.  The formulation is in
+        ``lumenairy/elements/rcwa/_asr_stack.py`` and
+        ``docs/rcwa_stack_asr.md``.
     """
 
     def __init__(self, period, *, period_y=None, n_superstrate=1.0,
                  n_substrate=1.0, n_orders=11, n_orders_y=None, use_gpu=False,
-                 truncation="rectangular"):
+                 truncation="rectangular", asr=None):
         _validate_geometry("RCWAStack", period=period, period_y=period_y,
                            n_orders=n_orders, n_orders_y=n_orders_y)
         if truncation not in ("rectangular", "circular"):
@@ -2026,8 +2123,26 @@ class RCWAStack:
         # above for 1-D, where the circle radius would collapse to (0, 0)).
         self.truncation = truncation
         self.use_gpu = bool(use_gpu)
+        self._asr = _normalize_asr(asr, "RCWAStack")
+        if self._asr is not None and not self.is_1d:
+            raise ValueError(
+                "RCWAStack: asr (adaptive spatial resolution) is implemented "
+                "for 1-D stacks only (period_y / n_orders_y unset).")
+        if self._asr is not None and self.use_gpu:
+            raise ValueError(
+                "RCWAStack: asr (adaptive spatial resolution) runs on NumPy "
+                "only; drop use_gpu or asr.")
         self._layers: List[_RCWALayer] = []
         self._source: Optional[dict] = None
+
+    @property
+    def asr(self):
+        """The adaptive-spatial-resolution setting: ``None`` (off) or
+        ``dict(eta=..., profile=...)`` with ``eta`` a number or ``'auto'``
+        (see the class docstring)."""
+        if self._asr is None:
+            return None
+        return dict(profile=self._asr[0], eta=self._asr[1])
 
     @property
     def n_orders_x(self) -> int:
@@ -3882,6 +3997,11 @@ class RCWAStack:
         xp = _rcwa_xp("RCWAStack.solve", self.use_gpu, *layer_arrays)
         bname = backend_name(xp)
         is_jax = bname == "jax"
+        if self._asr is not None and bname != "numpy":
+            raise ValueError(
+                "RCWAStack.solve: asr (adaptive spatial resolution) runs on "
+                "NumPy only; JAX-traced or GPU inputs are not supported -- "
+                "solve without asr for those.")
         if is_jax:
             _require_jax_x64("RCWAStack.solve")
         orders, N = _harmonic_orders_2d(
@@ -3984,8 +4104,21 @@ class RCWAStack:
         # the (N+1)-d even sector (~x3-4); any failed precondition falls
         # through to the full solve bit-identically.
         sym_rt = None
-        if (_symmetry_on(symmetry) and not retain_internal and bname != "jax"
-                and abs(kx0) < 1e-12 and abs(ky0) < 1e-12):
+        asr_internal = None
+        if self._asr is not None:
+            # Adaptive spatial resolution (_asr_stack): the whole cascade runs
+            # in the stretched coordinate and returns the Rayleigh amplitudes
+            # in the (r, t) form the efficiency tail below consumes, exactly
+            # like the even-parity cascade.  None = no patterned layer, i.e.
+            # nothing to adapt: the standard solve runs.
+            asr_out = _asr_solve(
+                self, self._layers, spec=self._asr, kx0=float(kx0),
+                ky0=float(ky0), wl=float(wl), k0=float(k0), eps_sup=eps_sup,
+                eps_sub=eps_sub, retain_internal=retain_internal)
+            if asr_out is not None:
+                sym_rt, asr_internal = asr_out
+        if (sym_rt is None and _symmetry_on(symmetry) and not retain_internal
+                and bname != "jax" and abs(kx0) < 1e-12 and abs(ky0) < 1e-12):
             specs = [self._layer_even_spec(L, Kx, Ky, orders, xp)
                      for L in self._layers]
             if all(sp is not None for sp in specs):
@@ -4177,7 +4310,13 @@ class RCWAStack:
                 "JAX path (the per-layer modal retention is host-side); the "
                 "efficiencies are returned WITHOUT internal-field data -- "
                 "re-solve with NumPy inputs for field maps.", stacklevel=2)
-        if retain_internal and bname != "jax" and not any_oop:
+        if retain_internal and asr_internal is not None:
+            modal["internal"] = dict(
+                asr_internal, Kx=Kx, Ky=Ky, k0=float(k0), N=N, delta=delta,
+                layers=list(self._layers), period_x=self.period_x,
+                period_y=self.period_y, is_1d=self.is_1d, nox=self.nox,
+                noy=self.noy)
+        elif retain_internal and bname != "jax" and not any_oop:
             # Per-layer cumulative partial S-matrices that bracket the TOP plane
             # of each layer -> the c+/c- modal amplitudes for the in-structure
             # field (see RCWAResult.internal_field).  Same gap-free
