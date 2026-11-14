@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 7d91f517976aaf1bc786c65c2d0f1b3c20195ebc61b6e3c4b0f3fc6dbacd96fb
-token_sha256: f63a6e436f73fe20805ddf5fb7567c89f413983db14bdb8667c5a14c52c7f109
+ast_sha256: 946a5a0f67f16fe2066077fae6d991eb77bb09f79c29b388aaa13c02edf49cd6
+token_sha256: 0fd9708b469049d5f2631b17d9d1d01534bdb30f773645aa6add2719b0a5fdcf
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -15,6 +15,7 @@ re_recorded: 2026-10-04 -- JAX 1-D, Jones twins routed through rcwa._core._jax_c
 re_recorded: 2026-10-04 -- round 3: the half-space geometric eig carries its Rayleigh-anomaly anchors (eps of the half-spaces) into the cluster rule; symmetric-point docstring note with limits
 re_recorded: 2026-11-03 -- point-mirror fix (v5.50.1): PMM paths solved eps(-x,-y); registration bridges (_internal_mirror_1d full x-mirror for the covariant core, _build_axis internal frame + _internal_slant for the hybrid, _stag_bloch_tau public carrier for the staggered family), slant-convection sign and frame-anchor sign (_frame_anchor_phase) corrected
 re_recorded: 2026-11-14 -- G-1 geometric grading spec: _graded_fractions is the one grading rule (the JAX-topology copy removed), _graded_boundaries delegates to it, new _normalize_grade + GEOMETRIC_DEFAULT_RATIO / GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC, geometric layout with an absolute floor; _sem_modes_uniform gains label=; bool/Chebyshev layouts bit-identical
+re_recorded: 2026-11-14 -- small-element wrong-branch root cause: _growth_mask (the forward/backward growth repair no longer undercuts the eigensolve's round-off eps*max|q^2|; bit-identical where that bound is below 1e-6|q|) and _hx_partner_rows (classical H_x partner rows by the exact relation W_bot q^2/lam, NumPy and JAX twins)
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`
@@ -461,3 +462,26 @@ self-converging to ~1e-7, though vs an INDEPENDENT full-3x3 oracle the TM floor
 is ~2.5e-3 at slant=45 / TE <8e-4; see the COVARIANT block above, audit P2-B.)
 '''
 ```
+
+### 2026-11-14 -- `_MODE_GROWTH_REL` -- "the two populations are six decades apart"
+
+*Left in the source, unchanged:* the 2026-08 calibration text of
+``_MODE_GROWTH_REL``.  It remains true on the grids it was measured on.  A new
+block below it records why the bar alone was not a round-off bar: the
+eigenvalue round-off is absolute in ``q^2`` (``~ eps * max|q^2|``), so on an
+element of ~1e-5 wavelengths a genuinely propagating mode read
+``|Im q| / |q|`` = 2.1e-6, past the bar.  ``_growth_mask`` now takes
+``max(_MODE_GROWTH_REL |q|, d / max(|q|, sqrt(d)))`` with
+``d = _EIG_ROUNDOFF_FAC * eps * max|q^2|``; where ``d`` is small (every grid of
+the 2026-08 calibration) the mask is the historical one bit for bit.
+
+### 2026-11-14 -- `_sem_modes_tensor` / `_jpmm_sem_modes_tensor` -- the magnetic partner's H_x rows
+
+Until 2026-11-14 both twins formed the whole classical partner as
+``V = Q W diag(1/lam)``.  Its top (``H_x``) rows are now
+``W_bot q^2 / lam`` (``_hx_partner_rows``), the exact bottom block row of
+``P V = W q^2 / lam`` with ``P = [[0, -G], [I, 0]]``; the ``Q``-route rows lose
+every digit for a TE-like mode at cut-off (measured: the dense per-layer path
+at a cut-off inside a uniform air spacer returned TE ``R + T`` = 1.257 / 1.156
+at degree 10 / 14; now 0.983202 at both, equal to the structured solve).  The
+conical (``ky0 != 0``) partner keeps the ``Q``-route.

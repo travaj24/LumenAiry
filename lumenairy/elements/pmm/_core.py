@@ -1359,6 +1359,75 @@ _MODE_CUT_MARGIN_WARN = 1.0e1
 #: headroom on each side and not a fitted constant.
 _MODE_GROWTH_REL = 1.0e-6
 
+# ---------------------------------------------------------------------------
+# 2026-11-14 -- WHY ``_MODE_GROWTH_REL`` ALONE WAS NOT A ROUND-OFF BAR
+# ---------------------------------------------------------------------------
+# The "six decades apart" measurement above was taken on element grids whose
+# smallest element is a sizeable fraction of the wavelength.  The round-off on
+# an eigenvalue is NOT relative to that eigenvalue: a backward-stable eig
+# returns every ``q^2`` with an ABSOLUTE error of order ``eps * ||M||``, and the
+# spectral radius of the modal operator grows like ``(p^2 / (k0 h))^2`` on an
+# element of width ``h`` at degree ``p``.  Measured on the eps-free geometric
+# operator of a uniform medium (where the exact spectrum is REAL, so its
+# imaginary part is pure round-off), oblique incidence, geometric layouts with
+# the smallest element ``h`` (12 elements per region, degrees 8 / 14, periods
+# 370 / 700 nm, 1300 nm wavelength):
+#
+#     h / wavelength   max|q^2|   |Im q^2| of the propagating modes
+#     1e-4             4.8e9      1e-8 .. 2e-8
+#     2e-5             1.2e11     1e-7 .. 3e-7
+#     1.25e-5          3.1e11     2e-7 .. 9e-7
+#     4e-6             3.0e12     2e-6 .. 6e-6
+#
+# -- i.e. ``|Im q^2| <= 0.02 * eps * max|q^2|`` on every reading, a
+# NORMWISE bound, while ``|Im q| / |q|`` of a genuinely propagating mode
+# reached 2.1e-6 at ``h = 1.25e-5`` wavelengths: past ``_MODE_GROWTH_REL``.
+# The passive widening of :func:`_forward_growth_flip` then took such a mode's
+# direction from the SIGN OF THAT ROUND-OFF instead of from its flux (which sat
+# 1e9 x the cut -- unambiguous power), sent a propagating substrate order to
+# the backward branch, and the cascade returned a super-unity answer
+# (R + T = 2.55 on an absorbing strip; a discrete wrong branch, the same
+# number at every ``h`` and degree that flips the same mode, decided by the
+# BLAS build's round-off sign, never at normal incidence, where the geometric
+# operator is real and a simple real eigenvalue carries no imaginary part).
+#
+# So "growing" now means growing BEYOND THE EIGENSOLVE'S ROUND-OFF: the bar on
+# ``-Im(q_forward)`` is ``max(_MODE_GROWTH_REL |q|, d / max(|q|, sqrt(d)))``
+# with ``d = _EIG_ROUNDOFF_FAC * eps * max|q^2|`` the normwise ``q^2`` error
+# bound and ``d / |q|`` its image on ``q`` (``sqrt(d)`` where ``|q|`` is
+# itself inside the noise).  Where that bound is below ``_MODE_GROWTH_REL |q|``
+# -- every grid the 2026-08 calibration measured -- the mask is the historical
+# one BIT FOR BIT.  A misclassified EVANESCENT mode (``Im q = -|q|``, the
+# population the repair exists for) is still caught whenever
+# ``|q|^2 > d``; one inside the bound is within round-off of its own cut-off,
+# where neither criterion can resolve a direction and the growth it could
+# carry, ``exp(sqrt(d) k0 t)``, is itself at round-off level.
+#: Multiple of the normwise eigenvalue round-off bound ``eps * max|q^2|``
+#: below which a forward mode's ``Im(q) < 0`` is NOT counted as growth.  The
+#: measured round-off is <= 0.02 of the bound (table above), so 1.0 is a 50x
+#: margin over the noise, and it is the bound itself (no fitted constant).
+_EIG_ROUNDOFF_FAC = 1.0
+
+
+def _growth_mask(qf, q_all, xp=np):
+    """Forward modes that GROW along +z beyond the eigensolve's round-off --
+    the ONE growth test shared by :func:`_forward_growth_flip` (the repair),
+    :func:`_mode_cut_growth` (the diagnosis) and
+    :func:`_mode_cut_growth_post` (the residual), so the three can never
+    disagree about which modes are affected.
+
+    ``qf`` are the forward-assigned ``q``; ``q_all`` the whole modal set of
+    the same eig (its largest ``|q|^2`` sets the round-off scale).  See the
+    2026-11-14 block above ``_EIG_ROUNDOFF_FAC``.  Elementwise (plus one
+    reduction), so it traces under JAX."""
+    aq = xp.abs(qf)
+    d = (_EIG_ROUNDOFF_FAC * float(np.finfo(np.float64).eps)
+         * xp.max(xp.abs(q_all)) ** 2)
+    den = xp.maximum(aq, xp.sqrt(d))
+    noise = xp.where(den > 0.0, d / xp.where(den > 0.0, den, 1.0), 0.0)
+    return qf.imag < -xp.maximum(_MODE_GROWTH_REL * aq, noise)
+
+
 #: Per-solve accumulator for the STACK-LEVEL half of the conjunction.  The
 #: verdict cannot be reached inside one layer's eig -- it needs the whole
 #: stack's propagating-mode counts -- so the per-layer solve paths open a scope
@@ -1461,9 +1530,8 @@ def _mode_cut_growth(flux, q, thr, prop):
     ratio = _mode_cut_ratio(flux, thr)
     # the forward q the selector will hand downstream, for the prop modes
     qf = np.where(np.asarray(flux) < 0.0, -q, q)
-    aq = np.abs(qf)
     grow = (prop & (ratio < _MODE_CUT_MARGIN_WARN)
-            & (qf.imag < -_MODE_GROWTH_REL * aq))
+            & _growth_mask(qf, q))
     if not bool(grow.any()):
         return 0, float("inf")
     return int(np.count_nonzero(grow)), float(np.min(ratio[grow]))
@@ -1720,7 +1788,7 @@ def _forward_growth_flip(flux, q, thr, prop, xp=np, passive=False):
     if not PMM_FORWARD_GROWTH_REPAIR:
         return flip
     qf = xp.where(flip, -q, q)
-    grow = qf.imag < -_MODE_GROWTH_REL * xp.abs(qf)
+    grow = _growth_mask(qf, q, xp)
     # ``_mode_cut_ratio``'s ``ratio < _MODE_CUT_MARGIN_WARN`` without the
     # division: under ``prop`` we have |flux| > thr, so the ratio IS
     # |flux| / thr.  A degenerate cut (thr <= 0 or non-finite) gives lim <= 0
@@ -1756,7 +1824,7 @@ def _mode_cut_growth_post(flux, q, flip):
     library caught it" from "the forward set is still wrong"."""
     q = np.asarray(q)
     qf = np.where(np.asarray(flip, dtype=bool), -q, q)
-    bad = qf.imag < -_MODE_GROWTH_REL * np.abs(qf)
+    bad = _growth_mask(qf, q)
     return int(np.count_nonzero(bad))
 
 
@@ -2948,6 +3016,11 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
     # for complex v, measured -- and ``lam`` is complex).
     QW = Q @ W2
     V0 = QW @ np.diag(1.0 / safe0)
+    if ky0 == 0.0:
+        # the probe partner's H_x rows by the exact relation as well (see
+        # _hx_partner_rows): a TE-like mode at cut-off otherwise carries a
+        # round-off H_x, and with it a round-off flux.
+        V0[:n] = _hx_partner_rows(W2, q2, safe0, n)
     SVt = S0 @ np.conj(V0[:n])          # S0 conj(Hx)
     SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
     flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
@@ -2970,7 +3043,35 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False, ky0=0.0):
     lam = -1j * q
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
     V2 = QW @ np.diag(1.0 / safe)
+    if ky0 == 0.0:
+        V2[:n] = _hx_partner_rows(W2, q2, safe, n)
     return W2, V2, lam, q
+
+
+def _hx_partner_rows(W2, q2, safe, n, xp=np):
+    """The ``H_x`` (top) rows of the classical (``ky0 = 0``) magnetic partner
+    ``V = Q W diag(1/lam)``, by the EXACT relation ``V_top = W_bot q^2 / lam``.
+
+    WHY (2026-11-14).  The classical operator factors as ``M = P Q`` with
+    ``P = [[0, -G], [I, 0]]``, so ``P V = M W / lam = W q^2 / lam`` and the
+    bottom block row of ``P`` reads ``V_top = W_bot q^2 / lam`` -- Faraday's
+    ``dEy/dz ~ Hx``, which carries no x-derivative at ``ky0 = 0``.  The
+    ``Q``-route evaluates the same rows as ``(Cyx W_x + (Cyy - Kx2) W_y) / lam``:
+    a difference of terms of size ``||Kx2|| |W|`` whose result is
+    ``q^2 |W|``, divided by ``lam``.  Its round-off is therefore of relative
+    size ``eps ||Kx2|| / |q|^2`` -- every digit is lost for a TE-like mode at
+    or near its cut-off (``q -> 0``), and the loss grows like ``1 / (k0 h)^2``
+    on small elements.  Measured: a laterally uniform air layer whose -1
+    order sits exactly at cut-off (1000 nm period, 1300 nm, the dense
+    per-layer eig): TE ``R + T`` = 1.257 / 1.156 at degree 10 / 14 with the
+    ``Q``-route, against 0.983202 at both degrees with this one -- identical to
+    the structured uniform-medium solve (``_sem_modes_uniform``, whose
+    ``V_top = w q^2 / lam`` is this same expression).  ``q2`` is the eig's own
+    eigenvalue (unchanged by the forward/backward flip), ``safe`` the clamped
+    ``lam``, so a mode exactly at cut-off gets ``0`` as the structured solve
+    does.  The bottom (``H_y``) rows keep the ``Q``-route: ``Cxx W_x``
+    carries no derivative and no cancellation."""
+    return W2[n:] * (q2 / safe)[None, :]
 
 
 
@@ -4597,6 +4698,8 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     lam0 = -1j * q
     safe0 = jnp.where(jnp.abs(lam0) < 1e-12, 1e-12, lam0)
     V0 = Q @ W2 @ jnp.diag(1.0 / safe0)
+    # H_x rows by the exact relation, as the NumPy twin (_hx_partner_rows)
+    V0 = jnp.concatenate([_hx_partner_rows(W2, q2, safe0, n, jnp), V0[n:]])
     SVt = S0 @ jnp.conj(V0[:n])             # S0 conj(Hx)
     SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
     flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
@@ -4611,6 +4714,7 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     lam = -1j * q
     safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
     V2 = Q @ W2 @ jnp.diag(1.0 / safe)
+    V2 = jnp.concatenate([_hx_partner_rows(W2, q2, safe, n, jnp), V2[n:]])
     return W2, V2, lam, q
 
 
@@ -7984,6 +8088,9 @@ __all__ = [
     "_resolve_incidence_checked",
     "_forward_branch_flip",
     "_forward_growth_flip",
+    "_growth_mask",
+    "_EIG_ROUNDOFF_FAC",
+    "_hx_partner_rows",
     "_tensor_is_passive",
     "_grid_is_passive",
     "_eps_is_passive",
