@@ -107,6 +107,29 @@ def test_m2_nonpositive_and_nonfinite_widths_raise():
             _stack().add_layer(THK, segments=bad)
 
 
+def test_m2_shared_segment_walls_refuses_nonfinite_fractions():
+    """The shared validator ``_segment_walls`` (used by the 1-D PMM segment
+    solvers and by ``RCWAStack.add_layer(segments=)``) refuses a NaN or an
+    infinite fraction itself.  Before, a NaN fell through both of its
+    comparisons (``w <= 0`` and ``|sum - 1| > 1e-6`` are False for a NaN) and
+    produced NaN walls; each caller had to pre-check."""
+    from lumenairy.elements.pmm._core import _segment_walls
+    for bad in ([float("nan"), 1.0], [0.5, float("nan")],
+                [float("inf"), 1.0], [0.5, 0.5, float("nan")]):
+        with pytest.raises(ValueError, match="finite and > 0"):
+            _segment_walls(P, bad)
+    # the 1-D sibling solver goes through the same check
+    with pytest.raises(ValueError, match="finite and > 0"):
+        pmm_jones_1d_segments(P, [(float("nan"), 2.5), (1.0, 1.0)], 1.5, 1.0,
+                              THK, WL, angle=0.0, degree=DEG,
+                              far_field_orders=FFO)
+    # a valid list is unchanged: walls land exactly on 0 and the period
+    walls = _segment_walls(P, [0.25, 0.5, 0.25])
+    assert walls[0] == 0.0 and walls[-1] == P
+    np.testing.assert_array_equal(
+        walls, np.array([0.0, 0.25, 0.75, 1.0]) / 1.0 * P)
+
+
 def test_m2_valid_fractions_unchanged_bit_for_bit():
     """A VALID fraction list is untouched: the frozen pre-fix values (recorded
     on this exact configuration) must still come out unchanged.  Held to rel

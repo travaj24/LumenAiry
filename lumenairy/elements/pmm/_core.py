@@ -3656,12 +3656,15 @@ def _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
 def _segment_walls(period, widths):
     """Cumulative region walls ``[0, w0, w0+w1, ..., period]`` (metres) for the
     fractional ``widths`` (must sum to 1 within 1e-6); normalized to land
-    EXACTLY on 0 and ``period``."""
+    EXACTLY on 0 and ``period``.  A NaN or infinite fraction is refused here
+    (both comparisons below are False for a NaN, so it would otherwise pass)."""
     w = np.asarray(widths, dtype=float)
     if w.ndim != 1 or w.size < 1:
         raise ValueError("segments: need at least one region.")
-    if np.any(w <= 0.0):
-        raise ValueError("segments: every width fraction must be > 0.")
+    if not np.all(np.isfinite(w)) or np.any(w <= 0.0):
+        raise ValueError(
+            f"segments: every width fraction must be finite and > 0 "
+            f"(got {[float(x) for x in w]}).")
     if abs(float(w.sum()) - 1.0) > 1e-6:
         raise ValueError(
             f"segments: width fractions must sum to 1 (got {float(w.sum()):.6f}).")

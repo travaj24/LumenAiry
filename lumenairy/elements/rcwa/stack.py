@@ -2752,14 +2752,9 @@ class RCWAStack:
             widths.append(w)
             epss.append(e)
         w = np.asarray(widths, dtype=float)
-        if not np.all(np.isfinite(w)):
-            # (the shared validator's comparisons are False for a NaN)
-            raise ValueError(
-                f"add_layer: every segment width FRACTION must be finite and "
-                f"> 0 (got {list(w)}).")
-        # THE segment validator of the library (PMMStack's): fractions > 0,
-        # summing to 1 within 1e-6, walls normalized to land EXACTLY on 0 and
-        # the period (here the unit period: fractions).
+        # THE segment validator of the library (PMMStack's): fractions finite
+        # and > 0, summing to 1 within 1e-6, walls normalized to land EXACTLY
+        # on 0 and the period (here the unit period: fractions).
         try:
             xw = _segment_walls(1.0, w)
         except ValueError as e:
