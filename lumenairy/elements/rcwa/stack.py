@@ -1125,9 +1125,51 @@ class RCWAResult:
         return 1.0 - self._R.sum(axis=1) - self._T.sum(axis=1)
 
     def jones_reflection(self):
+        """Zeroth-order REFLECTION Jones matrix, ``(2, 2)`` complex.
+
+        ``J[i, j]`` is the reflected zeroth-order TANGENTIAL lab field
+        component ``i`` (0 = ``E_x``, 1 = ``E_y``) over the incident tangential
+        component ``j``: columns are the responses to an incident ``E_x`` /
+        ``E_y`` plane wave.  Public time convention ``exp(-i w t)``; conjugate
+        the matrix for ``exp(+i w t)``.
+
+        PHASE REFERENCE: the top interface of the FIRST layer (the superstrate
+        interface).  Adding a thickness ``d`` of superstrate material on top
+        multiplies ``J`` by ``exp(2 i k0 n_sup cos(theta) d)``.
+
+        At ``phi = 0`` the ``x`` column is the p (TM) channel and ``J[0, 0]``
+        is the ratio of TANGENTIAL ``E_x`` amplitudes -- the p-polarized
+        amplitude ratio with the sign convention that gives ``J_xx = J_yy`` at
+        normal incidence, i.e. ``-r_p`` of the textbook Fresnel ``r_p``; the
+        ``y`` column is the s (TE) channel, ``J[1, 1] = r_s``
+        (``CONVENTIONS.md`` section 7.1).  Measured on an 80 nm film
+        (eps 2.5+0.5i) on n = 1.447 at 1300 nm, theta 0 and 0.3 rad: both
+        diagonal entries equal the closed-form tangential-field reflection to
+        1e-9 (``tests/unit/test_rcwa_doc_contracts.py``)."""
         return self._Jr
 
     def jones_transmission(self):
+        """Zeroth-order TRANSMISSION Jones matrix, ``(2, 2)`` complex.
+
+        ``J[i, j]`` is the transmitted zeroth-order TANGENTIAL lab field
+        component ``i`` (0 = ``E_x``, 1 = ``E_y``) in the substrate over the
+        incident tangential component ``j`` in the superstrate; columns are the
+        responses to an incident ``E_x`` / ``E_y``.  Public ``exp(-i w t)``;
+        conjugate for ``exp(+i w t)``.
+
+        PHASE REFERENCE: incident phase at the top interface of the FIRST
+        layer, transmitted phase at the BOTTOM interface of the LAST layer (the
+        substrate interface).  Adding a thickness ``d`` of superstrate material
+        on top multiplies ``J`` by ``exp(i k0 n_sup cos(theta) d)``; adding
+        ``d`` of substrate material at the bottom multiplies it by
+        ``exp(i k0 kz_sub d)``, ``kz_sub = sqrt(n_sub^2 - (n_sup sin theta)^2)``.
+
+        The ``E_x`` entry is the ratio of TANGENTIAL fields, so for the p (TM)
+        channel it differs from the p-polarized field-amplitude transmission
+        ``t_p`` by the ratio of the media's ``kz/n``:
+        ``J[0, 0] = t_p (kz_sub / n_sub) / (kz_sup / n_sup)``.  The s (TE)
+        entry ``J[1, 1]`` is ``t_s``.  Pinned against the closed form in
+        ``tests/unit/test_rcwa_doc_contracts.py``."""
         return self._Jt
 
     def apply_reflection(self, jones_field):
