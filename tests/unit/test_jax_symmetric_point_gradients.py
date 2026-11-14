@@ -323,7 +323,12 @@ def test_rcwa_stack_symmetry_breaking_gradient_at_a_symmetric_cell():
     """``RCWAStack`` on JAX input: the four-fold cell over a uniform spacer
     (eps 2.25, 0.1); t on the two x-side blocks; R, T of (0,0), (+-1,0) for
     both incident polarizations.  Before: 0.13 / 0.14 (probe g1, half-spaces
-    swapped); after: 2.3e-10 / 4.7e-10 (Windows / WSL)."""
+    swapped); after: 2.3e-10 / 4.7e-10 (Windows / WSL).
+
+    The factorization is pinned to ``'laurent'``: ``'auto'`` resolves a JAX
+    cell to ``'laurent'`` but the NumPy cell of the finite-difference side
+    to ``'li'`` on a 2-D stack (since 2026-11-14), and the gradient check
+    compares ONE function."""
     import jax
     import jax.numpy as jnp
 
@@ -334,7 +339,7 @@ def test_rcwa_stack_symmetry_breaking_gradient_at_a_symmetric_cell():
         st = RCWAStack(_P, period_y=_P, n_superstrate=1.0, n_substrate=1.45,
                        n_orders=3, n_orders_y=3)
         st.add_layer(0.45, eps_cell=(xp.asarray(_BASE) + t * xp.asarray(
-            _DIRN)).astype(complex))
+            _DIRN)).astype(complex), formulation="laurent")
         st.add_layer(0.1, eps=2.25)
         st.set_source(_WL, theta=0.0, phi=0.0)
         res = st.solve()

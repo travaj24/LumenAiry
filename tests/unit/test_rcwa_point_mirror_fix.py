@@ -445,7 +445,9 @@ def test_efficiency_2d_matches_stack_on_asymmetric_cell():
     cell[(U >= 0.6) & (U < 0.75) & (V >= 0.1) & (V < 0.45)] = 4.0
     st = RCWAStack(px, period_y=py, n_superstrate=1.0, n_substrate=1.0, n_orders=M,
                    n_orders_y=M)
-    st.add_layer(d, eps_cell=cell)
+    # one factorization on both sides: rcwa_efficiency_2d defaults to
+    # 'laurent', the stack's 'auto' takes 'li' for a 2-D cell (2026-11-14)
+    st.add_layer(d, eps_cell=cell, formulation="laurent")
     o, R, T = st.set_source(WL, theta=0.45, phi=0.0).solve().efficiencies()
     o2, R2, T2 = rcwa_efficiency_2d(px, py, cell, 1.0, 1.0, d, WL, theta=0.45, phi=0.0,
                                     polarization="tm", n_orders_x=M, n_orders_y=M)

@@ -96,9 +96,12 @@ def _raster(shapes, S=_RASTER_S):
 
 
 def _cells_stack(shape_lists, theta=0.0, phi=0.0):
+    # The oracle is the SAME factorization as the analytic-disk layers it
+    # checks ('auto' keeps a disk shape on 'laurent' but sends a 2-D
+    # eps_cell to 'li' since 2026-11-14): raster vs form factor, one rule.
     st = _stack()
     for sh in shape_lists:
-        st.add_layer(_TH, eps_cell=_raster(sh))
+        st.add_layer(_TH, eps_cell=_raster(sh), formulation="laurent")
     return st.set_source(_WL, theta=theta, phi=phi)
 
 
