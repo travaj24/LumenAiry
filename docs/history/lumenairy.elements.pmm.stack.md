@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: ccb0c6c055377f24d7dfe0a5f59d1d3e77070012c152902ba20b03c1016ee9f1
-token_sha256: e8912422ad228c46855af8f8ef082f95400d594ce08cd68e522f25278f98b98a
+ast_sha256: a51caf6ebe62ebd0428f9878622f3e59be9d7d50d92211d994f32595b5552793
+token_sha256: fb1247baabbcc0d54355e01021643bcda7122640fcfa457fb8eac3c3f43b9e41
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -11,6 +11,7 @@ re_recorded: 2026-11-03 -- point-mirror fix (v5.50.1): PMM paths solved eps(-x,-
 re_recorded: 2026-11-14 -- G-2: laterally uniform isotropic layers solved from the shared geometric eig; runs of uniform media cascaded elementwise (pmm/_uniform_cascade.py)
 re_recorded: 2026-11-14 -- G-1 wiring (grade through _normalize_grade, validated property, geometric refused at conical incidence), small-element guard + energy backstop, wavelength-completed default geometric floor
 re_recorded: 2026-11-14 -- prepare().solve cascades with the same uniform-run collapse as solve(), restoring prepared == rebuilt bit identity
+re_recorded: 2026-11-14 -- small-element guard re-derived after the selector root-cause fix: refusal 3e-5 -> 1e-5 x wavelength (measured round-off can exceed 1e-6 below it), opted-out solves below it warn, default geometric floor from _core._geometric_default_floor; pre-fix guard block moved to this document
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
@@ -482,4 +483,71 @@ earlier release's message said.
         # ``_core._pmm_jones_oblique_core`` and rcwa's ``_forward_flux_kz``.
         # (The MODAL kz inside the cascade keeps the internal convention -- that
         # path is already correct.)
+```
+
+### 2026-11-14 -- THE SMALL-ELEMENT GUARD block -- the pre-root-cause description and its three constants
+
+*Left in the source:* the measured defect in two sentences, its cause (the
+growth repair of the forward/backward selector deciding a propagating order's
+direction from eigenvalue round-off; fixed in ``_core._growth_mask``), the
+post-fix sweep and round-off table, and the re-derived constants
+(``_SMALL_ELEMENT_FRAC`` 3e-5 -> 1e-5 x wavelength, ``_SMALL_ELEMENT_WATCH_FRAC``
+unchanged at 1e-4, ``_SMALL_ELEMENT_SUGGEST_FRAC`` 4e-5 -> the 1-D family's
+``GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC`` = 1.25e-5).  The block as it stood
+before the cause was found:
+
+```text
+# THE DEFECT.  At fixed polynomial degree, a solve whose element grid carries a
+# very small element can return an O(1) wrong answer with no warning.  Measured
+# 2026-11-14 on one metal-strip layer (eps -74+6i, 50 nm, duty 0.47, air above,
+# n = 1.447 below, 1300 nm) with a geometric layout of 12 elements per region
+# whose wall element ``h`` was scanned: periods 200 / 370 / 700 / 1000 / 1300 /
+# 2000 / 2600 nm, theta 0 / 0.15 / 0.3 / 0.5 / 0.7, degrees 6-20, both
+# incident polarizations (each solve returns both rows), 1,398 solves on
+# Windows/MKL (86 wrong) and 720 on WSL/OpenBLAS (62 wrong):
+#
+#   * every wrong answer was SUPER-UNITY on this absorbing structure: max
+#     R + T >= 1.028 (often 2-30), against <= 0.996 for every correct row;
+#   * none occurred at normal incidence; WHICH oblique configurations fail is
+#     a lottery over degree, period and BLAS build (the same configuration
+#     fails at one degree and not at the next), and a failing configuration
+#     returns the SAME wrong number at several ``h`` -- a discrete alternative
+#     branch, not a gradual loss of digits;
+#   * the largest failing ``h`` was 1.6e-5 x wavelength on BOTH builds
+#     (period 700 nm, theta 0.5, degrees 6-20 return one and the same wrong
+#     answer; period 1300 nm, theta 0.15, degree 6); the 716 rows at
+#     ``h >= 2e-5 x wavelength`` were all correct.  In units of the PERIOD the
+#     edge wanders from 1.6e-5 (1300 nm) to 4e-5 (200 nm), so the danger
+#     scale is the wavelength, as the mechanism (the spurious modal
+#     wavenumbers of an element of width ``h`` grow like ``1 / (k0 h)``)
+#     says.
+#
+# A cell the GEOMETRY makes thin (an owned liner, one element per region) fails
+# the same way and further up (garbage at 2e-5 .. 5e-5 x wavelength next to a
+# metal strip at a 1300 nm period, and some sub-unity wrong answers at normal
+# incidence below 4e-6), but it is the caller's geometry, which no layout
+# choice can lift; it stays the territory of the sliver refusal (manufactured
+# cells) and the within-layer warning (owned cells), and this guard does not
+# act on it.
+#
+# So two numbers, both fractions of the WAVELENGTH:
+#
+#: REFUSE (unless ``allow_small_elements=True``) a solve whose LAYOUT made an
+#: element below this -- 1.9x above the largest failing ``h`` measured.  The
+#: default geometric floor never trips it (PMMStack completes it with the
+#: wavelength, see ``_SMALL_ELEMENT_SUGGEST_FRAC``); an explicit floor below it
+#: is refused.
+_SMALL_ELEMENT_FRAC = 3.0e-5
+#: Below THIS, a layout-made element arms the energy backstop in
+#: :func:`_warn_stack_energy`: a provably passive stack that reads super-unity
+#: (beyond ``_SLIVER_TRIGGER_BAR``) is refused instead of returned under a
+#: warning.  6x above the largest failing ``h``; since every measured wrong
+#: answer was super-unity by >= 2.8e-2 and every correct one sub-unity
+#: (<= 0.996), the backstop catches the whole measured failure mode on an
+#: absorbing stack.
+_SMALL_ELEMENT_WATCH_FRAC = 1.0e-4
+#: The geometric floor the refusal suggests, and the WAVELENGTH part of
+#: PMMStack's default geometric floor (see :meth:`PMMStack._effective_grade`):
+#: 2.5x above the largest failing ``h`` measured, 1.33x above the refusal bar.
+_SMALL_ELEMENT_SUGGEST_FRAC = 4.0e-5
 ```

@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 946a5a0f67f16fe2066077fae6d991eb77bb09f79c29b388aaa13c02edf49cd6
-token_sha256: 0fd9708b469049d5f2631b17d9d1d01534bdb30f773645aa6add2719b0a5fdcf
+ast_sha256: cbfd608625348eb71eafc6e2534a56826ee7a5de2b2c9a7e15a95c0962d3dc91
+token_sha256: 93ef4144f22eae041f154419e4bcac8596d46c0c57aa01b477b60d310ebf2d8a
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -16,6 +16,7 @@ re_recorded: 2026-10-04 -- round 3: the half-space geometric eig carries its Ray
 re_recorded: 2026-11-03 -- point-mirror fix (v5.50.1): PMM paths solved eps(-x,-y); registration bridges (_internal_mirror_1d full x-mirror for the covariant core, _build_axis internal frame + _internal_slant for the hybrid, _stag_bloch_tau public carrier for the staggered family), slant-convection sign and frame-anchor sign (_frame_anchor_phase) corrected
 re_recorded: 2026-11-14 -- G-1 geometric grading spec: _graded_fractions is the one grading rule (the JAX-topology copy removed), _graded_boundaries delegates to it, new _normalize_grade + GEOMETRIC_DEFAULT_RATIO / GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC, geometric layout with an absolute floor; _sem_modes_uniform gains label=; bool/Chebyshev layouts bit-identical
 re_recorded: 2026-11-14 -- small-element wrong-branch root cause: _growth_mask (the forward/backward growth repair no longer undercuts the eigensolve's round-off eps*max|q^2|; bit-identical where that bound is below 1e-6|q|) and _hx_partner_rows (classical H_x partner rows by the exact relation W_bot q^2/lam, NumPy and JAX twins)
+re_recorded: 2026-11-14 -- geometric default floor max(3e-5 x period, 1.25e-5 x wavelength) via _geometric_default_floor; _normalize_grade(wavelength=) completes it; superseded floor rationale moved to this document
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`
@@ -462,6 +463,43 @@ self-converging to ~1e-7, though vs an INDEPENDENT full-3x3 oracle the TM floor
 is ~2.5e-3 at slant=45 / TE <8e-4; see the COVARIANT block above, audit P2-B.)
 '''
 ```
+
+### 2026-11-14 -- the geometric-grading "Why a floor" comment block -- the superseded description of the small-element failures as a round-off band, and the "every layout >= 8e-6 of the wavelength read clean" claim
+
+*Left in the source:* the round-off scaling (``eps * max|q^2|`` with
+``max|q^2| ~ (degree^2 / (k0 h))^2``), the post-fix measurement table, and the
+default-floor rule ``max(3e-5 x period, 1.25e-5 x wavelength)``.
+
+Why it changed: the outright failures this paragraph attributed to round-off
+were a defect of the forward/backward mode selector (the passive growth repair
+of ``_forward_growth_flip`` took a propagating order's direction from the sign
+of its eigenvalue round-off once that round-off exceeded ``1e-6 |q|``), fixed
+the same day in ``_growth_mask``.  The closing claim was also contradicted by
+the later 1,398-solve sweep (failures up to 1.6e-5 of the wavelength, i.e.
+above 8e-6).  The paragraph as it stood:
+
+```text
+# Why a floor.  Tiny elements cost accuracy through ROUND-OFF, not
+# discretisation: the spectrally converging TE channel, which a correct mesh
+# refinement cannot move, drifts by ~1e-6 at a 4.7 pm wall element and ~4e-5
+# at 0.9 pm (strip alone, 370 nm period, 1300 nm, both BLAS builds), and below
+# about 6e-6 of a WAVELENGTH a solve can fail outright and silently -- an
+# O(1) error with R + T > 1 on an absorbing grating -- measured at 4.7 pm
+# (370 nm period), 7.2 pm (200 nm period) and 7.5 pm (1300 nm period), all at
+# 1300 nm, mostly at oblique incidence.  The danger scale is therefore set by
+# the wavelength, while the layout is built before the wavelength is known,
+# so the default floor is a fraction of the PERIOD chosen to stay clear of
+# that band for periods down to about a sixth of the wavelength:
+# ``GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period``.  For shorter periods pass an
+# explicit floor, e.g. ``('geometric', 0.17, 2e-5 * wavelength)``.  Every
+# layout whose smallest element was at least 8e-6 of the wavelength read clean
+# in the same sweep (TE drift <= 4.4e-7).  The test that pins these numbers is
+# ``tests/unit/test_pmm_geometric_grading.py``.
+```
+
+The constant it sized was ``GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC = 1e-4`` (x
+period, 37 pm on the 370 nm fixture); it is now ``3e-5`` with the wavelength
+part ``GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC = 1.25e-5``.
 
 ### 2026-11-14 -- `_MODE_GROWTH_REL` -- "the two populations are six decades apart"
 

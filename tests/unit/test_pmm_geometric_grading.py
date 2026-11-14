@@ -203,15 +203,18 @@ def test_floor_only_acts_below_it():
     # leaves the layout bit-identical ...
     kept = C._graded_boundaries(0.0, width, 12, ("geometric", 0.17, 11.1e-12))
     assert np.array_equal(kept, free)
-    # ... while the default floor of a 370 nm period (37 pm) raises the ratio
-    # until the wall element is exactly the floor (about 0.21 here).
-    spec = C._normalize_grade("geometric", period=370e-9, where="t")
+    # ... while the default floor of a 370 nm period at 1300 nm (16.25 pm, the
+    # wavelength part) raises the ratio until the wall element is exactly the
+    # floor (about 0.179 here).
+    spec = C._normalize_grade("geometric", period=370e-9, where="t",
+                              wavelength=1300e-9)
+    assert spec[2] == C.GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * 1300e-9
     b = C._graded_boundaries(0.0, width, 12, spec)
     h = np.diff(b)
     assert abs(h[0] / spec[2] - 1.0) <= 1e-9 and abs(h[-1] / spec[2] - 1.0) <= 1e-9
     assert np.all(h >= spec[2] * (1.0 - 1e-12))
     r_eff = (h[0] + h[1]) / (h[0] + h[1] + h[2])
-    assert 0.20 < r_eff < 0.22
+    assert 0.175 < r_eff < 0.185
 
 
 def test_floor_falls_back_to_uniform_when_unreachable():
@@ -267,7 +270,29 @@ def test_normalizer_accepted_forms_round_trip():
         assert C._normalize_grade(got, period=P, where="t") == got
         hash(got)
     assert C.GEOMETRIC_DEFAULT_RATIO == 0.17
-    assert C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC == 1e-4
+    assert C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC == 3e-5
+    assert C.GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC == 1.25e-5
+
+
+def test_default_floor_is_completed_by_the_wavelength():
+    """max(3e-5 x period, 1.25e-5 x wavelength); the longest wavelength of an
+    array binds; no / a non-numeric wavelength -> the period part alone; an
+    explicit floor is never touched."""
+    P = 370e-9
+    f = C._normalize_grade("geometric", period=P, where="t",
+                           wavelength=1300e-9)[2]
+    assert f == 1.25e-5 * 1300e-9
+    f = C._normalize_grade("geometric", period=P, where="t",
+                           wavelength=[1000e-9, 1300e-9, 1100e-9])[2]
+    assert f == 1.25e-5 * 1300e-9
+    f = C._normalize_grade("geometric", period=P, where="t",
+                           wavelength=200e-9)[2]             # period part wins
+    assert f == 3e-5 * P
+    for wl in (None, "x", float("nan"), -1.0):
+        assert C._geometric_default_floor(P, wl) == 3e-5 * P
+    spec = ("geometric", 0.2, 5e-12)
+    assert C._normalize_grade(spec, period=P, where="t",
+                              wavelength=1300e-9) == spec
 
 
 @pytest.mark.parametrize("bad", [
@@ -497,7 +522,13 @@ def test_census_one_grading_rule():
 # --------------------------------------------------------------------------- #
 # ONE bar separates "converged to the round-off floor" from "a real
 # discretisation or floor error".  Measured 2026-11-14, Windows/MKL and
-# WSL/OpenBLAS (the two builds agree to 3 digits on every reading):
+# WSL/OpenBLAS (the two builds agree to 3 digits on every reading) at the
+# former 1e-4 x period floor; RE-MEASURED the same day after the selector fix
+# and the new default floor max(3e-5 x period, 1.25e-5 x wavelength): every
+# reading below <= 6.2e-7 (Windows/MKL and WSL/OpenBLAS, 3 digits), the two signals
+# above >= 2.7e-5 (the unclamped ratio-0.10 layout no longer FAILS at theta
+# 0.3 -- that was the selector defect -- it reads 3.0e-5 of round-off).
+# Readings at the former floor:
 #   * below: every reading of the default geometric spec at 12 elements --
 #     fixtures A, B, C; theta 0 and 0.3; degrees 8 / 10 / 14 / 20; TE against
 #     a one-element degree-60 solve and TM against degree 20 x 12 -- is
@@ -526,11 +557,12 @@ def _te_ref(theta=0.0, geom="A"):
 
 def test_geometric_beats_chebyshev_at_equal_nodal_count(ref_tm):
     # DOF = 2 * elements * degree = 160 for both: measured 2.6e-7 (geometric
-    # 8 x 10) against 2.7e-5 (Chebyshev 10 x 8), a factor of ~100.
+    # 8 x 10; 3.1e-8 at the new floor) against 2.7e-5 (Chebyshev 10 x 8).
     geo = abs(_tm("geometric", 8, 10) - ref_tm)
     cheb = abs(_tm(True, 10, 8) - ref_tm)
     assert geo < _BAR < cheb
-    # the recommended 12-element layout (measured 1.1e-7)
+    # the recommended 12-element layout (measured 1.1e-7; 6.2e-7 at the new
+    # floor)
     assert abs(_tm("geometric", 8, 12) - ref_tm) < _BAR
 
 
@@ -553,10 +585,11 @@ def test_te_is_untouched_by_the_geometric_layout(theta):
 @pytest.mark.parametrize("theta", [0.0, 0.3])
 def test_the_floor_turns_a_bad_ratio_into_a_good_layout(theta):
     """Ratio 0.10 at 12 elements puts a 0.9 pm element at each wall.  The
-    default floor clamps it (measured TE 4.6e-8 / 1.7e-8 at theta 0 / 0.3);
-    the same ratio with the floor disabled is the signal the bar must see
-    (measured 3.9e-5 / 0.92 -- at oblique incidence the solve fails
-    outright)."""
+    default floor clamps it (measured TE 4.6e-8 / 1.7e-8 at theta 0 / 0.3;
+    5.0e-8 / 4.3e-7 at the new floor); the same ratio with the floor disabled
+    is the signal the bar must see (measured 3.9e-5 / 0.92 before the
+    selector fix -- at oblique incidence the solve failed outright -- and
+    4.5e-5 / 3.0e-5 of round-off after it)."""
     ref = _te_ref(theta)
     clamped = abs(_te(("geometric", 0.10), 8, 12, theta) - ref)
     unclamped = abs(_te(_nofloor(0.10), 8, 12, theta) - ref)
@@ -642,13 +675,14 @@ def test_default_results_match_the_previous_release():
     ("C", 0.3, (8, 10, 20)),      # period ~ wavelength / 6.5, oblique
 ])
 def test_default_floor_stays_clear_of_the_round_off_band(geom, theta, degrees):
-    """The default floor is a fraction of the PERIOD; the round-off danger
-    scale is set by the WAVELENGTH (measured: outright failures at 4.7 pm,
-    7.2 pm and 7.5 pm of wall element on the 370 / 200 / 1300 nm periods, all
-    at 1300 nm).  The decision measured here, on the geometries the floor is
-    most and least generous on: TE stays at round-off at every degree
-    (measured <= 2.6e-9 on B, <= 9.3e-8 on C, both builds), so the floor
-    does not need to grow with degree."""
+    """The round-off danger scale is set by the WAVELENGTH (the outright
+    failures once measured at 4.7 / 7.2 / 7.5 pm of wall element were the
+    selector defect, fixed 2026-11-14), and the default floor carries a
+    wavelength part since.  The decision measured here, on the geometries
+    the floor is most and least generous on: TE stays at round-off at every
+    degree (measured <= 2.6e-9 on B, <= 9.3e-8 on C, both builds, at the
+    former floor; <= 2.0e-8 on B and <= 2.3e-7 on C at the new one), so the
+    floor does not need to grow with degree."""
     ref = _te_ref(theta, geom)
     for degree in degrees:
         assert abs(_te("geometric", degree, 12, theta, geom) - ref) < _BAR
@@ -669,6 +703,7 @@ def test_single_layer_docs_state_what_the_grading_knob_does():
     assert "grade=True to recover" not in src
     # what replaces them
     assert "INERT at 1 and 2 elements" in eff
-    assert "'geometric'" in eff and "1e-4 * period" in eff
+    assert "'geometric'" in eff and "3e-5 * period" in eff
+    assert "1.25e-5 * wavelength" in eff
     assert "ROUND-OFF" in eff
     assert "grade='geometric'" in jon

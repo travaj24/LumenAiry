@@ -27,6 +27,7 @@ from ..rcwa._core import (
 from ._core import (
     _C,
     _COV_MIN_SLANT_RAD,
+    GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC,
     GEOMETRIC_DEFAULT_RATIO,
     _assemble_jones_farfield,
     _build_nodal_metric_segments,
@@ -36,6 +37,7 @@ from ._core import (
     _farfield_order_set,
     _frame_anchor_phase,
     _freeze_cached,
+    _geometric_default_floor,
     _graded_boundaries,
     _guarded_lstsq,
     _half_M_sym_metric,
@@ -479,59 +481,64 @@ _MIN_FEATURE_DEFAULT_FRAC = 1.0e-3
 # ===========================================================================
 # THE SMALL-ELEMENT GUARD
 # ===========================================================================
-# THE DEFECT.  At fixed polynomial degree, a solve whose element grid carries a
-# very small element can return an O(1) wrong answer with no warning.  Measured
-# 2026-11-14 on one metal-strip layer (eps -74+6i, 50 nm, duty 0.47, air above,
-# n = 1.447 below, 1300 nm) with a geometric layout of 12 elements per region
-# whose wall element ``h`` was scanned: periods 200 / 370 / 700 / 1000 / 1300 /
-# 2000 / 2600 nm, theta 0 / 0.15 / 0.3 / 0.5 / 0.7, degrees 6-20, both
-# incident polarizations (each solve returns both rows), 1,398 solves on
-# Windows/MKL (86 wrong) and 720 on WSL/OpenBLAS (62 wrong):
+# THE DEFECT, AND ITS CAUSE.  At fixed polynomial degree, a solve whose element
+# grid carried a very small element could return an O(1) wrong answer with no
+# warning.  Measured 2026-11-14 on one metal-strip layer (eps -74+6i, 50 nm,
+# duty 0.47, air above, n = 1.447 below, 1300 nm), geometric layout of 12
+# elements per region, wall element ``h`` scanned (1,398 solves on
+# Windows/MKL, 86 wrong; 720 on WSL/OpenBLAS, 62 wrong): every wrong answer
+# super-unity (R + T >= 1.028, often 2-30), none at normal incidence, a
+# failing configuration returned the SAME wrong number at several ``h``, and
+# the largest failing ``h`` was 1.6e-5 x wavelength.  The cause was the modal
+# forward/backward selector, not the solve's arithmetic: its passive growth
+# repair took the direction of any forward mode with ``Im q < -1e-6 |q|`` from
+# the sign of ``Im q``, and the eig's round-off -- absolute in ``q^2``, of order
+# ``eps * max|q^2|`` with ``max|q^2| ~ (degree^2 / (k0 h))^2`` -- pushed a
+# genuinely PROPAGATING half-space order past that bar, so the sign of
+# round-off sent it to the backward branch.  Fixed at the cause in
+# ``_core._growth_mask`` (the bar never undercuts the eig's round-off); see
+# docs/history/lumenairy.elements.pmm.stack.md for the pre-fix guard.
 #
-#   * every wrong answer was SUPER-UNITY on this absorbing structure: max
-#     R + T >= 1.028 (often 2-30), against <= 0.996 for every correct row;
-#   * none occurred at normal incidence; WHICH oblique configurations fail is
-#     a lottery over degree, period and BLAS build (the same configuration
-#     fails at one degree and not at the next), and a failing configuration
-#     returns the SAME wrong number at several ``h`` -- a discrete alternative
-#     branch, not a gradual loss of digits;
-#   * the largest failing ``h`` was 1.6e-5 x wavelength on BOTH builds
-#     (period 700 nm, theta 0.5, degrees 6-20 return one and the same wrong
-#     answer; period 1300 nm, theta 0.15, degree 6); the 716 rows at
-#     ``h >= 2e-5 x wavelength`` were all correct.  In units of the PERIOD the
-#     edge wanders from 1.6e-5 (1300 nm) to 4e-5 (200 nm), so the danger
-#     scale is the wavelength, as the mechanism (the spurious modal
-#     wavenumbers of an element of width ``h`` grow like ``1 / (k0 h)``)
-#     says.
+# AFTER THE FIX (same fixture; 900 Windows/MKL and 360 WSL/OpenBLAS
+# solves, periods 200-1300 nm, theta 0-0.7, degrees 6-20, ``h`` 2e-6 .. 3e-5
+# wavelengths): no wrong branch, every row sub-unity (max R + T 0.99603), and
+# what remains is a gradual round-off floor, the TE deviation (TE converges
+# spectrally, so a correct layout cannot move it) from the same degree at
+# ``h`` = 1e-4 wavelengths:
 #
-# A cell the GEOMETRY makes thin (an owned liner, one element per region) fails
-# the same way and further up (garbage at 2e-5 .. 5e-5 x wavelength next to a
-# metal strip at a 1300 nm period, and some sub-unity wrong answers at normal
-# incidence below 4e-6), but it is the caller's geometry, which no layout
-# choice can lift; it stays the territory of the sliver refusal (manufactured
-# cells) and the within-layer warning (owned cells), and this guard does not
-# act on it.
+#     h / wavelength   2e-6     4e-6     8e-6     1e-5     1.25e-5  2e-5
+#     max TE dev       2.7e-5   3.8e-6   1.5e-6   3.2e-7   4.0e-7   2.4e-7
 #
-# So two numbers, both fractions of the WAVELENGTH:
+# (the 324 rows both builds ran agree in R + T to 1.9e-7 and in the TE
+# deviation to 1.2e-8 -- the residual is round-off, not a branch; a period
+# equal to the
+# wavelength at normal incidence -- a grazing order, an ill-conditioned
+# answer at every element size -- is excluded and scatters by 1e-5 .. 5e-4.)
+#
+# Thin cells the GEOMETRY makes (an owned liner next to the strip, one
+# element) shared the defect (garbage at 2e-5 .. 5e-5 x wavelength before) and
+# are repaired by the same fix (108 solves, every row passive; the TE
+# deviation is round-off, <= 1.9e-5 at 1e-5 x wavelength off the grazing
+# point); the guard still does not act on
+# them -- no layout choice can lift the caller's geometry.
+#
+# So the numbers, all fractions of the WAVELENGTH:
 #
 #: REFUSE (unless ``allow_small_elements=True``) a solve whose LAYOUT made an
-#: element below this -- 1.9x above the largest failing ``h`` measured.  The
-#: default geometric floor never trips it (PMMStack completes it with the
-#: wavelength, see ``_SMALL_ELEMENT_SUGGEST_FRAC``); an explicit floor below it
-#: is refused.
-_SMALL_ELEMENT_FRAC = 3.0e-5
+#: element below this: below it the measured round-off can exceed 1e-6 of
+#: ``|r|``, the accuracy a geometric layout is used for.  The default
+#: geometric floor never trips it; an explicit floor below it is refused.
+_SMALL_ELEMENT_FRAC = 1.0e-5
 #: Below THIS, a layout-made element arms the energy backstop in
 #: :func:`_warn_stack_energy`: a provably passive stack that reads super-unity
 #: (beyond ``_SLIVER_TRIGGER_BAR``) is refused instead of returned under a
-#: warning.  6x above the largest failing ``h``; since every measured wrong
-#: answer was super-unity by >= 2.8e-2 and every correct one sub-unity
-#: (<= 0.996), the backstop catches the whole measured failure mode on an
-#: absorbing stack.
+#: warning.  Kept as defence in depth: after the fix no solve in the sweeps
+#: above tripped it, and refusing a provably non-physical answer costs nothing.
 _SMALL_ELEMENT_WATCH_FRAC = 1.0e-4
-#: The geometric floor the refusal suggests, and the WAVELENGTH part of
-#: PMMStack's default geometric floor (see :meth:`PMMStack._effective_grade`):
-#: 2.5x above the largest failing ``h`` measured, 1.33x above the refusal bar.
-_SMALL_ELEMENT_SUGGEST_FRAC = 4.0e-5
+#: The geometric floor the refusal suggests: the WAVELENGTH part of the 1-D
+#: family's default floor (``_core.GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC``,
+#: one source of truth), 1.25x above the refusal bar.
+_SMALL_ELEMENT_SUGGEST_FRAC = GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC
 
 
 def _grade_scope(wavelength_of):
@@ -1555,9 +1562,9 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
         raise ValueError(
             f"PMMStack.solve: energy not conserved (max R+T = {worst:.6g}) on "
             f"a provably passive stack whose element grid carries an element "
-            f"of {h:.3g} m, {h / wl_n:.3g} of the wavelength -- inside the "
-            f"band (below {_SMALL_ELEMENT_WATCH_FRAC:g} x wavelength) where "
-            f"the modal solve is measured to return O(1) wrong answers.  The "
+            f"of {h:.3g} m, {h / wl_n:.3g} of the wavelength (below "
+            f"{_SMALL_ELEMENT_WATCH_FRAC:g} x wavelength, where the modal "
+            f"eigensolve's round-off is largest).  The "
             f"result is refused.  Raise the smallest element (an explicit "
             f"geometric floor of {_SMALL_ELEMENT_SUGGEST_FRAC:g} x wavelength, "
             f"a larger ratio, fewer elements_per_region) or widen the thin "
@@ -1823,12 +1830,12 @@ class PMMStack:
         midpoint split); ``False`` is uniform; ``'geometric'`` or
         ``('geometric', ratio[, min_element_m])`` is the corner-refined
         geometric layout (ratio 0.17; needs ``elements_per_region >= 3``).
-        Without an explicit ``min_element_m`` PMMStack's floor is
-        ``max(1e-4 x period, 4e-5 x wavelength)``, resolved at solve time:
-        the period part is the 1-D family's default, and the wavelength part
-        keeps the smallest element out of the measured small-element failure
-        band (see ``allow_small_elements``) when the period is below
-        0.4 x wavelength.  The stored :attr:`grade` is the normalized spec (a
+        Without an explicit ``min_element_m`` the floor is the 1-D family's
+        default ``max(3e-5 x period, 1.25e-5 x wavelength)``, resolved at
+        solve time with the (longest) solve wavelength: the period part is
+        where a metal corner's error bottoms out, the wavelength part keeps
+        the eigensolve's round-off (which grows like ``1 / (k0 h)^2``) below
+        about 4e-7.  The stored :attr:`grade` is the normalized spec (a
         bool or that tuple).  Geometric grading is refused at conical
         incidence (``phi != 0``), where it was measured inaccurate.
     far_field_orders, n_orders : int, optional
@@ -1841,15 +1848,15 @@ class PMMStack:
         give the same zeroth-order Jones to 4e-15 relative.
     allow_small_elements : bool, optional
         Opt out of the small-element guard (default ``False``).  A solve
-        whose element LAYOUT makes an element smaller than ``3e-5`` of the
+        whose element LAYOUT makes an element smaller than ``1e-5`` of the
         wavelength (an explicit geometric floor below it, a very small ratio
         with many elements) raises ``ValueError`` before solving: below
-        roughly that size the modal solve can return an O(1) wrong answer
-        with no warning (measured at oblique incidence up to ``1.6e-5`` of the
-        wavelength on two BLAS builds; see ``_SMALL_ELEMENT_FRAC``).  With ``True`` the solve runs, and an
-        energy check refuses a super-unity answer on a provably passive stack
-        (it cannot see a sub-unity wrong one).  Thin cells the GEOMETRY makes
-        (a liner, a narrow gap) are not subject to this guard.
+        that size the eigensolve's round-off, which grows like
+        ``1 / (k0 h)^2``, can exceed 1e-6 of the answer (measured; see
+        ``_SMALL_ELEMENT_FRAC``).  With ``True`` the solve runs, and an
+        energy check still refuses a super-unity answer on a provably passive
+        stack.  Thin cells the GEOMETRY makes (a liner, a narrow gap) are not
+        subject to this guard.
     factorization : {'auto', 'convection', 'covariant'}, optional
         Slant treatment (as in :func:`pmm_jones_1d_slanted`).  ``'auto'``
         (default) uses the SPECTRAL covariant oblique-coordinate generator for
@@ -1921,9 +1928,9 @@ class PMMStack:
     metal mirror, TM, 1300 nm, error in the zeroth-order reflection against an
     external reference: default (degree 16, 1 element) 1.4e-2; degree 80,
     1 element 4.2e-4; Chebyshev degree 10 x 8 elements 1.0e-3; geometric
-    degree 8 x 12 elements 6.6e-6 (default floor, 52 pm here); an explicit
-    11 pm floor reads 1.1e-6 but sits inside the measured small-element
-    failure band and is refused unless ``allow_small_elements=True``.
+    degree 8 x 12 elements 7.4e-7 (default floor, 16 pm here).  Elements
+    below 1e-5 of the wavelength are refused unless
+    ``allow_small_elements=True`` (see that parameter).
 
     LATERALLY UNIFORM LAYERS are cheap: an isotropic uniform layer takes its
     modes from the one geometric eig every uniform medium on the grid shares,
@@ -2139,14 +2146,14 @@ class PMMStack:
     def _effective_grade(self, wavelength):
         """The grading spec a solve at ``wavelength`` uses.
 
-        A geometric spec WITHOUT an explicit floor gets the floor
-        ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period,
-        _SMALL_ELEMENT_SUGGEST_FRAC * wavelength)``: the period-based default
-        of the 1-D family, raised where the wavelength puts it inside the
-        measured small-element failure band (which scales with the
-        wavelength, see ``_SMALL_ELEMENT_FRAC``) -- for periods below
-        0.4 x wavelength.  An explicit floor, a bool spec, or an unknown /
-        traced wavelength returns the stored spec unchanged."""
+        A geometric spec WITHOUT an explicit floor gets the 1-D family's
+        default floor :func:`~lumenairy.elements.pmm._core._geometric_default_floor`
+        ``(period, wavelength)`` = ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC *
+        period, GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength)`` -- the
+        same rule the single-layer entry points apply.  The stored spec holds
+        the period part (the wavelength is not known at construction).  An
+        explicit floor, a bool spec, or an unknown / traced wavelength returns
+        the stored spec unchanged."""
         spec = self._grade
         if not (self._grade_floor_default and _is_geometric_spec(spec)):
             return spec
@@ -2156,7 +2163,7 @@ class PMMStack:
             return spec
         if not (np.isfinite(wl) and wl > 0.0):
             return spec
-        floor = _SMALL_ELEMENT_SUGGEST_FRAC * wl
+        floor = _geometric_default_floor(self.period, wl)
         if floor <= spec[2]:
             return spec
         return (spec[0], spec[1], floor)
@@ -2251,9 +2258,9 @@ class PMMStack:
                 f"a {wc:.3g} m cell -- below the measured safe size of "
                 f"{_SMALL_ELEMENT_FRAC:g} x wavelength "
                 f"({_SMALL_ELEMENT_FRAC * wl:.3g} m).  Below that size the "
-                f"modal solve can return an O(1) wrong answer with no warning "
-                f"(R + T > 1 on an absorbing stack, or a plausible-looking "
-                f"wrong value).  The layout is degree {self.degree}, "
+                f"round-off of the modal eigensolve (which grows like "
+                f"1 / (k0 h)^2) can exceed 1e-6 of the answer -- more than "
+                f"the smaller element buys.  The layout is degree {self.degree}, "
                 f"elements_per_region={self.n_el}, grade={self.grade!r}.  "
                 f"Raise the smallest element: for grade='geometric' pass an "
                 f"explicit floor, e.g. grade=('geometric', "
@@ -2261,10 +2268,22 @@ class PMMStack:
                 f"{_SMALL_ELEMENT_SUGGEST_FRAC * wl:.3g}) "
                 f"({_SMALL_ELEMENT_SUGGEST_FRAC:g} x wavelength), or a larger "
                 f"ratio, or fewer elements_per_region.  Pass "
-                f"allow_small_elements=True to PMMStack to solve anyway (an "
-                f"energy check then refuses a super-unity answer on a "
-                f"provably passive stack, but cannot see a sub-unity wrong "
-                f"one).")
+                f"allow_small_elements=True to PMMStack to solve anyway.")
+        if hit is not None:
+            # Opted out: solve, but say so -- the round-off grows like
+            # 1 / (k0 h)^2 and an answer that is wrong by it can be sub-unity
+            # (measured 2026-11-14: a 1 nm union-grid cell split into 12
+            # geometric elements with no floor, 7e-14 m wall element, read
+            # 0.18 off the converged reflection with R + T = 0.91 on an
+            # absorbing stack -- invisible to the energy backstop).
+            h, wc = hit
+            warnings.warn(
+                f"{where}: allow_small_elements=True and the element layout "
+                f"puts an element of {h:.3g} m ({h / wl:.3g} of the "
+                f"wavelength) below {_SMALL_ELEMENT_FRAC:g} x wavelength; "
+                f"the modal eigensolve's round-off grows like 1 / (k0 h)^2 "
+                f"there and is not bounded by any check -- verify the answer "
+                f"is stationary in degree.", UserWarning, stacklevel=3)
         watch = self._layout_made_below(cells, _SMALL_ELEMENT_WATCH_FRAC * wl)
         if watch is not None:
             self._small_element_note = (watch[0], wl)

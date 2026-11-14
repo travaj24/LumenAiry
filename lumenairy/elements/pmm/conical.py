@@ -136,7 +136,26 @@ def _refuse_geometric_conical(grade, where):
     the planar solve of the same layout converges monotonically (1e-6 per
     step); and at ``ky0 = 0`` the conical cascade reproduces the classical
     solve only to 5e-8 (Chebyshev, 3 elements: 4.5e-13).  ``grade`` is
-    normalized first, so an invalid value still raises ``ValueError``."""
+    normalized first, so an invalid value still raises ``ValueError``.
+
+    What this is NOT (2026-11-14): it is not the small-element selector defect
+    of the planar path (a propagating order sent to the backward branch by the
+    sign of eigenvalue round-off, see ``_core._growth_mask``) -- fixing that
+    leaves these readings unchanged.  It is the same ROUND-OFF reaching the
+    cross-polarized channel by a different road: the conical cascade solves
+    every layer, the uniform ones and the half-spaces included, with the
+    dense ``2n`` eig of ``M = -(P @ Q)``, where an isotropic uniform medium
+    carries an EXACTLY degenerate TE/TM pair per order.  On a geometric grid
+    the eig splits each pair by ~1e-7 .. 1e-6 (the ``eps * max|q^2|`` scale)
+    and returns arbitrary TE/TM mixtures, each paired with its own split
+    ``q``; the mismatch leaks into ``J_xy``.  Measured on the fixture-A stack
+    (strip / 1-7-5-7-1 nm films / mirror, theta 0.2, phi 0.3, 12 geometric
+    elements, default floor 52 pm): ``J_xy`` drifts 1.5e-3 over degree 8 .. 24;
+    giving round-off-equal eigenvalues one common value before the square
+    root cuts the drift to 9e-5, and the ky0 -> 0 reduction stays at
+    2e-7 .. 5e-7 (Chebyshev 4e-11).  What would lift the refusal: the
+    structured shared-eig modes for the uniform media of the conical cascade
+    (as the planar path has), measured against the same two readings."""
     if _is_geometric_spec(grade):
         raise NotImplementedError(
             f"{where}: geometric element grading is not available at conical "

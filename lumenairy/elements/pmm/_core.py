@@ -478,39 +478,85 @@ def _lagrange_derivative_matrix(nodes):
 # boundaries, the classical corner-refined hp mesh) shrinks the wall element
 # like ``r^m`` and converges much faster: on a 50 nm metal strip (eps
 # -74 + 6i, 175 nm in a 370 nm period) 21 nm above a metal mirror (TM,
-# 1300 nm), degree 8 x 12 elements is 4.4e-6 off with the default floor below
+# 1300 nm), degree 8 x 12 elements is 7.4e-7 off with the default floor below
 # (1.5e-6 with an explicit 11 pm floor) where Chebyshev grading at degree
 # 10 x 8 elements is 1.0e-3 off.
 #
 # Why a floor.  Tiny elements cost accuracy through ROUND-OFF, not
-# discretisation: the spectrally converging TE channel, which a correct mesh
-# refinement cannot move, drifts by ~1e-6 at a 4.7 pm wall element and ~4e-5
-# at 0.9 pm (strip alone, 370 nm period, 1300 nm, both BLAS builds), and below
-# about 6e-6 of a WAVELENGTH a solve can fail outright and silently -- an
-# O(1) error with R + T > 1 on an absorbing grating -- measured at 4.7 pm
-# (370 nm period), 7.2 pm (200 nm period) and 7.5 pm (1300 nm period), all at
-# 1300 nm, mostly at oblique incidence.  The danger scale is therefore set by
-# the wavelength, while the layout is built before the wavelength is known,
-# so the default floor is a fraction of the PERIOD chosen to stay clear of
-# that band for periods down to about a sixth of the wavelength:
-# ``GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period``.  For shorter periods pass an
-# explicit floor, e.g. ``('geometric', 0.17, 2e-5 * wavelength)``.  Every
-# layout whose smallest element was at least 8e-6 of the wavelength read clean
-# in the same sweep (TE drift <= 4.4e-7).  The test that pins these numbers is
-# ``tests/unit/test_pmm_geometric_grading.py``.
+# discretisation: a backward-stable eig returns every modal ``q^2`` with an
+# absolute error of order ``eps * max|q^2|``, and ``max|q^2|`` grows like
+# ``(degree^2 / (k0 h))^2`` on an element of width ``h`` -- so the danger scale
+# is ``h / wavelength``.  (Up to 2026-11-14 the same scale also produced
+# OUTRIGHT, silent O(1) failures -- R + T > 1 on an absorbing grating, up to
+# ``h`` = 1.6e-5 of the wavelength at oblique incidence -- which this comment
+# block used to describe as a round-off band; they were a mode-selector defect
+# that let that round-off decide a propagating order's direction, fixed in
+# :func:`_growth_mask`.  The superseded wording is in
+# docs/history/lumenairy.elements.pmm._core.md.)  What remains is gradual.
+# Measured after the fix on one 50 nm metal strip layer (eps -74+6i, duty
+# 0.47, periods 200-1300 nm, 1300 nm, theta 0-0.7, degrees 6-20, 12 geometric
+# elements per region; TE deviation from the same degree at h = 1e-4
+# wavelengths, max over the grid, Windows/MKL and WSL/OpenBLAS):
+#
+#     h / wavelength   2e-6    4e-6    8e-6    1e-5    1.25e-5  2e-5    3e-5
+#     max TE dev       2.7e-5  3.8e-6  1.5e-6  3.2e-7  4.0e-7   2.4e-7  1.6e-7
+#
+# (900 Windows/MKL + 360 WSL/OpenBLAS solves; the 1e-5 column is WSL only.
+# Excluded: a period equal to the wavelength at normal incidence, where a
+# diffraction order is at grazing and the answer itself is ill-conditioned --
+# 1e-5 .. 5e-4 of scatter at every element size, before and after the fix.)
+#
+# The default floor :func:`_geometric_default_floor` is therefore
+# ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period,
+# GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength)`` = ``max(3e-5 P,
+# 1.25e-5 wavelength)``: the period part is where the corner error of the
+# strip fixture bottoms out, the wavelength part keeps the round-off below
+# about 4e-7.  Every 1-D entry point knows its wavelength and passes it;
+# without one (a traced value) the period part applies alone.  The tests that
+# pin these numbers are ``tests/unit/test_pmm_geometric_grading.py`` and
+# ``tests/unit/test_pmm_eig_roundoff_selector.py``.
 # --------------------------------------------------------------------------- #
 
 #: Default ratio of the geometric layout (successive boundary distances from the
 #: wall shrink by this factor).  0.15-0.2 is the classical corner-mesh band.
 GEOMETRIC_DEFAULT_RATIO = 0.17
 
-#: Default absolute floor of the geometric layout, as a fraction of the PERIOD
-#: (``min_element_m = GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period``).  No
-#: element of a geometric layout is made smaller than this (the ratio is raised
-#: instead).  Chosen from the measured round-off band -- see the comment block
-#: above and :func:`_normalize_grade`.  On the 370 nm / 1300 nm strip fixture
-#: it is 37 pm, which raises the 12-element ratio from 0.17 to about 0.21.
-GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC = 1e-4
+#: Default absolute floor of the geometric layout, PERIOD part
+#: (``GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period``).  No element of a
+#: geometric layout is made smaller than the default floor (the ratio is
+#: raised instead); see :func:`_geometric_default_floor` for how this part and
+#: the wavelength part combine, and the comment block above for the
+#: measurements.  3e-5 x period is where the corner error of the strip fixture
+#: bottoms out (1.5e-6 at an 11.1 pm wall element on the 370 nm period).
+GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC = 3e-5
+
+#: Default absolute floor of the geometric layout, WAVELENGTH part
+#: (``GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength``): the round-off of
+#: the modal eig grows like ``1 / (k0 h)^2``, so this part keeps it below about
+#: 4e-7 (measured, see the comment block above).  Applied wherever the
+#: wavelength is known (every 1-D single-layer entry point and every PMMStack
+#: solve).
+GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC = 1.25e-5
+
+
+def _geometric_default_floor(period, wavelength=None):
+    """The default floor (metres) of a geometric layout:
+    ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period,
+    GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength)`` -- the period part
+    alone when ``wavelength`` is ``None`` or not a finite positive number (a
+    traced value).  For a sweep pass the LONGEST wavelength: the round-off
+    scale is ``h / wavelength``, so the longest wavelength is the binding
+    one."""
+    floor = GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * float(period)
+    if wavelength is None:
+        return floor
+    try:
+        wl = float(np.max(np.asarray(wavelength, dtype=float)))
+    except Exception:        # traced (JAX) / non-numeric: period part only
+        return floor
+    if np.isfinite(wl) and wl > 0.0:
+        floor = max(floor, GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wl)
+    return floor
 
 _GRADE_FORMS = (
     "False / True (also None, 0, 1, numpy.bool_), 'chebyshev' (= True), "
@@ -540,7 +586,7 @@ def _real_scalar(value, what, where):
 
 
 def _normalize_grade(grade, *, period, where, allow_geometric=True,
-                     elements_per_region=None):
+                     elements_per_region=None, wavelength=None):
     """Validate a user ``grade`` value and return its normalized spec.
 
     Returns ``False`` (uniform), ``True`` (Chebyshev-Lobatto) or the hashable
@@ -554,8 +600,8 @@ def _normalize_grade(grade, *, period, where, allow_geometric=True,
     * ``False`` / ``True`` and the values today's ``bool()`` reading accepts:
       ``None``, ``0``, ``1`` (any integer type) and ``numpy.bool_``;
     * ``'chebyshev'`` -- alias of ``True``;
-    * ``'geometric'`` -- ratio :data:`GEOMETRIC_DEFAULT_RATIO`, floor
-      ``GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period``;
+    * ``'geometric'`` -- ratio :data:`GEOMETRIC_DEFAULT_RATIO`, the default
+      floor :func:`_geometric_default_floor` ``(period, wavelength)``;
     * ``('geometric', ratio)`` (default floor) and
       ``('geometric', ratio, min_element_m)``, with ``0 < ratio < 1`` and
       ``min_element_m > 0`` (metres).
@@ -576,6 +622,11 @@ def _normalize_grade(grade, *, period, where, allow_geometric=True,
         When given, a geometric spec with fewer than 3 elements per region
         raises ``ValueError`` (at 1 or 2 elements every layout is the
         midpoint split, so the request would be silently inert).
+    wavelength : float or array, optional
+        The wavelength(s) the layout will be solved at; completes the default
+        floor of a geometric spec without an explicit floor (the longest one
+        of an array binds).  ``None`` (or a traced value) -> the period part
+        only.
     """
     if grade is None or isinstance(grade, (bool, np.bool_)):
         return bool(grade)
@@ -622,7 +673,7 @@ def _normalize_grade(grade, *, period, where, allow_geometric=True,
         p = _real_scalar(period, "period", where)
         if not p > 0.0:
             raise ValueError(f"{where}: period must be > 0, got {period!r}.")
-        min_el = GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * p
+        min_el = _geometric_default_floor(p, wavelength)
     if not allow_geometric:
         raise NotImplementedError(
             f"{where}: geometric grading is validated on the 1-D PMM family "
@@ -8115,6 +8166,8 @@ __all__ = [
     "_lagrange_derivative_matrix",
     "GEOMETRIC_DEFAULT_RATIO",
     "GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC",
+    "GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC",
+    "_geometric_default_floor",
     "_normalize_grade",
     "_graded_boundaries",
     "_build_sem",
