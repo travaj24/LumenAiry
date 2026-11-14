@@ -44,6 +44,7 @@ from ._core import (
     _interface_smatrix_mortar,
     _internal_mirror_1d,
     _is_geometric_spec,
+    _wood_safe_wl_1d,
     _jpmm_concrete_incidence_guard,
     _kz_forward,
     _layer_modes_metric,
@@ -1943,6 +1944,15 @@ class PMMStack:
     (Chebyshev, uniform) are refused unless
     ``allow_small_elements=True`` (see that parameter).
 
+    AT A RAYLEIGH ANOMALY (a diffraction order exactly at cut-off in some
+    medium, e.g. a period equal to the wavelength at normal incidence) the
+    answer is ILL-CONDITIONED: the grazing order's two half-space modes
+    coincide, and measured solves there scatter by 1e-5 .. 5e-4 at every
+    element size and degree.  :meth:`solve` therefore runs such a point at a
+    wavelength nudged by ~1e-7 relative and says so with a
+    ``lumenairy.elements.rcwa.WoodNudgeWarning`` (as every other 1-D entry
+    point does); off an anomaly nothing changes.
+
     LATERALLY UNIFORM LAYERS are cheap: an isotropic uniform layer takes its
     modes from the one geometric eig every uniform medium on the grid shares,
     and a run of consecutive uniform layers (with the half-spaces) is cascaded
@@ -2191,6 +2201,16 @@ class PMMStack:
                 f"or missing value).  Pass an explicit floor: "
                 f"grade=('geometric', {spec[1]}, min_element_m).")
         return (spec[0], spec[1], _geometric_default_floor(self.period, wl))
+
+    def _wood_order_reach(self, wavelength):
+        """The largest diffraction order that can reach cut-off in any medium
+        of the stack at ``wavelength`` (the order range the Rayleigh-anomaly
+        nudge scans)."""
+        n_max = max([abs(complex(self.n_sup)), abs(complex(self.n_sub))]
+                    + [abs(np.sqrt(complex(v))) for L in self._layers
+                       for _w, e in L[1]
+                       for v in np.diag(np.asarray(e, dtype=_C))])
+        return int(np.ceil(2.0 * n_max * self.period / float(wavelength))) + 1
 
     def _layout_signature(self):
         """Everything that fixes the element grids of a solve except the
@@ -3536,6 +3556,17 @@ class PMMStack:
             return out
 
         wl, angle = self._src["wl"], self._src["angle"]
+        # An order EXACTLY at cut-off (a Rayleigh anomaly: e.g. period equal
+        # to the wavelength at normal incidence) makes the answer
+        # ill-conditioned -- measured 1e-5 .. 5e-4 of scatter at every element
+        # size.  Announced and nudged like every other 1-D entry point
+        # (WoodNudgeWarning; identity off the anomaly).
+        wl = _wood_safe_wl_1d(
+            wl, angle, self.n_sup, self.period,
+            [self.n_sup ** 2, self.n_sub ** 2]
+            + [complex(v) for L in self._layers for _w, e in L[1]
+               for v in np.diag(np.asarray(e, dtype=_C))],
+            self._wood_order_reach(wl), fn_name="PMMStack.solve")
         k0 = 2.0 * np.pi / wl
         kx0 = float(np.real(self.n_sup)) * np.sin(angle) * k0
         eps_sup, eps_sub = self.n_sup ** 2, self.n_sub ** 2

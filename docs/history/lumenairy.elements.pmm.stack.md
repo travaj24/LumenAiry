@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: 72a6ebfd166d4122b4795013b721bef1c68c9855da94ca17f1585ca07a9582ea
-token_sha256: 5ec9ddbbe73a8f19208235130bd413bd38357ef2c34511c7c1454a5d5d468397
+ast_sha256: ca1419504861ebdaacbaa2ef011094f3cdac8a11f9fae3d38f0a1c4a83b42e6b
+token_sha256: 2297233cd228756f366234082a68ec2706d69dc7dcfbd7849512547998278fb8
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -14,6 +14,7 @@ re_recorded: 2026-11-14 -- prepare().solve cascades with the same uniform-run co
 re_recorded: 2026-11-14 -- small-element guard re-derived after the selector root-cause fix: refusal 3e-5 -> 1e-5 x wavelength (measured round-off can exceed 1e-6 below it), opted-out solves below it warn, default geometric floor from _core._geometric_default_floor; pre-fix guard block moved to this document
 re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: no per-solve grade state (_grade_scope removed; resolved spec passed down), fixed-point grade, prepared caches keyed by and refusing a changed layout, Chebyshev/uniform small-element bar 3e-6 x wavelength, backstop note derived from geometry
 re_recorded: 2026-11-14 -- 2026-11-14 -- add_layer records traced scalar eps (_iso_scalar) for the JAX twin's uniform-layer fast path
+re_recorded: 2026-11-14 -- 2026-11-14 -- classical solve applies the shared Wood nudge at an exact Rayleigh anomaly (_wood_safe_wl_1d, WoodNudgeWarning); _wood_order_reach
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
@@ -599,3 +600,12 @@ layer qualifies only when it was added as a traced scalar eps
 gradients (uniform eps real/imag, thickness, angle) vs the dense twin
 <= 1.6e-12 and vs central differences at the FD truncation; forward +
 gradient on 44 layers 68.5 s -> 1.05 s.
+
+### 2026-11-14 -- the classical solve announces an exact Rayleigh anomaly
+
+`PMMStack.solve` (classical mount) ran an exact Rayleigh anomaly -- e.g. a
+period equal to the wavelength at normal incidence -- silently, with an
+ill-conditioned answer (1e-5 .. 5e-4 of scatter at every element size).  It
+now applies the shared Wood nudge (`_core._wood_safe_wl_1d`, ~1e-7 relative)
+with a `WoodNudgeWarning`, as the single-layer 1-D entry points and the
+conical path already did; off an anomaly it is the identity.
