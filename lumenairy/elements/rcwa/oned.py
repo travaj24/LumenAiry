@@ -13,7 +13,6 @@ from ...backend import (
     is_jax_array,
     to_numpy,
 )
-from ._asr_stack import _AsrMap
 from ._core import (
     _C,
     _block,
@@ -194,10 +193,11 @@ def _asr_metric_profile(duty_cycle, eta, n_samples):
     Returns ``(u, f_u, x_u, in_ridge)`` on the uniform grid
     ``u = (i + 0.5)/n_samples``.  Host NumPy (pure geometry).
 
-    The map itself is :class:`~._asr_stack._AsrMap` (profile ``'sine'`` on the
-    walls ``0`` and ``duty_cycle``) -- the one coordinate-map implementation,
-    shared with the :class:`~.stack.RCWAStack` ASR solve.
+    The map is :class:`~._asr_stack._AsrMap` (profile ``'sine'``), the one
+    coordinate-map implementation, shared with the ``RCWAStack`` ASR solve.
     """
+    from ._asr_stack import _AsrMap  # local: keeps oned's line layout
+
     u = (np.arange(n_samples) + 0.5) / n_samples
     u1 = float(duty_cycle)
     walls = [0.0] if u1 in (0.0, 1.0) else [0.0, u1]
@@ -458,11 +458,9 @@ def rcwa_efficiency_1d(
 
         The floor comes from the ``G^{-1}`` bridge to the half-spaces (the
         high-order plane waves are not representable in the stretched basis)
-        and from the linear clustering of this map.  ``RCWAStack(asr=True)``
-        -- one layer between two half-spaces is a valid stack -- uses an
-        oversampled half-space admittance and a fourth-order map instead,
-        has no such floor and takes oblique incidence; see
-        ``docs/rcwa_stack_asr.md``.
+        and from this map's linear clustering at the walls.
+        ``RCWAStack(asr=True)`` (a one-layer stack is valid) has no such floor
+        and takes oblique incidence; see ``docs/rcwa_stack_asr.md``.
     asr_samples : int, optional
         Uniform ``u``-grid sample count for the ASR metric / permittivity /
         bridge FFTs (default 16384).  Only used when ``asr_eta > 0``.
