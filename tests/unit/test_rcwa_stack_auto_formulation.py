@@ -348,3 +348,47 @@ def test_concrete_li_cell_differentiates_and_jits_through_the_wavelength():
                                     .efficiencies()[1])[0]))) / (2 * h)
     assert np.isfinite(g)
     assert abs(g - fd) < 1e-4 * max(abs(fd), 1.0)
+
+
+# ---------------------------------------------------------------------------
+# 8: layer_absorption stays right on the resolved 'li' layers
+# ---------------------------------------------------------------------------
+def _absorber(formulation=None, N=8):
+    """A lossy bar over a metal line (eps -20+2i), 1.31 um, theta 0.25."""
+    p = 0.6e-6
+    kw = {} if formulation is None else dict(formulation=formulation)
+    st = RCWAStack(p, n_substrate=1.5, n_orders=N)
+    st.add_layer(0.06e-6, shapes=[dict(shape="rectangle", size=(0.3 * p, p),
+                                       eps=complex(4.0, 0.5),
+                                       center=(0.2 * p, p / 2))],
+                 eps_background=complex(2.25, 0.02), **kw)
+    st.add_layer(0.04e-6, shapes=[dict(shape="rectangle", size=(0.5 * p, p),
+                                       eps=complex(-20.0, 2.0),
+                                       center=(0.6 * p, p / 2))],
+                 eps_background=1.0, **kw)
+    st.set_source(1.31e-6, theta=0.25)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return st.solve(retain_internal=True, symmetry=False)
+
+
+def test_li_layer_absorption_is_the_face_flux_and_closes():
+    """An 'li' layer is attributed the Poynting-flux difference between its
+    faces.  The Im(eps)|E|^2 volume integral is not consistent with the
+    inverse-rule E_x: on this stack in TM it summed to 0.2505 against
+    A = 0.2088 (measured on the base release with explicit 'li').  The face
+    fluxes close on A to round-off (measured 6e-15)."""
+    res = _absorber()
+    assert {L.formulation for L in res._require_modal()["internal"]["layers"]
+            } == {"li"}
+    raw = res.layer_absorption(return_raw=True)
+    A = res.absorptance()
+    assert np.max(np.abs(raw.sum(axis=1) - A)) < 1e-12
+    assert np.all(raw > 0)
+    # independent check where the volume integral IS consistent: in TE (E_y
+    # tangential to every wall, the two rules give the same solve) the 'li'
+    # face flux and the 'laurent' volume integral attribute the same power
+    # to each layer -- measured agreement 4e-6 relative at nz_per_layer 128
+    vol = _absorber("laurent").layer_absorption(nz_per_layer=128,
+                                                return_raw=True)
+    assert np.max(np.abs(raw[1] / vol[1] - 1)) < 1e-4

@@ -1698,6 +1698,21 @@ class RCWAResult:
         1-D stack) the y-average is used, the structure such a stack solves.
         Only the depth rule (``nz_per_layer``) is approximate there.
 
+        A layer solved with ``formulation='li'`` (the default resolves 1-D
+        patterned layers and 2-D metallic ones to it) is instead attributed
+        the POYNTING-FLUX DIFFERENCE between its two faces -- by Poynting's
+        theorem that IS its absorbed power (the lateral flux cancels over a
+        period) -- evaluated exactly from the retained modal fields, with no
+        depth rule.  The ``Im(eps) |E|^2`` volume integral is not consistent
+        with the inverse-rule field: the truncated series of the wall-normal
+        ``E_x``, which jumps at every wall, is a poor ``|E_x|^2`` inside a
+        metal.  Measured on a two-layer 1-D stack (a lossy bar over a metal
+        line, eps -20+2i, 1.31 um, theta 0.25, ``n_orders`` 8) in TM: the
+        ``'li'`` volume integral summed to 0.2505 against the absorptance
+        0.2088 and misplaced 15 % of the top layer's share, while the face
+        fluxes sum to the absorptance exactly.  ``nx`` / ``ny`` /
+        ``nz_per_layer`` do not enter for these layers.
+
         .. versionchanged:: 5.50.1
            ``shapes`` layers no longer raise (plan C2, audit L-3); new
            ``return_raw``.
@@ -1786,10 +1801,28 @@ class RCWAResult:
                   for i, L in enumerate(layers)]
         eps_t = [self._layer_eps_tensor_grid(L, xg, yg, px, py)
                  if L.kind == "tensor" else None for L in layers]
+        # An 'li' layer's absorption is the Poynting-flux difference between its
+        # faces (see the docstring): exact by Parseval on 2 M + 2 nodes per
+        # axis (the product of two fields band-limited to M has no alias onto
+        # its mean there), with no depth rule.
+        li_layer = [getattr(L, "formulation", "laurent") == "li"
+                    for L in layers]
+        fnx, fny = 2 * nox + 2, (1 if noy == 0 else 2 * noy + 2)
         out = np.zeros((2, nlay))
         for p, inc in enumerate(((1.0, 0.0), (0.0, 1.0))):
             raw = np.zeros(nlay)
             for i in range(nlay):
+                if li_layer[i]:
+                    fl = self.internal_field([0.0, thick[i]], component="all",
+                                             nx=fnx, ny=fny, layer=i,
+                                             incident=inc)
+                    sz = np.real(fl["Ex"] * np.conj(fl["Hy"])
+                                 - fl["Ey"] * np.conj(fl["Hx"]))
+                    sz = sz.reshape(2, -1).mean(axis=1)
+                    # in the units of the volume integral below (whose k0 *
+                    # raw is the absorbed flux)
+                    raw[i] = float(sz[0] - sz[1]) / info["k0"]
+                    continue
                 zl = (np.arange(nz_per_layer) + 0.5) / nz_per_layer * thick[i]
                 gnx, gny, gdx, gdy = grid[i][:4]
                 f = self.internal_field(zl, component="E", nx=gnx, ny=gny,

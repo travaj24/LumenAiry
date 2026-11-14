@@ -31,6 +31,13 @@ from lumenairy.elements.rcwa.stack import RCWAResult
 
 P = 0.6e-6
 WL = 1.31e-6
+#: Every patterned layer here is built with an EXPLICIT 'laurent': these pins
+#: are about the Im(eps)|E|^2 VOLUME integral (its in-plane weight, frame and
+#: depth rule), which is what a 'laurent' layer uses.  The formulation default
+#: 'auto' resolves 1-D patterned layers and 2-D metallic ones to 'li', whose
+#: absorption is the face-flux difference instead (re-pinned 2026-11-14; the
+#: 'li' path is pinned in test_rcwa_stack_auto_formulation.py).
+LAU = dict(formulation="laurent")
 
 
 def _solve(st):
@@ -65,11 +72,11 @@ def _stack_1d():
     st.add_layer(0.06e-6, shapes=[{"shape": "rectangle", "size": (0.3 * P, P),
                                    "eps": complex(4.0, 0.5),
                                    "center": (0.2 * P, P / 2)}],
-                 eps_background=complex(2.25, 0.02))
+                 eps_background=complex(2.25, 0.02), **LAU)
     st.add_layer(0.04e-6, shapes=[{"shape": "rectangle", "size": (0.5 * P, P),
                                    "eps": complex(-20.0, 2.0),
                                    "center": (0.6 * P, P / 2)}],
-                 eps_background=1.0)
+                 eps_background=1.0, **LAU)
     st.set_source(WL, theta=0.25)
     return _solve(st)
 
@@ -83,7 +90,7 @@ def _stack_2d():
          "eps": complex(4.0, 0.8), "center": (0.25 * P, 0.35 * P)},
         {"shape": "rectangle", "size": (0.2 * P, 0.3 * P),
          "eps": complex(-10.0, 1.0), "center": (0.7 * P, 0.7 * P)}],
-        eps_background=1.0)
+        eps_background=1.0, **LAU)
     st.add_layer(0.05e-6, eps=complex(2.1, 0.1))
     st.set_source(WL, theta=0.2, phi=0.5)
     return _solve(st)
@@ -145,7 +152,7 @@ def test_existing_kinds_byte_identical_to_pre_c2_algorithm():
                         n_orders=3, n_orders_y=2)
     cell = np.ones((24, 20), dtype=complex) * 2.1
     cell[6:15, 4:12] = complex(-12.0, 1.5)
-    st.add_layer(0.06e-6, eps_cell=cell)
+    st.add_layer(0.06e-6, eps_cell=cell, **LAU)
     st.add_layer(0.05e-6, eps=complex(2.25, 0.08))
     st.set_source(WL, theta=0.2, phi=0.3)
     res = _solve(st)
@@ -181,11 +188,11 @@ def _mixed_stack(nx_cell=64):
     st.add_layer(0.06e-6, shapes=[{"shape": "rectangle", "size": (0.3 * P, P),
                                    "eps": complex(4.0, 0.5),
                                    "center": (0.2 * P, P / 2)}],
-                 eps_background=complex(2.25, 0.02))
+                 eps_background=complex(2.25, 0.02), **LAU)
     x = np.arange(nx_cell) / nx_cell
     cell = np.where(x < 0.3, complex(5.0, 0.8),
                     np.where(x < 0.5, complex(2.5, 0.2), 1.0 + 0j))
-    st.add_layer(0.05e-6, eps_cell=cell[:, None])
+    st.add_layer(0.05e-6, eps_cell=cell[:, None], **LAU)
     st.add_layer(0.04e-6, eps=complex(2.1, 0.1))
     st.set_source(WL, theta=0.25)
     return _solve(st)
