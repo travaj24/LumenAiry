@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 7e4b7d14f5a0309c8e96b3656d41890bc5cfb154d7396e6e5be64ae742467976
-token_sha256: 7390d884be88b79149e9f7c1cd464b360c933c8fdce95caf80c19862a8dacc14
+ast_sha256: 6c647f4865fc0894a1a50f0fd45b8f8e1321b4e68e054f8e0a693d5c539b8b9c
+token_sha256: 2ffc7fb4c3bc738ad24071dccc1529ade55933e5df87b6bcf80288866685a988
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -23,6 +23,7 @@ re_recorded: 2026-11-14 -- RCWAYAverageWarning message: the bit-identity to a ha
 re_recorded: 2026-11-14 -- RCWAStack(asr=...): adaptive spatial resolution for 1-D stacks -- constructor spec (_asr_stack._normalize_asr) and asr property; _solve_once hands the cascade to _asr_stack._asr_solve and feeds its Rayleigh amplitudes through the even-cascade (r, t) slot; internal_field reads the u-harmonic carriers, the u-space incident vector, [[f]]^-1 for H_x / H_z and D_x / eps for E_x; layer_absorption takes every layer's face flux in u under ASR
 re_recorded: 2026-11-14 -- host-read probes (_layer_offplane_or_traced, _layer_eig_key, _li_cell_contrast, _concrete_eps_values, rcwa_convergence's amplitude read) share one tracer guard, _host_array_or_none: five broad except clauses become one, behaviour unchanged
 re_recorded: 2026-11-14 -- 2-D formulation='auto' resolves per SHAPE class, not per material: every eps_cell (dispersive included) and every axis-aligned-rectangle shapes layer -> 'li', disks / ellipses -> 'laurent'; measured against PMM2DStackPure on dielectric, weak- and strong-metal squares and disks (docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md); the 2-D 'li' operator itself is unchanged
+re_recorded: 2026-11-14 -- review A5/A7/A9/A13 (rcwa part): _host_array_or_none narrowed to (TypeError, ValueError) and rcwa_convergence reads extra solver outputs unguarded; legacy bump= call form keeps the 5.50 verdict (rtol default None); dispersive 'auto' layers re-resolved per wavelength from materialised values (_auto_at_wavelength); add_layer(segments=) validates through pmm._core._segment_walls (_segment_walls hook)
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`

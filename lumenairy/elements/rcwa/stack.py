@@ -565,24 +565,31 @@ def _normalize_formulation(fn_name, formulation):
     return f
 
 
+def _segment_walls(period, widths):
+    """THE segment validator of the library (``PMMStack``'s
+    :func:`lumenairy.elements.pmm._core._segment_walls`), shared by
+    ``RCWAStack.add_layer(segments=)``.  Imported at call time: the pmm package
+    imports this one while it loads."""
+    from ..pmm._core import _segment_walls as _walls
+    return _walls(period, widths)
+
+
 def _host_array_or_none(x):
     """``x`` read back as a host NumPy array, or ``None`` when it has no
     concrete value.
 
-    THE one broad ``except`` of this module's host probes (the eig-dedup key,
-    the ``'li'`` contrast test, the ``'auto'`` resolution's permittivity read,
-    the out-of-plane tensor probe and ``rcwa_convergence``'s amplitude read
-    all go through it).  The case it exists for is a JAX tracer under
-    ``jax.grad`` / ``jax.jit``: reading it raises
-    ``TracerArrayConversionError``, ``ConcretizationTypeError`` or
-    ``TypeError`` depending on the jax version, and none of those can be named
-    without importing jax at module scope, which this module must not do (jax
-    is optional).  Every caller treats ``None`` conservatively: no eigenmode
-    dedup, ``'laurent'`` for ``'auto'``, the general (out-of-plane) cascade,
-    an amplitude left out of a convergence report."""
+    The one host-read guard of this module (the eig-dedup key, the ``'li'``
+    contrast test, the ``'auto'`` resolution's permittivity read and the
+    out-of-plane tensor probe go through it).  The case it exists for is a JAX
+    tracer under ``jax.grad`` / ``jax.jit``: reading it raises
+    ``TracerArrayConversionError`` or ``ConcretizationTypeError``, both
+    subclasses of ``TypeError`` (checked on jax 0.11), so the handler names
+    ``(TypeError, ValueError)`` and needs no jax import.  Every caller treats
+    ``None`` conservatively: no eigenmode dedup, ``'laurent'`` for ``'auto'``,
+    the general (out-of-plane) cascade."""
     try:
         return np.asarray(to_numpy(x))
-    except Exception:
+    except (TypeError, ValueError):
         return None
 
 
@@ -672,7 +679,15 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
       dielectric pillars on the direct rule, 15x-60x less accurate.
 
     ``eps_values`` (builders) is the list of concrete permittivities of a
-    rasterised layer, used instead of ``cell``."""
+    rasterised layer, used instead of ``cell``.
+
+    A DISPERSIVE (``wl -> value``) layer left at ``'auto'`` is resolved here
+    provisionally (the cell cannot be evaluated without a wavelength) and
+    AGAIN at every wavelength of :meth:`RCWAStack.solve_vs_wavelength`, by
+    this same function on the materialised values
+    (:meth:`RCWAStack._auto_at_wavelength`): the rule is one function of the
+    physical layer, however the layer is supplied and whatever else the sweep
+    holds."""
     f = _normalize_formulation(fn_name, requested)
     if f != "auto":
         return f
@@ -836,7 +851,7 @@ def _layer_offplane_or_traced(data):
 
 
 def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
-                     bump=None, rtol=1e-2, atol=None, estimate=False,
+                     bump=None, rtol=None, atol=None, estimate=False,
                      warn=True, **kwargs):
     """Run an RCWA ``solver`` at the requested harmonic count AND a higher one,
     and report whether the answer has converged in the retained order count.
@@ -922,16 +937,24 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
     bump : int, optional
         The ADDITIVE step instead (each order parameter ``+ bump``); the solve
         it compares against is then exactly the one earlier releases used
-        (their default was ``bump=4``).  The verdict still follows ``rtol`` /
-        ``atol`` above, with ``f = N_hi / N``.  Mutually exclusive with
-        ``factor``.
+        (their default was ``bump=4``).  Mutually exclusive with ``factor``.
+        LEGACY CALL FORM: ``bump`` given with ``rtol`` left unset (and no
+        ``estimate``) keeps the verdict of releases up to 5.50 exactly --
+        ``converged = delta <= atol``, ``atol`` defaulting to ``1e-3`` -- and
+        therefore their warnings too; the error estimate is still in the
+        report.  Pass ``rtol`` as well to have the additive step judged by the
+        estimate (with ``f = N_hi / N``).  The legacy verdict can certify a
+        wrong answer: on a lossless Si lamellar grating ``bump=4,
+        atol=1e-3`` calls ``N`` = 20 / 40 / 60 converged while the estimate
+        says 7.1e-2 / 4.0e-2 / 2.8e-2 and the true error at 60 is 1.07e-2.
     rtol : float, optional
         Tolerance on the estimated RELATIVE error of the top solve (default
-        ``1e-2``).
+        ``1e-2``; not applied in the legacy call form above).
     atol : float, optional
         Additionally require the largest absolute per-order efficiency change
         to be ``<= atol`` (the test earlier releases applied alone, with
-        ``1e-3``).  Default ``None``: not applied.
+        ``1e-3``).  Default ``None``: not applied (``1e-3``, alone, in the
+        legacy call form).
     estimate : bool, optional
         Third solve and per-quantity local exponent (see above).  Default
         ``False``.
@@ -963,7 +986,8 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
         return _rcwa_convergence_stack(solver, factor=factor, bump=bump,
                                        rtol=rtol, atol=atol,
                                        estimate=estimate, warn=warn)
-    _convergence_args("rcwa_convergence", factor, bump, rtol, atol)
+    rtol, atol, legacy = _convergence_args("rcwa_convergence", factor, bump,
+                                           rtol, atol, estimate)
     for p in order_params:
         if p not in kwargs:
             raise ValueError(
@@ -988,9 +1012,11 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
     def _rung(out):
         amps = []
         for x in tuple(out)[3:]:
-            a = _host_array_or_none(x)
-            if a is None:
-                continue
+            # no guard: the solves here are concrete, and an output that
+            # cannot be read must raise rather than drop out of the comparison
+            # (a non-array output reads as an object array and is skipped by
+            # the complex-amplitude test below, by design)
+            a = np.asarray(to_numpy(x))
             if np.iscomplexobj(a) and a.size and len(amps) < 2:
                 amps.append(("R" if not amps else "T", a))
         return (out[0], out[1], out[2], amps)
@@ -998,7 +1024,7 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
     report = _convergence_report(
         [_rung(o) for o in outs],
         [tuple(lev[p] for p in params) for lev in levels],
-        rtol=rtol, atol=atol)
+        rtol=rtol, atol=atol, legacy=legacy)
     report.update(n_orders_low=levels[0], n_orders_high=levels[-1])
     if estimate:
         report["n_orders_mid"] = levels[1]
@@ -2206,7 +2232,13 @@ class RCWAStack:
         * ``formulation`` -- the factorization that RUNS, ``'laurent' | 'li'``
           (``'li'`` only on iso layers, and shapes layers -- on a 2-D stack,
           rectangles only); never ``'auto'``, which :meth:`add_layer`
-          resolves when the layer is added;
+          resolves when the layer is added.  For a DISPERSIVE layer left at
+          ``'auto'`` this add-time value is provisional (the cell cannot be
+          evaluated without a wavelength): :meth:`solve_vs_wavelength`
+          applies the same rule to the materialised values at each
+          wavelength, so a y-varying cell of a 1-D stack or a layer holding
+          an exact zero runs ``'laurent'`` exactly as its concrete twin
+          does;
         * ``formulation_requested`` -- what was asked, ``'auto' | 'laurent' |
           'li'`` (``'fff'`` reads ``'li'``; a builder records its own
           argument on every layer it adds);
@@ -2720,23 +2752,25 @@ class RCWAStack:
             widths.append(w)
             epss.append(e)
         w = np.asarray(widths, dtype=float)
-        if not np.all(np.isfinite(w)) or np.any(w <= 0.0):
+        if not np.all(np.isfinite(w)):
+            # (the shared validator's comparisons are False for a NaN)
             raise ValueError(
                 f"add_layer: every segment width FRACTION must be finite and "
                 f"> 0 (got {list(w)}).")
-        if abs(float(w.sum()) - 1.0) > 1e-6:
+        # THE segment validator of the library (PMMStack's): fractions > 0,
+        # summing to 1 within 1e-6, walls normalized to land EXACTLY on 0 and
+        # the period (here the unit period: fractions).
+        try:
+            xw = _segment_walls(1.0, w)
+        except ValueError as e:
             raise ValueError(
-                f"add_layer: segment width FRACTIONS must sum to 1 within 1e-6 "
-                f"(got {float(w.sum()):.6g}).  They are fractions of the "
-                f"period, not absolute widths.")
+                f"add_layer: {e}  They are fractions of the period, not "
+                f"absolute widths.") from None
         if len(epss) == 1:
             e = epss[0]
             self.add_layer(thickness, eps=e)
             self._layers[-1].formulation_requested = f_req
             return self
-        # Walls normalized to land EXACTLY on 0 and the period.
-        edges = np.concatenate([[0.0], np.cumsum(w)])
-        xw = edges / edges[-1]
         Px, Py = self.period_x, self.period_y
         shapes = [dict(shape="rectangle", eps=epss[i],
                        center=(float(0.5 * (xw[i] + xw[i + 1]) * Px), 0.5 * Py),
@@ -3391,6 +3425,22 @@ class RCWAStack:
                 arrs.append(L.data)
         return _passive_media(eps_sup, eps_sub, *arrs)
 
+    def _auto_at_wavelength(self, layer, kind, **concrete):
+        """The factorization of a DISPERSIVE layer at one wavelength: an
+        explicit request as stored; ``'auto'`` resolved AGAIN, by
+        :func:`_resolve_formulation`, from the materialised (concrete) values,
+        so the layer runs exactly the rule the same layer given concretely
+        would run (a y-varying cell of a 1-D stack: ``'laurent'``; an exact
+        zero: ``'laurent'``) -- independent of the other wavelengths of a
+        sweep.  The add-time resolution of a callable is only provisional: it
+        cannot evaluate the cell."""
+        if (getattr(layer, "formulation_requested", None) != "auto"
+                or layer.normal_cells is not None):
+            return layer.formulation
+        return _resolve_formulation(
+            "solve_vs_wavelength", "auto", kind=kind, is_1d=self.is_1d,
+            period_y=self.period_y, **concrete)
+
     def _materialized_layers(self, wl, layers=None):
         """Concrete layer list at one wavelength: every DISPERSIVE
         (``wl -> value``) layer spec is resolved and validated; non-dispersive
@@ -3417,7 +3467,8 @@ class RCWAStack:
                 _warn_if_y_averaged("solve_vs_wavelength", cell, self.noy,
                                     strict_y=not self.is_1d, stacklevel=5)
                 out.append(_RCWALayer(L.thickness, "iso", cell,
-                                      formulation=L.formulation,
+                                      formulation=self._auto_at_wavelength(
+                                          L, "iso", cell=cell),
                                       formulation_requested=L.formulation_requested))
             elif L.kind == "shapes":
                 bg, shapes = L.data
@@ -3431,14 +3482,16 @@ class RCWAStack:
                                            self.period_y, self.noy,
                                            strict_y=not self.is_1d,
                                            stacklevel=5)
-                if L.formulation == "li" and self.is_1d:
+                f = self._auto_at_wavelength(L, "shapes", shapes=sh,
+                                             eps_background=bgv)
+                if f == "li" and self.is_1d:
                     # the per-wavelength eps values are only known now
                     _check_li_shapes("solve_vs_wavelength", sh, self.period_y,
                                      bgv)
-                elif L.formulation == "li":
+                elif f == "li":
                     _check_li_shapes_2d("solve_vs_wavelength", sh, bgv)
                 out.append(_RCWALayer(L.thickness, "shapes", (bgv, sh),
-                                      formulation=L.formulation,
+                                      formulation=f,
                                       formulation_requested=L.formulation_requested))
             else:
                 tcell = np.asarray(L.data(wl), dtype=_C)
