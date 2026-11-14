@@ -2,6 +2,7 @@
 layers via the div-conforming covariant-metric generator)."""
 from __future__ import annotations
 
+import functools
 import os
 import threading
 import warnings
@@ -26,6 +27,7 @@ from ..rcwa._core import (
 from ._core import (
     _C,
     _COV_MIN_SLANT_RAD,
+    GEOMETRIC_DEFAULT_RATIO,
     _assemble_jones_farfield,
     _build_nodal_metric_segments,
     _build_sem_tensor_segments,
@@ -34,12 +36,14 @@ from ._core import (
     _farfield_order_set,
     _frame_anchor_phase,
     _freeze_cached,
+    _graded_boundaries,
     _guarded_lstsq,
     _half_M_sym_metric,
     _interface_smatrix,
     _interface_smatrix_general_mortar,
     _interface_smatrix_mortar,
     _internal_mirror_1d,
+    _is_geometric_spec,
     _jpmm_concrete_incidence_guard,
     _kz_forward,
     _layer_modes_metric,
@@ -47,6 +51,7 @@ from ._core import (
     _mode_cut_scope,
     _ModeClassificationWarning,
     _n_propagating_orders,
+    _normalize_grade,
     _perlayer_window_grids,
     _pmm_union_grid,
     _propagation_smatrix,
@@ -66,6 +71,58 @@ from ._core import (
     _tensor_is_passive,
     _uniform_geo_eig,
 )
+from ._uniform_cascade import (
+    UNIFORM_LAYER_LABEL,
+    _cascade_vertical,
+    _uniform_iso_eps,
+    _uniform_medium_diag,
+)
+from .conical import _refuse_geometric_conical
+
+#: The laterally-uniform-layer fast path (``_uniform_cascade``): uniform
+#: isotropic vertical layers take their modes from the shared geometric eig and
+#: runs of consecutive uniform media are cascaded elementwise.  A PRIVATE
+#: switch for the tests -- ``False`` restores the dense per-layer path (every
+#: layer through ``_sem_modes_tensor``, no run collapse) bit for bit.
+_UNIFORM_FAST_PATH = True
+
+
+def _vertical_media(sup, sub, lmodes, uni_eps, mu):
+    """The cascade-ordered media list ``[sup, layer_1, ..., layer_L, sub]`` of
+    :func:`~lumenairy.elements.pmm._uniform_cascade._cascade_vertical`.
+
+    ``sup`` / ``sub`` are ``(W, V, lam, eps)`` of the two half-spaces and
+    ``lmodes[i]`` the ``(W, V, lam, q)`` of layer ``i``; ``uni_eps[i]`` is the
+    layer's uniform scalar permittivity or ``None`` (patterned).  ``mu`` is the
+    shared geometric spectrum every uniform medium was built from.  The
+    half-spaces are uniform media on the same basis by construction; with the
+    fast path off they are entered as dense media so nothing collapses."""
+    fast = _UNIFORM_FAST_PATH
+
+    def _half(h):
+        W, V, lam, eps = h
+        return (W, V, lam, _uniform_medium_diag(eps, lam, mu) if fast else None)
+
+    media = [_half(sup)]
+    for (W, V, lam, _q), e in zip(lmodes, uni_eps):
+        media.append((W, V, lam,
+                      _uniform_medium_diag(e, lam, mu)
+                      if (fast and e is not None) else None))
+    media.append(_half(sub))
+    return media
+
+
+def _layer_modes_vertical(mats, eps_row, k0, kx0):
+    """Modes ``(W, V, lam, q)`` of one VERTICAL IN-PLANE layer on its own grid
+    ``mats``: from that grid's geometric eig when the layer is laterally
+    uniform and isotropic (exact, and the eig is cached on the grid's digest,
+    so every uniform layer on one window grid shares it), else the dense coupled
+    eig.  The caller guarantees vertical / in-plane."""
+    e = _uniform_iso_eps(eps_row) if _UNIFORM_FAST_PATH else None
+    if e is None:
+        return _sem_modes_tensor(mats, k0, kx0, True)
+    return _sem_modes_uniform(mats, k0, kx0, e, _uniform_geo_eig(mats, k0, kx0),
+                              label=UNIFORM_LAYER_LABEL)
 
 # ===========================================================================
 # O-11 -- THE NEAR-COINCIDENT-WALL (SLIVER) REFUSAL
@@ -418,6 +475,102 @@ _SLIVER_OWN_SCALE_RATIO = 100.0
 #: ``min_feature`` explicitly, ~10x above its own collision scale, and check the
 #: answer is stationary in BOTH ``degree`` and ``min_feature``.
 _MIN_FEATURE_DEFAULT_FRAC = 1.0e-3
+
+# ===========================================================================
+# THE SMALL-ELEMENT GUARD
+# ===========================================================================
+# THE DEFECT.  At fixed polynomial degree, a solve whose element grid carries a
+# very small element can return an O(1) wrong answer with no warning.  Measured
+# 2026-11-14 on one metal-strip layer (eps -74+6i, 50 nm, duty 0.47, air above,
+# n = 1.447 below, 1300 nm) with a geometric layout of 12 elements per region
+# whose wall element ``h`` was scanned: periods 200 / 370 / 700 / 1000 / 1300 /
+# 2000 / 2600 nm, theta 0 / 0.15 / 0.3 / 0.5 / 0.7, degrees 6-20, both
+# incident polarizations (each solve returns both rows), 1,398 solves on
+# Windows/MKL (86 wrong) and 720 on WSL/OpenBLAS (62 wrong):
+#
+#   * every wrong answer was SUPER-UNITY on this absorbing structure: max
+#     R + T >= 1.028 (often 2-30), against <= 0.996 for every correct row;
+#   * none occurred at normal incidence; WHICH oblique configurations fail is
+#     a lottery over degree, period and BLAS build (the same configuration
+#     fails at one degree and not at the next), and a failing configuration
+#     returns the SAME wrong number at several ``h`` -- a discrete alternative
+#     branch, not a gradual loss of digits;
+#   * the largest failing ``h`` was 1.6e-5 x wavelength on BOTH builds
+#     (period 700 nm, theta 0.5, degrees 6-20 return one and the same wrong
+#     answer; period 1300 nm, theta 0.15, degree 6); the 716 rows at
+#     ``h >= 2e-5 x wavelength`` were all correct.  In units of the PERIOD the
+#     edge wanders from 1.6e-5 (1300 nm) to 4e-5 (200 nm), so the danger
+#     scale is the wavelength, as the mechanism (the spurious modal
+#     wavenumbers of an element of width ``h`` grow like ``1 / (k0 h)``)
+#     says.
+#
+# A cell the GEOMETRY makes thin (an owned liner, one element per region) fails
+# the same way and further up (garbage at 2e-5 .. 5e-5 x wavelength next to a
+# metal strip at a 1300 nm period, and some sub-unity wrong answers at normal
+# incidence below 4e-6), but it is the caller's geometry, which no layout
+# choice can lift; it stays the territory of the sliver refusal (manufactured
+# cells) and the within-layer warning (owned cells), and this guard does not
+# act on it.
+#
+# So two numbers, both fractions of the WAVELENGTH:
+#
+#: REFUSE (unless ``allow_small_elements=True``) a solve whose LAYOUT made an
+#: element below this -- 1.9x above the largest failing ``h`` measured.  The
+#: default geometric floor never trips it (PMMStack completes it with the
+#: wavelength, see ``_SMALL_ELEMENT_SUGGEST_FRAC``); an explicit floor below it
+#: is refused.
+_SMALL_ELEMENT_FRAC = 3.0e-5
+#: Below THIS, a layout-made element arms the energy backstop in
+#: :func:`_warn_stack_energy`: a provably passive stack that reads super-unity
+#: (beyond ``_SLIVER_TRIGGER_BAR``) is refused instead of returned under a
+#: warning.  6x above the largest failing ``h``; since every measured wrong
+#: answer was super-unity by >= 2.8e-2 and every correct one sub-unity
+#: (<= 0.996), the backstop catches the whole measured failure mode on an
+#: absorbing stack.
+_SMALL_ELEMENT_WATCH_FRAC = 1.0e-4
+#: The geometric floor the refusal suggests, and the WAVELENGTH part of
+#: PMMStack's default geometric floor (see :meth:`PMMStack._effective_grade`):
+#: 2.5x above the largest failing ``h`` measured, 1.33x above the refusal bar.
+_SMALL_ELEMENT_SUGGEST_FRAC = 4.0e-5
+
+
+def _grade_scope(wavelength_of):
+    """Decorator for the public solve entry points: run the call with the
+    stack's WAVELENGTH-RESOLVED grading spec in force (see
+    :meth:`PMMStack._effective_grade`), and restore the stored spec after.
+
+    ``wavelength_of(obj, args, kwargs)`` returns the wavelength the call
+    solves at (the longest one for a sweep), or ``None`` when it is not known
+    or not concrete -- the stored spec then applies unchanged."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(obj, *args, **kwargs):
+            stack = getattr(obj, "_st", obj)
+            try:
+                wl = wavelength_of(obj, args, kwargs)
+            except (TypeError, ValueError, KeyError, IndexError):
+                wl = None
+            prev = stack._grade_solve
+            stack._grade_solve = stack._effective_grade(wl)
+            try:
+                return fn(obj, *args, **kwargs)
+            finally:
+                stack._grade_solve = prev
+        return wrapper
+    return deco
+
+
+def _wl_of_solve(obj, args, kwargs):
+    return None if obj._src is None else obj._src["wl"]
+
+
+def _wl_of_sweep(obj, args, kwargs):
+    w = args[0] if args else kwargs["wavelengths"]
+    return float(np.max(np.asarray(w, dtype=float)))
+
+
+def _wl_of_prepared(obj, args, kwargs):
+    return kwargs["wavelength"]
 
 #: A layer is solved IN A SHEARED FRAME exactly when the cascade routes it to
 #: the metric generator, i.e. ``abs(slant_angle) > 1e-12`` -- the SAME literal
@@ -1389,6 +1542,26 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
             "gain or non-propagating incidence medium slipped past the entry "
             "guards (kz_inc < 0 negates every order).")
     import warnings
+    # SMALL-ELEMENT BACKSTOP: the solve carried an element below
+    # _SMALL_ELEMENT_WATCH_FRAC of the wavelength (recorded by
+    # PMMStack._guard_small_elements), where the measured failure mode is an
+    # O(1) wrong answer.  On a provably passive stack a super-unity total is
+    # then refused rather than returned under a warning.
+    small_note = (getattr(stack, "_small_element_note", None)
+                  if stack is not None else None)
+    if (small_note is not None and worst > 1.0 + _SLIVER_TRIGGER_BAR
+            and _stack_provably_passive(stack)):
+        h, wl_n = small_note
+        raise ValueError(
+            f"PMMStack.solve: energy not conserved (max R+T = {worst:.6g}) on "
+            f"a provably passive stack whose element grid carries an element "
+            f"of {h:.3g} m, {h / wl_n:.3g} of the wavelength -- inside the "
+            f"band (below {_SMALL_ELEMENT_WATCH_FRAC:g} x wavelength) where "
+            f"the modal solve is measured to return O(1) wrong answers.  The "
+            f"result is refused.  Raise the smallest element (an explicit "
+            f"geometric floor of {_SMALL_ELEMENT_SUGGEST_FRAC:g} x wavelength, "
+            f"a larger ratio, fewer elements_per_region) or widen the thin "
+            f"feature.")
     # The arbiter is NOT gated on the super-unity reading: the screen inside it
     # is a deterministic fact about the wall coordinates, whereas a super-unity
     # total is a property of the running BLAS kernel (the same sliver-corrupted
@@ -1641,8 +1814,42 @@ class PMMStack:
         Transmission / incidence half-space indices.
     degree : int, optional
         Polynomial degree per spectral element (the spectral knob).  Default 16.
-    elements_per_region, grade, far_field_orders : as in
-        :func:`pmm_jones_1d_segments`.
+    elements_per_region : int, optional
+        Spectral elements per cell of the shared union grid (default 1).
+    grade : bool, str or tuple, optional
+        Element layout inside each cell, as in :func:`pmm_jones_1d_segments`:
+        ``True`` / ``'chebyshev'`` (default) clusters elements toward the
+        walls (inert at 1 and 2 elements per cell -- every layout is then the
+        midpoint split); ``False`` is uniform; ``'geometric'`` or
+        ``('geometric', ratio[, min_element_m])`` is the corner-refined
+        geometric layout (ratio 0.17; needs ``elements_per_region >= 3``).
+        Without an explicit ``min_element_m`` PMMStack's floor is
+        ``max(1e-4 x period, 4e-5 x wavelength)``, resolved at solve time:
+        the period part is the 1-D family's default, and the wavelength part
+        keeps the smallest element out of the measured small-element failure
+        band (see ``allow_small_elements``) when the period is below
+        0.4 x wavelength.  The stored :attr:`grade` is the normalized spec (a
+        bool or that tuple).  Geometric grading is refused at conical
+        incidence (``phi != 0``), where it was measured inaccurate.
+    far_field_orders, n_orders : int, optional
+        How many Rayleigh orders the FAR FIELD projects onto (``n_orders`` is
+        the cross-suite alias; it is auto-grown to cover every propagating
+        order).  This is NOT an accuracy knob: the modal truncation is
+        ``degree`` x ``elements_per_region`` (and the grading), so a
+        convergence study must step ``degree`` or the element count, never
+        ``n_orders`` -- on the metal-strip stack below ``n_orders`` 3 / 21 / 61
+        give the same zeroth-order Jones to 4e-15 relative.
+    allow_small_elements : bool, optional
+        Opt out of the small-element guard (default ``False``).  A solve
+        whose element LAYOUT makes an element smaller than ``3e-5`` of the
+        wavelength (an explicit geometric floor below it, a very small ratio
+        with many elements) raises ``ValueError`` before solving: below
+        roughly that size the modal solve can return an O(1) wrong answer
+        with no warning (measured at oblique incidence up to ``1.6e-5`` of the
+        wavelength on two BLAS builds; see ``_SMALL_ELEMENT_FRAC``).  With ``True`` the solve runs, and an
+        energy check refuses a super-unity answer on a provably passive stack
+        (it cannot see a sub-unity wrong one).  Thin cells the GEOMETRY makes
+        (a liner, a narrow gap) are not subject to this guard.
     factorization : {'auto', 'convection', 'covariant'}, optional
         Slant treatment (as in :func:`pmm_jones_1d_slanted`).  ``'auto'``
         (default) uses the SPECTRAL covariant oblique-coordinate generator for
@@ -1706,13 +1913,32 @@ class PMMStack:
     geometry.  Size ``degree`` from the TM channel, and use its own ``degree``
     convergence (not ``ΣR + ΣT``) as the accuracy signal there.  See
     :func:`pmm_jones_1d` for the measured ladders.
+
+    For METAL CORNERS raise ``degree`` with one element per cell, or use
+    ``grade='geometric'`` with 8-12 elements per cell at degree 8-10;
+    Chebyshev grading only matters from 3 elements per cell up.  Measured on a
+    50 nm metal strip (eps -74+6i, 175 nm in a 370 nm period) 21 nm above a
+    metal mirror, TM, 1300 nm, error in the zeroth-order reflection against an
+    external reference: default (degree 16, 1 element) 1.4e-2; degree 80,
+    1 element 4.2e-4; Chebyshev degree 10 x 8 elements 1.0e-3; geometric
+    degree 8 x 12 elements 6.6e-6 (default floor, 52 pm here); an explicit
+    11 pm floor reads 1.1e-6 but sits inside the measured small-element
+    failure band and is refused unless ``allow_small_elements=True``.
+
+    LATERALLY UNIFORM LAYERS are cheap: an isotropic uniform layer takes its
+    modes from the one geometric eig every uniform medium on the grid shares,
+    and a run of consecutive uniform layers (with the half-spaces) is cascaded
+    elementwise as one S-matrix.  Exact up to the eigenvector gauge (measured
+    agreement with the per-layer dense eig: <= 5e-12 in the Jones; 13x faster
+    on a stack with 52 graded oxide sub-layers at degree 12, about 25x at
+    degree 20).
     """
 
     def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
                  degree=16, elements_per_region=1, grade=True,
                  far_field_orders=21, n_orders=None, factorization="auto",
                  min_feature=None, layer_grids="shared",
-                 window_halfwidth=1):
+                 window_halfwidth=1, allow_small_elements=False):
         far_field_orders = _resolve_order_count(far_field_orders, n_orders)
         if int(degree) < 2:
             raise ValueError("PMMStack: degree must be >= 2.")
@@ -1752,7 +1978,12 @@ class PMMStack:
                       else _C(n_superstrate))
         self.degree = int(degree)
         self.n_el = int(elements_per_region)
-        self.grade = bool(grade)
+        self._grade_solve = None        # the spec in force during a solve
+        # Normalized grading spec: False / True / ('geometric', ratio,
+        # min_element_m) -- a bool or a hashable tuple, a fixed point of the
+        # normalizer, so the clones and the JAX static topology pass it on
+        # unchanged.  Assignment goes through the same validation (property).
+        self.grade = grade
         self.factorization = factorization
         self.ffo = int(far_field_orders)
         # PHYSICAL wall-snap threshold for the shared union grid (item 3a):
@@ -1871,10 +2102,172 @@ class PMMStack:
         # docs/audits/PMM_M2_WINDOW_CONTRACT_2026_08_04.md and the contract on
         # :func:`~lumenairy.elements.pmm._core._perlayer_window_grids`.
         self.window_halfwidth = _hw
+        # The small-element guard's opt-out (see _guard_small_elements).
+        self.allow_small_elements = bool(allow_small_elements)
+        self._small_element_note = None
         self._layers = []                          # (thickness, segments)
         self._taper_recipes = []                   # (i0, count, method, kwargs)
         self._src = None
         self._modal = None      # per-order amplitudes of the last solve (B)
+
+    @property
+    def grade(self):
+        """The normalized element-grading spec: ``False`` (uniform), ``True``
+        (Chebyshev, the default) or ``('geometric', ratio, min_element_m)``.
+
+        Assigning any accepted form (``'chebyshev'``, ``'geometric'``,
+        ``('geometric', ratio[, min_element_m])``, bool-likes) stores its
+        normalized value; anything else raises ``ValueError``, and a geometric
+        spec with ``elements_per_region < 3`` raises because it would be inert.
+        While a solve runs, this reads the spec that solve uses (see
+        :meth:`_effective_grade`).
+        """
+        return self._grade if self._grade_solve is None else self._grade_solve
+
+    @grade.setter
+    def grade(self, value):
+        spec = _normalize_grade(
+            value, period=self.period, where="PMMStack",
+            elements_per_region=self.n_el)
+        self._grade = spec
+        # a geometric spec whose floor the CALLER did not state: its floor is
+        # completed with the wavelength at solve time (_effective_grade)
+        self._grade_floor_default = bool(
+            _is_geometric_spec(spec)
+            and not (isinstance(value, (tuple, list)) and len(value) == 3))
+
+    def _effective_grade(self, wavelength):
+        """The grading spec a solve at ``wavelength`` uses.
+
+        A geometric spec WITHOUT an explicit floor gets the floor
+        ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period,
+        _SMALL_ELEMENT_SUGGEST_FRAC * wavelength)``: the period-based default
+        of the 1-D family, raised where the wavelength puts it inside the
+        measured small-element failure band (which scales with the
+        wavelength, see ``_SMALL_ELEMENT_FRAC``) -- for periods below
+        0.4 x wavelength.  An explicit floor, a bool spec, or an unknown /
+        traced wavelength returns the stored spec unchanged."""
+        spec = self._grade
+        if not (self._grade_floor_default and _is_geometric_spec(spec)):
+            return spec
+        try:
+            wl = float(wavelength)
+        except (TypeError, ValueError):
+            return spec
+        if not (np.isfinite(wl) and wl > 0.0):
+            return spec
+        floor = _SMALL_ELEMENT_SUGGEST_FRAC * wl
+        if floor <= spec[2]:
+            return spec
+        return (spec[0], spec[1], floor)
+
+    def _solve_grids(self):
+        """The fractional cell widths of every element grid the classical
+        solve of this stack builds: the one shared union grid, or one window
+        grid per layer under ``layer_grids='per-layer'``.  Built with the
+        stack's own ``min_feature`` exactly as the solve builds them (snap
+        warnings silenced: the solve itself reports them)."""
+        segs = [L[1] for L in self._layers]
+        mf = self.min_feature / self.period
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if self.layer_grids == "per-layer":
+                return [np.asarray(w, dtype=float) for w, _r in
+                        _perlayer_window_grids(segs, mf,
+                                               self.window_halfwidth)]
+            uw = _pmm_union_grid(segs, mf, warn=False)[0]
+        return [np.asarray(uw, dtype=float)]
+
+    def _element_cells(self):
+        """``[(h, w_cell, subdivided), ...]`` -- the smallest element and the
+        width (metres) of every cell of every grid this solve builds, and
+        whether the cell is split into more than one element.
+
+        Element sizes follow the solver's own layout rule
+        (:func:`_graded_boundaries` per cell, and the lone-element midpoint
+        split of a one-cell grid in ``_segment_elem_bnds``)."""
+        P = self.period
+        out = []
+        for widths in self._solve_grids():
+            single = len(widths) == 1
+            for w in widths:
+                wc = float(w) * P
+                if wc <= 0.0:
+                    continue
+                if single and self.n_el == 1:
+                    out.append((0.5 * wc, wc, True))
+                elif self.n_el == 1:
+                    out.append((wc, wc, False))
+                else:
+                    h = float(np.min(np.diff(_graded_boundaries(
+                        0.0, wc, self.n_el, self.grade))))
+                    out.append((h, wc, True))
+        return out
+
+    @staticmethod
+    def _layout_made_below(cells, size):
+        """The smallest element below ``size`` that the LAYOUT made --
+        ``(h, w_cell)`` or ``None``.  An element is layout-made when its cell
+        is split into several elements AND the cell itself is at least
+        ``size`` wide, i.e. one element per cell would not have been small.
+        A cell the GEOMETRY makes thinner than ``size`` (a liner, a narrow
+        gap, a near-coincident wall pair), or an unsplit cell, is never
+        counted: no layout choice can lift it, and it is the territory of the
+        sliver refusal (manufactured cells) and the within-layer warning
+        (owned cells)."""
+        best = None
+        for h, wc, split in cells:
+            if split and wc >= size and h < size and (best is None
+                                                      or h < best[0]):
+                best = (h, wc)
+        return best
+
+    def _guard_small_elements(self, wavelength, where):
+        """THE SMALL-ELEMENT GUARD -- raise before solving when an element
+        the LAYOUT made (see :meth:`_layout_made_below`) is below
+        :data:`_SMALL_ELEMENT_FRAC` of the wavelength, unless the caller
+        passed ``allow_small_elements=True``.
+
+        Records ``self._small_element_note`` for :func:`_warn_stack_energy`'s
+        backstop: when a layout-made element is below
+        :data:`_SMALL_ELEMENT_WATCH_FRAC` of the wavelength, a provably
+        passive stack whose answer reads super-unity is refused instead of
+        returned with a warning.  A traced (JAX) wavelength skips the guard
+        (its value cannot be read without severing the trace)."""
+        self._small_element_note = None
+        try:
+            wl = float(wavelength)
+        except (TypeError, ValueError):                 # traced / payload
+            return
+        if not (np.isfinite(wl) and wl > 0.0):
+            return
+        cells = self._element_cells()
+        hit = self._layout_made_below(cells, _SMALL_ELEMENT_FRAC * wl)
+        if hit is not None and not self.allow_small_elements:
+            h, wc = hit
+            raise ValueError(
+                f"{where}: the element layout puts an element of "
+                f"{h:.3g} m ({h / wl:.3g} of the wavelength {wl:.4g} m) inside "
+                f"a {wc:.3g} m cell -- below the measured safe size of "
+                f"{_SMALL_ELEMENT_FRAC:g} x wavelength "
+                f"({_SMALL_ELEMENT_FRAC * wl:.3g} m).  Below that size the "
+                f"modal solve can return an O(1) wrong answer with no warning "
+                f"(R + T > 1 on an absorbing stack, or a plausible-looking "
+                f"wrong value).  The layout is degree {self.degree}, "
+                f"elements_per_region={self.n_el}, grade={self.grade!r}.  "
+                f"Raise the smallest element: for grade='geometric' pass an "
+                f"explicit floor, e.g. grade=('geometric', "
+                f"{GEOMETRIC_DEFAULT_RATIO}, "
+                f"{_SMALL_ELEMENT_SUGGEST_FRAC * wl:.3g}) "
+                f"({_SMALL_ELEMENT_SUGGEST_FRAC:g} x wavelength), or a larger "
+                f"ratio, or fewer elements_per_region.  Pass "
+                f"allow_small_elements=True to PMMStack to solve anyway (an "
+                f"energy check then refuses a super-unity answer on a "
+                f"provably passive stack, but cannot see a sub-unity wrong "
+                f"one).")
+        watch = self._layout_made_below(cells, _SMALL_ELEMENT_WATCH_FRAC * wl)
+        if watch is not None:
+            self._small_element_note = (watch[0], wl)
 
     def _as_tensor(self, eps):
         if is_jax_array(eps):
@@ -2540,7 +2933,8 @@ class PMMStack:
                          factorization=self.factorization,
                          min_feature=self.min_feature,
                          layer_grids=self.layer_grids,
-                         window_halfwidth=self.window_halfwidth)
+                         window_halfwidth=self.window_halfwidth,
+                         allow_small_elements=self.allow_small_elements)
         recipes = sorted(self._taper_recipes, key=lambda r: r[0])
         i = 0
         ri = 0
@@ -2572,7 +2966,8 @@ class PMMStack:
                          factorization=self.factorization,
                          min_feature=float(mf),
                          layer_grids=self.layer_grids,
-                         window_halfwidth=self.window_halfwidth)
+                         window_halfwidth=self.window_halfwidth,
+                         allow_small_elements=self.allow_small_elements)
         clone._layers = list(self._layers)
         return clone
 
@@ -2836,11 +3231,26 @@ class PMMStack:
         _warn_stack_energy(R_eff, T_eff, stack=self)
         return order_x, R_eff, T_eff, jones
 
+    @_grade_scope(_wl_of_solve)
     def solve(self, *, stabilize=None, retain_internal=False):
         """Solve the stack.  Returns ``(orders, R_eff, T_eff, jones_reflection)``
         as :func:`pmm_jones_1d_segments` (``R_eff`` / ``T_eff`` are ``(2, M)``:
         row 0 = incident ``E_x``, row 1 = incident ``E_y``; ``jones`` is the
         zeroth-order ``2x2`` reflection).
+
+        THE JONES CONVENTION.  ``jones`` is the zeroth-order TANGENTIAL lab
+        ``(E_x, E_y)`` field over the incident one: columns = incident
+        ``E_x`` / ``E_y``, rows = reflected ``E_x`` / ``E_y``, public
+        ``exp(-i w t)`` (conjugate it for ``exp(+i w t)``).  The reflection
+        phase is referenced at the TOP interface of the first layer (an air
+        layer of thickness ``d`` added on top multiplies it by
+        ``exp(2 i k0 cos(theta) d)``); :meth:`jones_transmission` is
+        referenced at the BOTTOM interface of the last layer.  For reflection
+        the ``E_x`` ratio is the p-polarized amplitude ratio (the same
+        impedance formula as s, so ``J_xx = J_yy`` at normal incidence on an
+        isotropic stack); for transmission the ``E_x`` ratio differs from the
+        p-polarized amplitude ratio by the ratio of the two media's
+        ``kz / n``.
 
         ``stabilize='slices'`` (device-geometry roadmap item 3b, 2026-06-10;
         opt-in, ~3x cost): the n_slices-consensus tripwire for PASSIVE-BUT-
@@ -2928,6 +3338,11 @@ class PMMStack:
                 f"PMMStack.solve: unresolved material keys {_unresolved}; "
                 f"pass materials={{...}} via prepare()/solve(materials=...) "
                 f"or use concrete permittivities.")
+        # ---- small-element guard, BEFORE any dispatch -----------------------
+        # Every path below builds its element grids from the same walls,
+        # ``min_feature``, ``degree`` / ``elements_per_region`` / ``grade``,
+        # so one census covers them all (see _guard_small_elements).
+        self._guard_small_elements(self._src["wl"], "PMMStack.solve")
         # ---- native conical (out-of-plane, phi != 0) dispatch --------------
         # Path B phase 4: the O(N) n_y = 0 reduction.  Restricted to all-vertical
         # NumPy scalar / in-plane stacks; the JAX / slant / stabilize /
@@ -2953,6 +3368,7 @@ class PMMStack:
                 raise NotImplementedError(
                     "PMMStack: conical incidence (phi != 0) is not available for "
                     "SLANTED layers; use PMM2DStack with y-invariant cells.")
+            _refuse_geometric_conical(self.grade, "PMMStack.solve (conical)")
             return self._solve_conical(self._src["wl"], self._src["angle"], phi)
 
         # ---- incidence guard, BEFORE any dispatch ---------------------------
@@ -3150,11 +3566,22 @@ class PMMStack:
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers],
                                        self.min_feature / self.period)
         nU = len(uwidths)
+        oop_layer = [any(self._is_oop(M) for _w, M in L[1]) for L in self._layers]
+        # Laterally uniform isotropic VERTICAL in-plane layers are solved from
+        # the shared geometric eig (``_uniform_cascade``); their own
+        # eps-dependent operators are not needed unless the internal fields
+        # (which read ``layer_mats[i]``) are retained.
+        uni_eps = [(_uniform_iso_eps(eps_u)
+                    if (_UNIFORM_FAST_PATH and abs(L[2]) <= 1e-12
+                        and not oop_layer[i]) else None)
+                   for i, (eps_u, L) in enumerate(zip(layer_eps_u,
+                                                      self._layers))]
         layer_mats = [
-            _build_sem_tensor_segments(
-                self.period, uwidths, [_tensor3_dict(e) for e in eps_u],
-                self.degree, self.n_el, self.grade)
-            for eps_u in layer_eps_u]
+            (None if (uni_eps[i] is not None and not retain_internal)
+             else _build_sem_tensor_segments(
+                 self.period, uwidths, [_tensor3_dict(e) for e in eps_u],
+                 self.degree, self.n_el, self.grade))
+            for i, eps_u in enumerate(layer_eps_u)]
         t_sup = _tensor3_dict(eps_sup * np.eye(3))
         t_sub = _tensor3_dict(eps_sub * np.eye(3))
         mats_sup = _build_sem_tensor_segments(
@@ -3164,47 +3591,70 @@ class PMMStack:
         n_glob = mats_sup["n_glob"]
 
         _geo = _uniform_geo_eig(mats_sup, k0, kx0)
-        Wsup, Vsup, _l, _g = _sem_modes_uniform(mats_sup, k0, kx0, eps_sup,
-                                                _geo)
-        Wsub, Vsub, _l, _g = _sem_modes_uniform(mats_sub, k0, kx0, eps_sub,
-                                                _geo)
+        Wsup, Vsup, _lsup, _g = _sem_modes_uniform(mats_sup, k0, kx0, eps_sup,
+                                                   _geo)
+        Wsub, Vsub, _lsub, _g = _sem_modes_uniform(mats_sub, k0, kx0, eps_sub,
+                                                   _geo)
 
         # Redheffer recursion: sup -> [interface, propagation]*layers -> sub.
         # A layer needs the GENERAL fwd/back cascade if it is SLANTED or carries
         # full-3x3 OUT-OF-PLANE coupling (both break the +/-q symmetry and are
         # solved by the metric generator); an all-vertical-in-plane stack keeps the
         # symmetric path (bit-identical to the prior release).
-        oop_layer = [any(self._is_oop(M) for _w, M in L[1]) for L in self._layers]
         if not any(abs(L[2]) > 1e-12 or oo
                    for L, oo in zip(self._layers, oop_layer)):
-            # ALL-VERTICAL IN-PLANE: the symmetric (+/-q) S-matrix path --
-            # bit-identical to the prior release.  Dedup the per-layer modal eig
-            # (the dominant cost) across IDENTICAL layers -- a periodic / Bragg
-            # (ABAB...) stack recomputes the same eig P times; content-key it on
-            # the layer's eps bytes (a 1:1 fingerprint of ``m`` since geometry /
-            # degree / grade are shared).  Byte-identical (deterministic eig,
-            # same arrays a plain loop would build; mirrors rcwa/stack.py).
+            # ALL-VERTICAL IN-PLANE: the symmetric (+/-q) S-matrix path.  Dedup
+            # the per-layer modal eig (the dominant cost) across IDENTICAL
+            # layers -- a periodic / Bragg (ABAB...) stack recomputes the same
+            # eig P times; content-key it on the layer's eps bytes (a 1:1
+            # fingerprint of ``m`` since geometry / degree / grade are shared).
+            # Byte-identical (deterministic eig, same arrays a plain loop would
+            # build; mirrors rcwa/stack.py).
+            #
+            # UNIFORM layers take their modes from the shared geometric eig
+            # ``_geo`` (exact; see ``_uniform_cascade``), and every run of
+            # consecutive uniform media -- the half-spaces included -- is
+            # cascaded elementwise and starred in as ONE S-matrix.  A stack with
+            # no uniform layer runs exactly the arithmetic it ran before.  The
+            # partial cascades of ``retain_internal`` need every interface, so
+            # that mode keeps the per-layer loop (uniform modes still shared).
             _eig_memo = {}
             lmodes = []
-            for eps_u, m in zip(layer_eps_u, layer_mats):
+            for i, (eps_u, m) in enumerate(zip(layer_eps_u, layer_mats)):
                 ck = tuple(np.asarray(e, dtype=_C).tobytes() for e in eps_u)
                 hit = _eig_memo.get(ck)
                 if hit is None:
-                    hit = _sem_modes_tensor(m, k0, kx0, True)
+                    if uni_eps[i] is not None:
+                        hit = _sem_modes_uniform(mats_sup, k0, kx0, uni_eps[i],
+                                                 _geo, label=UNIFORM_LAYER_LABEL)
+                    else:
+                        hit = _sem_modes_tensor(m, k0, kx0, True)
                     _eig_memo[ck] = hit
                 lmodes.append(hit)
             nlay = len(lmodes)
-            ifc = [_interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])]
-            for i in range(1, nlay):
-                ifc.append(_interface_smatrix(
-                    lmodes[i - 1][0], lmodes[i - 1][1],
-                    lmodes[i][0], lmodes[i][1]))
-            ifc.append(_interface_smatrix(lmodes[-1][0], lmodes[-1][1],
-                                          Wsub, Vsub))
-            S = ifc[0]
-            for i in range(nlay):
-                S = _propagation_star(S, lmodes[i][2], k0 * self._layers[i][0])
-                S = _redheffer_star(S, ifc[i + 1])
+            if not retain_internal:
+                media = _vertical_media(
+                    (Wsup, Vsup, _lsup, eps_sup), (Wsub, Vsub, _lsub, eps_sub),
+                    lmodes, uni_eps, _geo[0])
+                S = _cascade_vertical(
+                    media, [k0 * self._layers[i][0] for i in range(nlay)],
+                    interface=_interface_smatrix, star=_redheffer_star,
+                    propagation_star=_propagation_star,
+                    collapse=_UNIFORM_FAST_PATH)
+            else:
+                ifc = [_interface_smatrix(Wsup, Vsup, lmodes[0][0],
+                                          lmodes[0][1])]
+                for i in range(1, nlay):
+                    ifc.append(_interface_smatrix(
+                        lmodes[i - 1][0], lmodes[i - 1][1],
+                        lmodes[i][0], lmodes[i][1]))
+                ifc.append(_interface_smatrix(lmodes[-1][0], lmodes[-1][1],
+                                              Wsub, Vsub))
+                S = ifc[0]
+                for i in range(nlay):
+                    S = _propagation_star(S, lmodes[i][2],
+                                          k0 * self._layers[i][0])
+                    S = _redheffer_star(S, ifc[i + 1])
             if retain_internal:
                 # partial cascades for internal-amplitude recovery (device-
                 # geometry roadmap item 6): S_above[i] = sup -> TOP of layer i
@@ -3291,8 +3741,13 @@ class PMMStack:
                     Wf, Vf, lamf, _qf, Wb, Vb, lamb, _qb = _layer_modes_metric(
                         mm, k0, slant, kx0)
                 else:
-                    Wl, Vl, lam_l, _q = _sem_modes_tensor(
-                        layer_mats[i], k0, kx0, True)
+                    if uni_eps[i] is not None:
+                        Wl, Vl, lam_l, _q = _sem_modes_uniform(
+                            mats_sup, k0, kx0, uni_eps[i], _geo,
+                            label=UNIFORM_LAYER_LABEL)
+                    else:
+                        Wl, Vl, lam_l, _q = _sem_modes_tensor(
+                            layer_mats[i], k0, kx0, True)
                     Wf, Wb, Vf, Vb = Wl, Wl, Vl, -Vl
                     lamf, lamb = lam_l, -lam_l
                 Mls.append(np.block([[Wf, Wb], [Vf, Vb]]))
@@ -3411,7 +3866,7 @@ class PMMStack:
                 m = _build_sem_tensor_segments(
                     period, w, [_tensor3_dict(e) for e in eps_row],
                     self.degree, self.n_el, self.grade)
-                hit = (m, _sem_modes_tensor(m, k0, kx0, True), wkey)
+                hit = (m, _layer_modes_vertical(m, eps_row, k0, kx0), wkey)
                 memo[(wkey, ekey)] = hit
             mats_by.append(hit[0])
             modes_by.append(hit[1])
@@ -3587,7 +4042,7 @@ class PMMStack:
                 m = _build_sem_tensor_segments(
                     period, w_i, [_tensor3_dict(e) for e in row],
                     self.degree, self.n_el, self.grade)
-                Wl, Vl, lam_l, _q = _sem_modes_tensor(m, k0, kx0, True)
+                Wl, Vl, lam_l, _q = _layer_modes_vertical(m, row, k0, kx0)
                 Wf, Wb, Vf, Vb = Wl, Wl, Vl, -Vl
                 lamf, lamb = lam_l, -lam_l
             mats_by.append(m)
@@ -3740,7 +4195,16 @@ class PMMStack:
         a SHEARED layer -- the same LAB re-referencing: this is
         ``exp(+i k0 alpha_0 W)`` times the cascade's frame answer, which is the
         identity at NORMAL incidence (``alpha_0 = 0``, so ``P_0 = 1`` for any
-        walk) and a genuine phase at every oblique mount."""
+        walk) and a genuine phase at every oblique mount.
+
+        Reference planes: the transmitted phase is referenced at the BOTTOM
+        interface of the last layer (a layer of substrate material of
+        thickness ``d`` added at the bottom multiplies it by
+        ``exp(i k0 kz_sub d)``, ``kz_sub = sqrt(n_sub^2 - n_sup^2 sin^2
+        theta)``), the incident one at the top interface of the first layer
+        (an air layer on top multiplies it by ``exp(i k0 cos(theta) d)``).
+        The ``E_x`` entries are tangential-field ratios, which differ from the
+        p-polarized amplitude ratio by the ratio of the media's ``kz / n``."""
         m = self._modal
         if m is None:
             raise ValueError(
@@ -4393,6 +4857,7 @@ class PMMStack:
                 out[key] = out[key] + share * A[i]
         return A, out
 
+    @_grade_scope(_wl_of_sweep)
     def solve_vs_wavelength(self, wavelengths, *, angle=0.0, theta=None,
                             jones=False, max_workers=None, blas_per_worker=1):
         """Diffraction efficiencies across a wavelength sweep on ONE call,
@@ -4520,6 +4985,11 @@ class PMMStack:
                 "(the symmetric cascade); call solve() per wavelength for slanted "
                 "/ out-of-plane stacks.")
 
+        # the guard reads the LONGEST wavelength: the danger scale is a
+        # fraction of the wavelength, so that is where a fixed element is
+        # relatively smallest.
+        self._guard_small_elements(float(np.max(wl)),
+                                   "PMMStack.solve_vs_wavelength")
         if self.layer_grids == "per-layer":
             return self._solve_vs_wavelength_perlayer(
                 wl, angle, jones, max_workers, blas_per_worker,
@@ -4532,8 +5002,14 @@ class PMMStack:
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers],
                                        self.min_feature / self.period)
         nU = len(uwidths)
+        # a NON-dispersive uniform isotropic layer never needs its own
+        # operators (its modes come from the shared geometric eig at every
+        # wavelength); a dispersive one is classified per wavelength below.
         layer_mats = [
-            (None if disp_layer[i] else _build_sem_tensor_segments(
+            (None if (disp_layer[i] or (
+                _UNIFORM_FAST_PATH and _uniform_iso_eps(
+                    [self._as_tensor(e) for e in eps_u]) is not None))
+             else _build_sem_tensor_segments(
                 self.period, uwidths,
                 [_tensor3_dict(self._as_tensor(e)) for e in eps_u],
                 self.degree, self.n_el, self.grade))
@@ -4621,34 +5097,47 @@ class PMMStack:
             # the applied pool.
             with _blas_threads_quiet(None):
                 _geo = _uniform_geo_eig(msup, k0, kx0)
-                Wsup, Vsup, _l, _g = _sem_modes_uniform(msup, k0, kx0,
-                                                        eps_sup, _geo)
-                Wsub, Vsub, _l2, _g2 = _sem_modes_uniform(msub, k0, kx0,
-                                                          eps_sub, _geo)
+                Wsup, Vsup, _lsup, _g = _sem_modes_uniform(msup, k0, kx0,
+                                                           eps_sup, _geo)
+                Wsub, Vsub, _lsub, _g2 = _sem_modes_uniform(msub, k0, kx0,
+                                                            eps_sub, _geo)
                 # DBR / identical-layer dedup: eig each DISTINCT layer once per
                 # wavelength (an ABAB Bragg stack recomputes the same eig P times
                 # otherwise -- solve() already dedups, the sweep did not).  Key
                 # on the materialised per-region eps bytes (mirrors solve():937).
+                # Uniform isotropic layers take the shared geometric eig and
+                # runs of uniform media collapse, exactly as in solve().
                 _eig_memo = {}
                 lmodes = []
+                uni = []
                 for i, m in enumerate(layer_mats):
-                    ck = tuple(np.asarray(_tens(e, w), dtype=_C).tobytes()
-                               for e in layer_eps_u[i])
+                    tens = [_tens(e, w) for e in layer_eps_u[i]]
+                    ck = tuple(np.asarray(t, dtype=_C).tobytes() for t in tens)
+                    e_u = _uniform_iso_eps(tens) if _UNIFORM_FAST_PATH else None
+                    uni.append(e_u)
                     hit = _eig_memo.get(ck)
                     if hit is None:
-                        mm = (m if m is not None else _build_sem_tensor_segments(
-                            self.period, uwidths,
-                            [_tensor3_dict(_tens(e, w)) for e in layer_eps_u[i]],
-                            self.degree, self.n_el, self.grade))
-                        hit = _sem_modes_tensor(mm, k0, kx0, True)
+                        if e_u is not None:
+                            hit = _sem_modes_uniform(
+                                msup, k0, kx0, e_u, _geo,
+                                label=UNIFORM_LAYER_LABEL)
+                        else:
+                            mm = (m if m is not None
+                                  else _build_sem_tensor_segments(
+                                      self.period, uwidths,
+                                      [_tensor3_dict(t) for t in tens],
+                                      self.degree, self.n_el, self.grade))
+                            hit = _sem_modes_tensor(mm, k0, kx0, True)
                         _eig_memo[ck] = hit
                     lmodes.append(hit)
-                S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
-                for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
-                    S = _propagation_star(S, lam_l, k0 * depths[i])
-                    nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
-                              else (lmodes[i + 1][0], lmodes[i + 1][1]))
-                    S = _redheffer_star(S, _interface_smatrix(Wl_, Vl_, nW, nV))
+                media = _vertical_media(
+                    (Wsup, Vsup, _lsup, eps_sup), (Wsub, Vsub, _lsub, eps_sub),
+                    lmodes, uni, _geo[0])
+                S = _cascade_vertical(
+                    media, [k0 * d for d in depths],
+                    interface=_interface_smatrix, star=_redheffer_star,
+                    propagation_star=_propagation_star,
+                    collapse=_UNIFORM_FAST_PATH)
             S11, _S12, S21, _S22 = S
             kx = (kx0 + orders * G) / k0
             Hsup, Hsub = _proj(Wsup), _proj(Wsub)
@@ -4840,7 +5329,8 @@ class PMMStack:
                                   self.period, w_i,
                                   [_tensor3_dict(_tens(e, w)) for e in row],
                                   self.degree, self.n_el, self.grade))
-                        hit = (mm, _sem_modes_tensor(mm, k0, kx0, True))
+                        hit = (mm, _layer_modes_vertical(
+                            mm, [_tens(e, w) for e in row], k0, kx0))
                         _eig_memo[ck] = hit
                     mats_l.append(hit[0])
                     lmodes.append(hit[1])
@@ -5154,7 +5644,8 @@ class _PreparedPMMStack:
                 out.append(e)
         return out
 
-    def _layer_eig(self, i, materials, k0, kx0, wavelength, angle):
+    def _layer_eig(self, i, materials, k0, kx0, wavelength, angle,
+                   mats_geo=None):
         st = self._st
         keys = self._layer_keys[i]
         if keys:
@@ -5174,16 +5665,27 @@ class _PreparedPMMStack:
             return hit
         if resolved is None:
             resolved = [st._as_tensor(e) for e in self._layer_eps_u[i]]
-        mats = _build_sem_tensor_segments(
-            st.period, self._uwidths, [_tensor3_dict(e) for e in resolved],
-            st.degree, st.n_el, st.grade)
-        modes = _sem_modes_tensor(mats, k0, kx0, True)
+        e_u = (_uniform_iso_eps(resolved)
+               if (_UNIFORM_FAST_PATH and mats_geo is not None) else None)
+        if e_u is not None:
+            # uniform isotropic layer: the shared geometric eig of the union
+            # grid (``mats_geo`` is the half-space operator set on that grid;
+            # the eig is cached on its digest), no layer operators built.
+            modes = _sem_modes_uniform(
+                mats_geo, k0, kx0, e_u, _uniform_geo_eig(mats_geo, k0, kx0),
+                label=UNIFORM_LAYER_LABEL)
+        else:
+            mats = _build_sem_tensor_segments(
+                st.period, self._uwidths, [_tensor3_dict(e) for e in resolved],
+                st.degree, st.n_el, st.grade)
+            modes = _sem_modes_tensor(mats, k0, kx0, True)
         with self._cache_lock:
             self._eig_cache[ck] = _freeze_cached(modes)   # W7 A13
             while len(self._eig_cache) > self._EIG_CACHE_SIZE:
                 self._eig_cache.popitem(last=False)
         return modes
 
+    @_grade_scope(_wl_of_prepared)
     def solve(self, *, wavelength, materials=None, angle=0.0, theta=None):
         """Solve at ``wavelength`` with the material keys resolved from
         ``materials`` (values: scalar / ``(3, 3)`` / ``wl -> value``
@@ -5243,22 +5745,31 @@ class _PreparedPMMStack:
         Wsub, Vsub = sub_modes[0], sub_modes[1]
         n_glob = mats_sup["n_glob"]
 
-        lmodes = [self._layer_eig(i, materials, k0, kx0, wl, angle)
+        st._guard_small_elements(wl, "PMMStack.prepare().solve")
+        lmodes = [self._layer_eig(i, materials, k0, kx0, wl, angle, mats_sup)
                   for i in range(len(st._layers))]
         # out-of-plane resolved tensors are not supported on this path
-        S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
-        for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
-            S = _propagation_star(S, lam_l, k0 * st._layers[i][0])
-            nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
-                      else (lmodes[i + 1][0], lmodes[i + 1][1]))
-            S = _redheffer_star(S, _interface_smatrix(Wl_, Vl_, nW, nV))
-        S11, _S12, S21, _S22 = S
-
-        # far field (mirrors PMMStack.solve)
         resolved_all = [self._resolve(eps_u, materials, wl)
                         if ks else [st._as_tensor(e) for e in eps_u]
                         for eps_u, ks in zip(self._layer_eps_u,
                                              self._layer_keys)]
+        # the SAME cascade as PMMStack.solve (uniform runs collapsed), so a
+        # prepared solve stays bit-identical to the rebuilt one; the uniform
+        # classification is the one _layer_eig made on the same resolved
+        # tensors.
+        uni = [(_uniform_iso_eps(r) if _UNIFORM_FAST_PATH else None)
+               for r in resolved_all]
+        media = _vertical_media(
+            (Wsup, Vsup, sup_modes[2], eps_sup),
+            (Wsub, Vsub, sub_modes[2], eps_sub), lmodes, uni,
+            _uniform_geo_eig(mats_sup, k0, kx0)[0])
+        S = _cascade_vertical(
+            media, [k0 * st._layers[i][0] for i in range(len(lmodes))],
+            interface=_interface_smatrix, star=_redheffer_star,
+            propagation_star=_propagation_star, collapse=_UNIFORM_FAST_PATH)
+        S11, _S12, S21, _S22 = S
+
+        # far field (mirrors PMMStack.solve)
         n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))
                      for eps_u in resolved_all for e in eps_u]
                     + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))

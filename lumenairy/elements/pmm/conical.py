@@ -36,7 +36,7 @@ from ..rcwa._core import (
     _propagation_smatrix_general,
     _require_propagating_incidence,
 )
-from ._core import _mode_cut_scoped
+from ._core import _is_geometric_spec, _mode_cut_scoped, _normalize_grade
 from .twod import (
     _build_axis,
     _cell_to_walls_tile,
@@ -121,6 +121,31 @@ def _conical_jones_farfield(S11, S21, order_x, order_y, kxv, kyv, kx0, ky0,
                      kz_inc=kz_inc, kx0=float(kx0), ky0=float(ky0), **amp)
         return out + (modal,)
     return out
+
+
+def _refuse_geometric_conical(grade, where):
+    """Geometric element grading is REFUSED at conical incidence.
+
+    The conical cascade's per-layer eigenproblem ``M = -(P @ Q)`` carries the
+    element-size scaling of BOTH factors, and it measurably loses accuracy on
+    the small wall elements a geometric layout makes where the planar path
+    does not (2026-11-14, a 50 nm metal strip / 21 nm spacer / metal mirror
+    stack, 370 nm period, 1300 nm, theta 0.2, phi 0.3, 12 elements per region,
+    default floor 37 pm): the cross-polarized ``J_xy`` drifts from
+    0.00596 + 0.00742i to 0.00544 + 0.00833i between degree 8 and 24, while
+    the planar solve of the same layout converges monotonically (1e-6 per
+    step); and at ``ky0 = 0`` the conical cascade reproduces the classical
+    solve only to 5e-8 (Chebyshev, 3 elements: 4.5e-13).  ``grade`` is
+    normalized first, so an invalid value still raises ``ValueError``."""
+    if _is_geometric_spec(grade):
+        raise NotImplementedError(
+            f"{where}: geometric element grading is not available at conical "
+            f"incidence -- the conical cascade loses accuracy on the small "
+            f"wall elements it makes (measured: the cross-polarized Jones "
+            f"term drifts by ~1e-3 across degree 8-24 at the default floor, "
+            f"where the planar solve converges).  Use grade=True (Chebyshev) "
+            f"or False here; geometric grading is validated for the planar "
+            f"(phi = 0) mount.")
 
 
 def _tile_has_offplane_public(tensors):
@@ -456,6 +481,10 @@ def pmm_jones_1d_conical(period, eps_ridge, eps_groove, n_substrate,
     reflection Jones (columns = incident ``[E_x; E_y]``), exactly as
     :func:`~lumenairy.elements.pmm.pmm_jones_2d`.
     """
+    grade = _normalize_grade(grade, period=period,
+                             where="pmm_jones_1d_conical",
+                             elements_per_region=elements_per_region)
+    _refuse_geometric_conical(grade, "pmm_jones_1d_conical")
     if n_orders is None:
         n_orders = max(8, degree // 2)
     # PATTERNED grating -> the pure-nodal conical cascade
@@ -579,6 +608,10 @@ def pmm_jones_1d_conical_tensor(period, eps_tensor_cell, n_substrate,
         raise ValueError(
             f"pmm_jones_1d_conical_tensor: formulation must be 'laurent' or "
             f"'li', got {formulation!r}")
+    grade = _normalize_grade(grade, period=period,
+                             where="pmm_jones_1d_conical_tensor",
+                             elements_per_region=elements_per_region)
+    _refuse_geometric_conical(grade, "pmm_jones_1d_conical_tensor")
     cell = np.asarray(eps_tensor_cell, dtype=_C)
     if cell.ndim == 3:                             # (Sx, 3, 3) -> (Sx, 1, 3, 3)
         cell = cell[:, None, :, :]

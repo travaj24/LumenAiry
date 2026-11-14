@@ -379,9 +379,8 @@ def test_pmm2dstack_refuses_geometric_at_construction_and_on_assignment():
 
 
 def test_unnormalized_string_reaching_the_kernel_raises():
-    # entry points that hand ``grade`` to the layout builder without
-    # normalizing it (e.g. the conical 1-D solver) must not read a string as
-    # truthy: the builder raises.
+    # a caller that hands ``grade`` to the layout builder without normalizing
+    # it must not have a string read as truthy: the builder raises.
     for bad in ("geometric", "chebyshev", ("geometric", 0.17)):
         with pytest.raises(ValueError, match="un-normalized"):
             C._graded_boundaries(0.0, 1.0, 4, bad)
@@ -389,14 +388,17 @@ def test_unnormalized_string_reaching_the_kernel_raises():
             C._graded_boundaries(0.0, 1.0, 1, bad)
     with pytest.raises(ValueError, match="invalid geometric spec"):
         C._graded_boundaries(0.0, 1.0, 4, ("geometric", 1.5, 1e-12))
-    with pytest.raises(ValueError, match="un-normalized"):
+    # the conical 1-D entry and pmm_jones_2d now normalize ``grade`` at entry
+    # and refuse the geometric spec explicitly (conical: measured inaccurate
+    # there, see tests/unit/test_pmm_stack_geometric.py; 2-D: not validated)
+    with pytest.raises(NotImplementedError, match="conical incidence"):
         lum.elements.pmm.pmm_jones_1d_conical(
             370e-9, EPS_METAL, 1.0, N_SUB, 1.0, DEPTH, 0.47, 1300e-9,
             theta=0.1, phi=0.2, degree=6, elements_per_region=4,
             grade="geometric")
     cell = np.ones((4, 4, 3, 3)) * np.eye(3)
     cell[:2, :2] = 4.0 * np.eye(3)
-    with pytest.raises(ValueError, match="un-normalized"):
+    with pytest.raises(NotImplementedError, match="1-D PMM family"):
         lum.elements.pmm.pmm_jones_2d(
             400e-9, 400e-9, cell, 1.5, 1.0, 100e-9, 1000e-9, degree=5, n_orders=3,
             grade="geometric")
