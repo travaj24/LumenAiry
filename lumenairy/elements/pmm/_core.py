@@ -1459,6 +1459,14 @@ _MODE_GROWTH_REL = 1.0e-6
 #: margin over the noise, and it is the bound itself (no fitted constant).
 _EIG_ROUNDOFF_FAC = 1.0
 
+#: FAIL-BEFORE SWITCH for the round-off term of :func:`_growth_mask`
+#: (2026-11-14).  ``False`` restores the historical ``Im(q) < -_MODE_GROWTH_REL
+#: |q|`` growth test bit for bit -- and with it the wrong-branch population on
+#: small elements and near-coincident walls.  Tests that exercise the
+#: guards built against that population (the sliver refusal / warning
+#: machinery of ``stack.py``) set it ``False`` to reproduce what they guard.
+PMM_EIG_ROUNDOFF_BAR = True
+
 
 def _growth_mask(qf, q_all, xp=np):
     """Forward modes that GROW along +z beyond the eigensolve's round-off --
@@ -1472,6 +1480,8 @@ def _growth_mask(qf, q_all, xp=np):
     2026-11-14 block above ``_EIG_ROUNDOFF_FAC``.  Elementwise (plus one
     reduction), so it traces under JAX."""
     aq = xp.abs(qf)
+    if not PMM_EIG_ROUNDOFF_BAR:
+        return qf.imag < -_MODE_GROWTH_REL * aq
     d = (_EIG_ROUNDOFF_FAC * float(np.finfo(np.float64).eps)
          * xp.max(xp.abs(q_all)) ** 2)
     den = xp.maximum(aq, xp.sqrt(d))
@@ -8141,6 +8151,7 @@ __all__ = [
     "_forward_growth_flip",
     "_growth_mask",
     "_EIG_ROUNDOFF_FAC",
+    "PMM_EIG_ROUNDOFF_BAR",
     "_hx_partner_rows",
     "_tensor_is_passive",
     "_grid_is_passive",

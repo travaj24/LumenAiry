@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: cbfd608625348eb71eafc6e2534a56826ee7a5de2b2c9a7e15a95c0962d3dc91
-token_sha256: 93ef4144f22eae041f154419e4bcac8596d46c0c57aa01b477b60d310ebf2d8a
+ast_sha256: 4647dffd9585ce9522e0f07ccc328a09800187286b3a9a8e6102cb8fffb21687
+token_sha256: 49f6fea9e543dc3525ff2f134d6033f35c4fede3ad21c96abd6b78422d0de63b
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -17,6 +17,7 @@ re_recorded: 2026-11-03 -- point-mirror fix (v5.50.1): PMM paths solved eps(-x,-
 re_recorded: 2026-11-14 -- G-1 geometric grading spec: _graded_fractions is the one grading rule (the JAX-topology copy removed), _graded_boundaries delegates to it, new _normalize_grade + GEOMETRIC_DEFAULT_RATIO / GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC, geometric layout with an absolute floor; _sem_modes_uniform gains label=; bool/Chebyshev layouts bit-identical
 re_recorded: 2026-11-14 -- small-element wrong-branch root cause: _growth_mask (the forward/backward growth repair no longer undercuts the eigensolve's round-off eps*max|q^2|; bit-identical where that bound is below 1e-6|q|) and _hx_partner_rows (classical H_x partner rows by the exact relation W_bot q^2/lam, NumPy and JAX twins)
 re_recorded: 2026-11-14 -- geometric default floor max(3e-5 x period, 1.25e-5 x wavelength) via _geometric_default_floor; _normalize_grade(wavelength=) completes it; superseded floor rationale moved to this document
+re_recorded: 2026-11-14 -- PMM_EIG_ROUNDOFF_BAR: fail-before switch of the _growth_mask round-off term (False restores the historical growth test bit for bit); the sliver-guard tests use it to reproduce the population they guard
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`

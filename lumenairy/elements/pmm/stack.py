@@ -189,6 +189,18 @@ def _layer_modes_vertical(mats, eps_row, k0, kx0):
 # round 2's arbiter, round 3's relative closure, round 4's removal of the
 # super-unity precondition -- are recorded verbatim in
 # docs/history/lumenairy.elements.pmm.stack.md.
+#
+# 2026-11-14 -- WHAT PRODUCED THE WRONG ANSWERS THIS MACHINERY GUARDS.  The
+# sliver's wrong answers were not an interface conditioning collapse: they
+# were the forward/backward selector defect fixed in ``_core._growth_mask``
+# (on a sliver-width element the eigensolve's round-off pushed a propagating
+# mode's ``Im(q)`` past the growth bar and its sign decided the direction).
+# With the fix, the O-11 hazard ladder (degrees 12 / 14 / 20, wall steps
+# 1.5e-5 .. 3e-4 of the period) has no wrong row on either BLAS build
+# (``tests/unit/test_pmm_eig_roundoff_selector.py``), the screen and the
+# arbiter still run, and they refuse nothing there.  The machinery is kept as
+# defence in depth; its own tests reproduce the population they were built
+# against through ``_core.PMM_EIG_ROUNDOFF_BAR = False``.
 
 #: FAIL-BEFORE SWITCH for the refusal (2026-09-11).  ``False`` restores the
 #: pre-guard behaviour bit for bit: the super-unity WARNING below, and the

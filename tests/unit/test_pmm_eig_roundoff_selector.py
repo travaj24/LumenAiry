@@ -381,3 +381,52 @@ def test_lossless_former_failures_match_the_reference(P, theta, deg, hw):
     Jr, _ = _solve(_lamellar(60, 1, True, theta, P=P))
     assert float(np.max(np.abs(tot - 1.0))) < 1e-5, tot
     assert float(np.max(np.abs(J - Jr))) < LAMELLAR_BAR
+
+
+# --------------------------------------------------------------------------- #
+# 6. the near-coincident-wall (sliver) hazard band was the same defect
+# --------------------------------------------------------------------------- #
+# The O-11 fixture of tests/unit/test_fix_pmmstack_sliver_walls.py: two slices
+# of a taper whose walls differ by ``delta`` of the period, so the union grid
+# carries a sliver element of that width.  That file draws its "hazard band"
+# (rows whose answer is > 100 x the physical shift ``delta`` away from the
+# delta -> 0 reference) at run time; before the selector fix the band was
+# non-empty on every kernel measured.
+_SL_P, _SL_WL, _SL_TH, _SL_DZ = 1.2e-6, 0.85e-6, 0.15, 0.32e-6 / 4
+_SL_A0, _SL_B0 = 0.27865, 0.62505
+
+
+def _sliver(delta, degree):
+    st = PMMStack(_SL_P, n_superstrate=1.0, n_substrate=1.0, degree=degree,
+                  min_feature=_SL_P * 1e-5)
+    for a, b in ((_SL_A0, _SL_B0), (_SL_A0 - delta, _SL_B0 + delta)):
+        st.add_layer(_SL_DZ, segments=[(a, 2.25), (b - a, 9.0), (1.0 - b, 2.25)])
+    st.set_source(_SL_WL, theta=_SL_TH)
+    was = S.PMM_SLIVER_GUARD
+    S.PMM_SLIVER_GUARD = False
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            o, R, T, J = st.solve()
+    finally:
+        S.PMM_SLIVER_GUARD = was
+    i = np.argsort(np.asarray(o).ravel())
+    return np.asarray(R)[:, i], np.asarray(T)[:, i]
+
+
+def test_the_sliver_hazard_band_is_empty_with_the_fix():
+    """Every row of the sliver ladder (degrees 12 / 14 / 20, delta 3e-4 ..
+    1.5e-5 of the period) tracks the physical shift.  MEASURED 2026-11-14:
+    0 wrong rows on Windows/MKL and on WSL/OpenBLAS with the fix (11 sliver
+    tests that need the wrong population now restore the pre-fix selector
+    through ``_core.PMM_EIG_ROUNDOFF_BAR``; with it restored the band is
+    non-empty again and those tests pass)."""
+    wrong = []
+    for deg in (12, 14, 20):
+        Rr, Tr = _sliver(0.0, deg)
+        for d in np.geomspace(3e-4, 1.5e-5, 12):
+            R, T = _sliver(float(d), deg)
+            e = max(float(np.max(np.abs(R - Rr))), float(np.max(np.abs(T - Tr))))
+            if e > 100.0 * d:
+                wrong.append((deg, float(d), e))
+    assert wrong == [], wrong
