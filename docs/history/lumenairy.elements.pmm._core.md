@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 3543fc65bc2b761ca2799d55f014e80b66d71b64acfe935b35622c8ad853a5f5
-token_sha256: 9f056ee241e311792303218af73907025da413e23f7a92b04e5d09e40a219bbe
+ast_sha256: 6996528651e34bdb88ad63705c517abca54b7208811e4440ea16770b027cf330
+token_sha256: fe98c11f51b6c066f6716a2e6bf93286f8d58e0d518137b3816fd3c3581cc410
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -21,6 +21,7 @@ re_recorded: 2026-11-14 -- PMM_EIG_ROUNDOFF_BAR: fail-before switch of the _grow
 re_recorded: 2026-11-14 -- 2026-11-14 -- structured conical modal solves (_sem_modes_uniform_conical, _sem_modes_conical, _conical_khat, _conical_dpq) and the shared forward selector _select_forward_modes (_sem_modes_uniform unchanged bit for bit)
 re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: deferred default floor in _normalize_grade (defer_floor), narrowed wavelength handling in _geometric_default_floor, private _PMM_EIG_ROUNDOFF_BAR, shared _LAM_CLAMP/_safe_lam and _interface_from_ab
 re_recorded: 2026-11-14 -- 2026-11-14 -- _sem_modes_uniform and _select_forward_modes parametrized over the array namespace (xp): the JAX twin of PMMStack runs the same kernels
+re_recorded: 2026-11-14 -- 2026-11-14 -- 5.51.0 integration: _segment_walls refuses a NaN / infinite width fraction itself (both of its comparisons are False for a NaN), so RCWAStack.add_layer(segments=) drops its duplicate finiteness pre-check
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`

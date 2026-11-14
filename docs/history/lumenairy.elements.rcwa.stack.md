@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/rcwa/stack.py
-ast_sha256: 6c647f4865fc0894a1a50f0fd45b8f8e1321b4e68e054f8e0a693d5c539b8b9c
-token_sha256: 2ffc7fb4c3bc738ad24071dccc1529ade55933e5df87b6bcf80288866685a988
+ast_sha256: 1a650c3831a8aaad10114ad2205e245b92fe815870fdf4ddbc4e5e65da400e7c
+token_sha256: 9ad33c3c05866ffcb62e4c1449f3d7cb565c4367b04ce399b33fab4bbd4a2db1
 pre_relocation_lines: 3372
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -24,6 +24,7 @@ re_recorded: 2026-11-14 -- RCWAStack(asr=...): adaptive spatial resolution for 1
 re_recorded: 2026-11-14 -- host-read probes (_layer_offplane_or_traced, _layer_eig_key, _li_cell_contrast, _concrete_eps_values, rcwa_convergence's amplitude read) share one tracer guard, _host_array_or_none: five broad except clauses become one, behaviour unchanged
 re_recorded: 2026-11-14 -- 2-D formulation='auto' resolves per SHAPE class, not per material: every eps_cell (dispersive included) and every axis-aligned-rectangle shapes layer -> 'li', disks / ellipses -> 'laurent'; measured against PMM2DStackPure on dielectric, weak- and strong-metal squares and disks (docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md); the 2-D 'li' operator itself is unchanged
 re_recorded: 2026-11-14 -- review A5/A7/A9/A13 (rcwa part): _host_array_or_none narrowed to (TypeError, ValueError) and rcwa_convergence reads extra solver outputs unguarded; legacy bump= call form keeps the 5.50 verdict (rtol default None); dispersive 'auto' layers re-resolved per wavelength from materialised values (_auto_at_wavelength); add_layer(segments=) validates through pmm._core._segment_walls (_segment_walls hook)
+re_recorded: 2026-11-14 -- 2026-11-14 -- 5.51.0 integration: _segment_walls refuses a NaN / infinite width fraction itself (both of its comparisons are False for a NaN), so RCWAStack.add_layer(segments=) drops its duplicate finiteness pre-check
 -->
 
 # Version history -- `lumenairy/elements/rcwa/stack.py`
