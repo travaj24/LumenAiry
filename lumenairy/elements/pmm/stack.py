@@ -1814,8 +1814,42 @@ class PMMStack:
         Transmission / incidence half-space indices.
     degree : int, optional
         Polynomial degree per spectral element (the spectral knob).  Default 16.
-    elements_per_region, grade, far_field_orders : as in
-        :func:`pmm_jones_1d_segments`.
+    elements_per_region : int, optional
+        Spectral elements per cell of the shared union grid (default 1).
+    grade : bool, str or tuple, optional
+        Element layout inside each cell, as in :func:`pmm_jones_1d_segments`:
+        ``True`` / ``'chebyshev'`` (default) clusters elements toward the
+        walls (inert at 1 and 2 elements per cell -- every layout is then the
+        midpoint split); ``False`` is uniform; ``'geometric'`` or
+        ``('geometric', ratio[, min_element_m])`` is the corner-refined
+        geometric layout (ratio 0.17; needs ``elements_per_region >= 3``).
+        Without an explicit ``min_element_m`` PMMStack's floor is
+        ``max(1e-4 x period, 4e-5 x wavelength)``, resolved at solve time:
+        the period part is the 1-D family's default, and the wavelength part
+        keeps the smallest element out of the measured small-element failure
+        band (see ``allow_small_elements``) when the period is below
+        0.4 x wavelength.  The stored :attr:`grade` is the normalized spec (a
+        bool or that tuple).  Geometric grading is refused at conical
+        incidence (``phi != 0``), where it was measured inaccurate.
+    far_field_orders, n_orders : int, optional
+        How many Rayleigh orders the FAR FIELD projects onto (``n_orders`` is
+        the cross-suite alias; it is auto-grown to cover every propagating
+        order).  This is NOT an accuracy knob: the modal truncation is
+        ``degree`` x ``elements_per_region`` (and the grading), so a
+        convergence study must step ``degree`` or the element count, never
+        ``n_orders`` -- on the metal-strip stack below ``n_orders`` 3 / 21 / 61
+        give the same zeroth-order Jones to 4e-15 relative.
+    allow_small_elements : bool, optional
+        Opt out of the small-element guard (default ``False``).  A solve
+        whose element LAYOUT makes an element smaller than ``3e-5`` of the
+        wavelength (an explicit geometric floor below it, a very small ratio
+        with many elements) raises ``ValueError`` before solving: below
+        roughly that size the modal solve can return an O(1) wrong answer
+        with no warning (measured at oblique incidence up to ``1.6e-5`` of the
+        wavelength on two BLAS builds; see ``_SMALL_ELEMENT_FRAC``).  With ``True`` the solve runs, and an
+        energy check refuses a super-unity answer on a provably passive stack
+        (it cannot see a sub-unity wrong one).  Thin cells the GEOMETRY makes
+        (a liner, a narrow gap) are not subject to this guard.
     factorization : {'auto', 'convection', 'covariant'}, optional
         Slant treatment (as in :func:`pmm_jones_1d_slanted`).  ``'auto'``
         (default) uses the SPECTRAL covariant oblique-coordinate generator for
@@ -1879,6 +1913,25 @@ class PMMStack:
     geometry.  Size ``degree`` from the TM channel, and use its own ``degree``
     convergence (not ``ΣR + ΣT``) as the accuracy signal there.  See
     :func:`pmm_jones_1d` for the measured ladders.
+
+    For METAL CORNERS raise ``degree`` with one element per cell, or use
+    ``grade='geometric'`` with 8-12 elements per cell at degree 8-10;
+    Chebyshev grading only matters from 3 elements per cell up.  Measured on a
+    50 nm metal strip (eps -74+6i, 175 nm in a 370 nm period) 21 nm above a
+    metal mirror, TM, 1300 nm, error in the zeroth-order reflection against an
+    external reference: default (degree 16, 1 element) 1.4e-2; degree 80,
+    1 element 4.2e-4; Chebyshev degree 10 x 8 elements 1.0e-3; geometric
+    degree 8 x 12 elements 6.6e-6 (default floor, 52 pm here); an explicit
+    11 pm floor reads 1.1e-6 but sits inside the measured small-element
+    failure band and is refused unless ``allow_small_elements=True``.
+
+    LATERALLY UNIFORM LAYERS are cheap: an isotropic uniform layer takes its
+    modes from the one geometric eig every uniform medium on the grid shares,
+    and a run of consecutive uniform layers (with the half-spaces) is cascaded
+    elementwise as one S-matrix.  Exact up to the eigenvector gauge (measured
+    agreement with the per-layer dense eig: <= 5e-12 in the Jones; 13x faster
+    on a stack with 52 graded oxide sub-layers at degree 12, about 25x at
+    degree 20).
     """
 
     def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
@@ -3185,6 +3238,20 @@ class PMMStack:
         row 0 = incident ``E_x``, row 1 = incident ``E_y``; ``jones`` is the
         zeroth-order ``2x2`` reflection).
 
+        THE JONES CONVENTION.  ``jones`` is the zeroth-order TANGENTIAL lab
+        ``(E_x, E_y)`` field over the incident one: columns = incident
+        ``E_x`` / ``E_y``, rows = reflected ``E_x`` / ``E_y``, public
+        ``exp(-i w t)`` (conjugate it for ``exp(+i w t)``).  The reflection
+        phase is referenced at the TOP interface of the first layer (an air
+        layer of thickness ``d`` added on top multiplies it by
+        ``exp(2 i k0 cos(theta) d)``); :meth:`jones_transmission` is
+        referenced at the BOTTOM interface of the last layer.  For reflection
+        the ``E_x`` ratio is the p-polarized amplitude ratio (the same
+        impedance formula as s, so ``J_xx = J_yy`` at normal incidence on an
+        isotropic stack); for transmission the ``E_x`` ratio differs from the
+        p-polarized amplitude ratio by the ratio of the two media's
+        ``kz / n``.
+
         ``stabilize='slices'`` (device-geometry roadmap item 3b, 2026-06-10;
         opt-in, ~3x cost): the n_slices-consensus tripwire for PASSIVE-BUT-
         WRONG staircases.  An over-sliced taper whose walls collide can return
@@ -4128,7 +4195,16 @@ class PMMStack:
         a SHEARED layer -- the same LAB re-referencing: this is
         ``exp(+i k0 alpha_0 W)`` times the cascade's frame answer, which is the
         identity at NORMAL incidence (``alpha_0 = 0``, so ``P_0 = 1`` for any
-        walk) and a genuine phase at every oblique mount."""
+        walk) and a genuine phase at every oblique mount.
+
+        Reference planes: the transmitted phase is referenced at the BOTTOM
+        interface of the last layer (a layer of substrate material of
+        thickness ``d`` added at the bottom multiplies it by
+        ``exp(i k0 kz_sub d)``, ``kz_sub = sqrt(n_sub^2 - n_sup^2 sin^2
+        theta)``), the incident one at the top interface of the first layer
+        (an air layer on top multiplies it by ``exp(i k0 cos(theta) d)``).
+        The ``E_x`` entries are tangential-field ratios, which differ from the
+        p-polarized amplitude ratio by the ratio of the media's ``kz / n``."""
         m = self._modal
         if m is None:
             raise ValueError(
