@@ -3466,6 +3466,13 @@ _CONV_FACTOR_2AXIS = 1.25
 #: inside this range; outside it (or with successive changes of opposite sign)
 #: the sequence is ERRATIC and no extrapolated error is trusted.
 _CONV_EXPONENT_RANGE = (0.5, 4.0)
+#: Default ``rtol`` of the error-estimate verdict.
+_CONV_RTOL = 1e-2
+#: The LEGACY call form -- an additive ``bump=`` with no ``rtol`` and no
+#: ``estimate`` -- is judged exactly as releases up to 5.50 judged it: the
+#: largest absolute per-order efficiency change against ``atol`` alone, with
+#: their default ``atol``.
+_CONV_LEGACY_ATOL = 1e-3
 
 
 def _algebraic_exponent(n1, n2, n3, target, lo, hi):
@@ -3555,7 +3562,7 @@ def _convergence_vector(rung, keys):
     return np.concatenate(vals), np.concatenate(scales), n_eff
 
 
-def _convergence_report(rungs, ns, *, rtol, atol):
+def _convergence_report(rungs, ns, *, rtol, atol, legacy=False):
     """THE comparator of :func:`rcwa_convergence`, shared by its callable and
     :class:`RCWAStack` branches.
 
@@ -3580,7 +3587,9 @@ def _convergence_report(rungs, ns, *, rtol, atol):
       ``erratic``.
 
     ``converged`` is ``err_estimate <= rtol``, not erratic, and -- when
-    ``atol`` is given -- ``delta <= atol``."""
+    ``atol`` is given -- ``delta <= atol``.  ``legacy=True`` (the legacy call
+    form, see :func:`_convergence_args`) judges ``delta <= atol`` alone, as
+    releases up to 5.50 did; the estimate is still reported."""
     def _ratio(a, b):
         r = [nb / na for na, nb in zip(a, b) if int(na) > 0]
         return float(min(r)) if r else 1.0
@@ -3629,15 +3638,25 @@ def _convergence_report(rungs, ns, *, rtol, atol):
                 err, exponent = err_i, p_i
         err = max(err, 0.0)
         report.update(exponent=exponent, erratic=bool(erratic))
-    converged = (not erratic) and err <= rtol
-    if atol is not None:
-        converged = converged and delta <= atol
+    if legacy:
+        converged = delta <= atol
+    else:
+        converged = (not erratic) and err <= rtol
+        if atol is not None:
+            converged = converged and delta <= atol
     report.update(converged=bool(converged), err_estimate=float(err))
     return report
 
 
-def _convergence_args(fn_name, factor, bump, rtol, atol):
-    """Validate the step / tolerance arguments of :func:`rcwa_convergence`."""
+def _convergence_args(fn_name, factor, bump, rtol, atol, estimate=False):
+    """Validate the step / tolerance arguments of :func:`rcwa_convergence` and
+    return ``(rtol, atol, legacy)``.
+
+    ``legacy`` is the LEGACY call form: an additive ``bump=`` with ``rtol``
+    left unset and no ``estimate``.  It reproduces the verdict of releases up
+    to 5.50 exactly (``delta <= atol``, ``atol`` defaulting to 1e-3), so a call
+    written for them keeps its answer and its warnings.  Any other form takes
+    the error-estimate verdict with ``rtol`` defaulting to 1e-2."""
     if factor is not None and bump is not None:
         raise ValueError(
             f"{fn_name}: pass factor (geometric step) OR bump (additive step), "
@@ -3647,20 +3666,24 @@ def _convergence_args(fn_name, factor, bump, rtol, atol):
                          f"{bump!r}.")
     if factor is not None and not (float(factor) > 1.0):
         raise ValueError(f"{fn_name}: factor must be > 1, got {factor!r}.")
-    if not (float(rtol) > 0.0):
+    if rtol is not None and not (float(rtol) > 0.0):
         raise ValueError(f"{fn_name}: rtol must be > 0, got {rtol!r}.")
     if atol is not None and not (float(atol) >= 0.0):
         raise ValueError(f"{fn_name}: atol must be >= 0, got {atol!r}.")
+    legacy = bump is not None and rtol is None and not estimate
+    if legacy:
+        return None, (_CONV_LEGACY_ATOL if atol is None else atol), True
+    return (_CONV_RTOL if rtol is None else rtol), atol, False
 
 
 def _convergence_warn(report, rtol, atol, stacklevel):
     """The one ``NOT converged`` warning of :func:`rcwa_convergence`."""
     why = []
-    if report.get("erratic"):
+    if rtol is not None and report.get("erratic"):
         why.append("the three truncations do not converge algebraically "
                    "(successive changes turn around, or the local exponent "
                    "leaves [0.5, 4]), so no extrapolated error is trusted")
-    if report["err_estimate"] > rtol:
+    if rtol is not None and report["err_estimate"] > rtol:
         why.append(f"the estimated relative error of the top solve is "
                    f"{report['err_estimate']:.2e} > rtol={rtol:.1e}")
     if atol is not None and report["delta"] > atol:
@@ -3674,7 +3697,7 @@ def _convergence_warn(report, rtol, atol, stacklevel):
         f"order count -- geometrically, by x1.5 or x2.", stacklevel=stacklevel)
 
 
-def _rcwa_convergence_stack(stack, *, factor=None, bump=None, rtol=1e-2,
+def _rcwa_convergence_stack(stack, *, factor=None, bump=None, rtol=None,
                             atol=None, estimate=False, warn=True):
     """``rcwa_convergence`` for a configured :class:`RCWAStack`: solve at its
     current truncation and at a higher one (two higher ones with
@@ -3685,8 +3708,18 @@ def _rcwa_convergence_stack(stack, *, factor=None, bump=None, rtol=1e-2,
     kwarg, so it is raised in place and RESTORED in a ``finally``; a 2-D stack
     raises both axes.  Every concrete pixel / tensor cell is checked against
     the Fourier sampling bound of each higher truncation first, so the check
-    never compares against an aliased solve."""
-    _convergence_args("rcwa_convergence", factor, bump, rtol, atol)
+    never compares against an aliased solve.
+
+    ADAPTIVE RESOLUTION (``RCWAStack(asr=...)``) with ``eta='auto'``: the
+    stretch is a function of ``n_orders`` (it ramps from 0 at 5 to 1 at 15
+    orders), so rungs at different truncations would solve in different
+    bases and the change between them would mix a basis change into the
+    truncation change the estimate reads.  The stretch is therefore FROZEN
+    at the base rung's value for every rung of one check (``eta = 0``: the
+    plain basis throughout) and reported as ``asr_eta``; the base rung is
+    the stack's own solve either way."""
+    rtol, atol, legacy = _convergence_args("rcwa_convergence", factor, bump,
+                                           rtol, atol, estimate)
     if bump is None and factor is None:
         factor = _CONV_FACTOR_1AXIS if stack.is_1d else _CONV_FACTOR_2AXIS
     base_nox, base_noy = stack.nox, stack.noy
@@ -3722,26 +3755,39 @@ def _rcwa_convergence_stack(stack, *, factor=None, bump=None, rtol=1e-2,
         return (o, R, T, [("R", res.jones_reflection()),
                           ("T", res.jones_transmission())])
 
-    rungs = [_rung(stack.solve())]
+    base_asr = getattr(stack, "_asr", None)
+    asr_eta = None
+    if base_asr is not None:
+        from ._asr_stack import _resolved_eta
+        asr_eta = _resolved_eta(base_asr[1], base_nox)
     top = None
     try:
+        if base_asr is not None and base_asr[1] == "auto":
+            # one basis for every rung (eta = 0 is the plain basis)
+            stack._asr = None if asr_eta == 0.0 else (base_asr[0], asr_eta)
+        rungs = [_rung(stack.solve())]
         for nx, ny in trunc[1:]:
             stack.nox, stack.noy = nx, ny
             top = stack.solve()
             rungs.append(_rung(top))
     finally:
         stack.nox, stack.noy = base_nox, base_noy
+        if base_asr is not None:
+            stack._asr = base_asr
 
     def _label(nx, ny):
         return ({"n_orders": nx} if stack.is_1d
                 else {"n_orders": nx, "n_orders_y": ny})
 
     ns = [(nx,) if stack.is_1d else (nx, ny) for nx, ny in trunc]
-    report = _convergence_report(rungs, ns, rtol=rtol, atol=atol)
+    report = _convergence_report(rungs, ns, rtol=rtol, atol=atol,
+                                 legacy=legacy)
     report.update(n_orders_low=_label(*trunc[0]),
                   n_orders_high=_label(*trunc[-1]))
     if estimate:
         report["n_orders_mid"] = _label(*trunc[1])
+    if base_asr is not None:
+        report["asr_eta"] = asr_eta
     if warn and not report["converged"]:
         _convergence_warn(report, rtol, atol, stacklevel=4)
     return top, report

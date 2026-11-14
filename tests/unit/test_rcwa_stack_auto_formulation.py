@@ -2,10 +2,13 @@
 
 ``'auto'`` resolves per layer: ``'li'`` for a patterned isotropic layer of a
 1-D stack (``eps_cell``; a y-invariant ``shapes`` / ``segments`` list), ``'li'``
-on a 2-D stack only for a METALLIC layer that ``'li'`` supports, and
-``'laurent'`` for everything else (uniform and tensor layers, y-varying
-layers of a 1-D stack, dielectric 2-D layers, disks / ellipses, dispersive
-2-D layers, a traced JAX cell, an exact zero permittivity).  The resolved
+on a 2-D stack for every layer ``'li'`` supports (an ``eps_cell``; a list of
+axis-aligned rectangles), whatever its material, and ``'laurent'`` for
+everything else (uniform and tensor layers, y-varying layers of a 1-D stack,
+2-D disks / ellipses, a traced JAX cell, an exact zero permittivity).  The
+2-D rule was 'li' for METALLIC layers only on the 5.51 staging branch; the
+measurements that replaced it are in
+``docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md``.  The resolved
 value is ``layers[i].formulation``; the request is
 ``layers[i].formulation_requested``.
 
@@ -164,11 +167,15 @@ def test_resolution_table_1d():
 
 
 def test_resolution_table_2d():
-    assert _one(_s2(), eps_cell=_PILLAR) == ("laurent", "auto")
+    # 2-D: per SHAPE class, not per material (measured, 2026-11-14:
+    # docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md and
+    # tests/unit/test_rcwa_li_2d_crossed.py) -- every layer 'li' supports
+    # resolves to 'li', dielectric included
+    assert _one(_s2(), eps_cell=_PILLAR) == ("li", "auto")
     assert _one(_s2(), eps_cell=_METAL_PILLAR) == ("li", "auto")
     assert _one(_s2(), shapes=_RECT, eps_background=1.0) == ("li", "auto")
     assert _one(_s2(), shapes=_DIEL_RECT, eps_background=1.0) == (
-        "laurent", "auto")
+        "li", "auto")
     # a metal disk: 2-D 'li' takes axis-aligned rectangles only
     assert _one(_s2(), shapes=_DISK, eps_background=1.0) == (
         "laurent", "auto")
@@ -177,10 +184,13 @@ def test_resolution_table_2d():
                   size=(0.3e-6, 0.3e-6))]
     assert _one(_s2(), shapes=holes, eps_background=-20 + 2j) == (
         "li", "auto")
-    # dispersive 2-D metal: no per-wavelength factorization switch
+    # dispersive 2-D layers: the rule does not read the material, so it
+    # cannot switch inside a spectrum
     disp = [dict(_RECT[0], eps=lambda wl: -20 + 2j)]
-    assert _one(_s2(), shapes=disp, eps_background=1.0) == ("laurent", "auto")
-    assert _one(_s2(), eps_cell=lambda wl: _METAL_PILLAR) == (
+    assert _one(_s2(), shapes=disp, eps_background=1.0) == ("li", "auto")
+    assert _one(_s2(), eps_cell=lambda wl: _METAL_PILLAR) == ("li", "auto")
+    # an exact zero background: the inverse rule would read 1/0
+    assert _one(_s2(), shapes=_RECT, eps_background=0.0) == (
         "laurent", "auto")
     tens = np.broadcast_to(np.diag([2.0, 2.5, 2.0]).astype(complex),
                            (13, 13, 3, 3)).copy()
@@ -228,7 +238,10 @@ def test_builder_default_equals_explicit_li():
     assert h.layers[0].normal_cells is not None
 
 
-def test_2d_builder_dielectric_keeps_laurent_metal_takes_li():
+def test_2d_builder_takes_li_for_dielectric_and_metal():
+    """A 2-D builder resolves like ``add_layer``: per shape class, so a
+    rasterized dielectric pillar and a metal one both take 'li', and the
+    default call is the explicit 'li' call bit for bit (same route)."""
     def pillars(eps, **kw):
         st = RCWAStack(1e-6, period_y=1e-6, n_superstrate=1.0,
                        n_substrate=1.5, n_orders=2, n_orders_y=2)
@@ -237,8 +250,8 @@ def test_2d_builder_dielectric_keeps_laurent_metal_takes_li():
                                                  (0.4e-6, 0.35e-6), eps)],
                                eps_host=1.0, n_slices=2, **kw)
         return st.set_source(0.7e-6, theta=0.1, phi=0.2)
-    d, dl = pillars(4.0), pillars(4.0, formulation="laurent")
-    assert {L.formulation for L in d.layers} == {"laurent"}
+    d, dl = pillars(4.0), pillars(4.0, formulation="li")
+    assert {L.formulation for L in d.layers} == {"li"}
     assert _bits(d.solve()) == _bits(dl.solve())
     m = pillars(-20 + 2j)
     assert {L.formulation for L in m.layers} == {"li"}

@@ -565,6 +565,34 @@ def _normalize_formulation(fn_name, formulation):
     return f
 
 
+def _segment_walls(period, widths):
+    """THE segment validator of the library (``PMMStack``'s
+    :func:`lumenairy.elements.pmm._core._segment_walls`), shared by
+    ``RCWAStack.add_layer(segments=)``.  Imported at call time: the pmm package
+    imports this one while it loads."""
+    from ..pmm._core import _segment_walls as _walls
+    return _walls(period, widths)
+
+
+def _host_array_or_none(x):
+    """``x`` read back as a host NumPy array, or ``None`` when it has no
+    concrete value.
+
+    The one host-read guard of this module (the eig-dedup key, the ``'li'``
+    contrast test, the ``'auto'`` resolution's permittivity read and the
+    out-of-plane tensor probe go through it).  The case it exists for is a JAX
+    tracer under ``jax.grad`` / ``jax.jit``: reading it raises
+    ``TracerArrayConversionError`` or ``ConcretizationTypeError``, both
+    subclasses of ``TypeError`` (checked on jax 0.11), so the handler names
+    ``(TypeError, ValueError)`` and needs no jax import.  Every caller treats
+    ``None`` conservatively: no eigenmode dedup, ``'laurent'`` for ``'auto'``,
+    the general (out-of-plane) cascade."""
+    try:
+        return np.asarray(to_numpy(x))
+    except (TypeError, ValueError):
+        return None
+
+
 def _li_cell_contrast(cell, *, traced_ok=True):
     """Does an isotropic cell carry contrast, i.e. does the ``'li'`` rule build
     its inverse-rule blocks for it?  ``False`` for a cell uniform to ``1e-12``
@@ -582,12 +610,12 @@ def _li_cell_contrast(cell, *, traced_ok=True):
 
     A traced cell cannot be inspected: ``traced_ok=True`` returns ``None`` for
     it, ``traced_ok=False`` lets the host read raise."""
-    try:
+    if traced_ok:
+        e_np = _host_array_or_none(cell)
+        if e_np is None:
+            return None
+    else:
         e_np = np.asarray(to_numpy(cell))
-    except Exception:
-        if not traced_ok:
-            raise
-        return None
     scale = max(1.0, float(np.max(np.abs(e_np))))
     return bool(float(np.max(np.abs(e_np - e_np.flat[0]))) > 1e-12 * scale)
 
@@ -601,9 +629,12 @@ def _concrete_eps_values(values):
             continue
         if callable(v):
             return None
+        a = _host_array_or_none(v)
+        if a is None:
+            return None
         try:
-            out.append(np.asarray(to_numpy(v), dtype=_C).ravel())
-        except Exception:
+            out.append(np.asarray(a, dtype=_C).ravel())
+        except (TypeError, ValueError):       # not a number: not inspectable
             return None
     return np.concatenate(out) if out else np.zeros(0, dtype=_C)
 
@@ -634,14 +665,29 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
       :class:`RCWAYAverageWarning` documents); a ``shapes`` list -> ``'li'``
       when it is y-invariant (full-``period_y`` rectangles), else
       ``'laurent'``;
-    * 2-D stack: ``'li'`` only for a METALLIC layer (``Re(eps) < 0`` somewhere
-      in the cell, the shapes or the background) that ``'li'`` supports (an
-      ``eps_cell``; a ``shapes`` list of axis-aligned rectangles); otherwise
-      ``'laurent'``.  A dispersive (callable) 2-D layer -> ``'laurent'``: a
-      per-wavelength choice would switch the factorization inside a spectrum.
+    * 2-D stack: ``'li'`` for every layer ``'li'`` supports -- an ``eps_cell``
+      (any pattern, dispersive included) and a ``shapes`` list of axis-aligned
+      rectangles -- whatever its material; ``'laurent'`` for a ``shapes`` list
+      holding a disk or an ellipse (``'li'`` takes rectangles only).  The rule
+      is per SHAPE class, not per material: measured against the pure 2-D
+      polynomial modal solver on dielectric, weak-metal and strong-metal
+      cells, Li's rule is the more accurate of the two at the truncations a
+      2-D stack can afford on every rectangle cell and every rasterized cell
+      measured, and much more accurate on high-index dielectrics and strong
+      metals (``docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md``).
+      The 5.51 staging rule ('li' for metallic layers only) left high-index
+      dielectric pillars on the direct rule, 15x-60x less accurate.
 
     ``eps_values`` (builders) is the list of concrete permittivities of a
-    rasterised layer, used instead of ``cell``."""
+    rasterised layer, used instead of ``cell``.
+
+    A DISPERSIVE (``wl -> value``) layer left at ``'auto'`` is resolved here
+    provisionally (the cell cannot be evaluated without a wavelength) and
+    AGAIN at every wavelength of :meth:`RCWAStack.solve_vs_wavelength`, by
+    this same function on the materialised values
+    (:meth:`RCWAStack._auto_at_wavelength`): the rule is one function of the
+    physical layer, however the layer is supplied and whatever else the sweep
+    holds."""
     f = _normalize_formulation(fn_name, requested)
     if f != "auto":
         return f
@@ -653,9 +699,10 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
         if eps_values is not None:
             vals = _concrete_eps_values(eps_values)
         elif callable(cell):
-            # dispersive cell: inspected per wavelength only, so the 1-D stack
-            # takes 'li' and the 2-D stack keeps the direct rule
-            return "li" if is_1d else "laurent"
+            # dispersive cell: inspected per wavelength only; the rule does
+            # not depend on the material, so no factorization switch can
+            # happen inside a spectrum
+            return "li"
         elif is_jax_array(cell):
             # A JAX cell -- traced or not -- keeps the direct rule, so a
             # function evaluated eagerly and under jax.grad / jax.jit solves
@@ -666,8 +713,8 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
             vals = _concrete_eps_values([cell])
             if vals is None:                  # not inspectable
                 return "laurent"
-        if vals is None:
-            return "li" if is_1d else "laurent"
+        if vals is None:                      # builders: a dispersive value
+            return "li"
         if vals.size and float(np.min(np.abs(vals))) < 1e-12:
             return "laurent"
         if is_1d:
@@ -675,8 +722,7 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
                 c = np.asarray(to_numpy(cell))
                 if c.ndim >= 2 and _cell_y_spread(c) != 0.0:
                     return "laurent"
-            return "li"
-        return "li" if bool(np.any(vals.real < 0.0)) else "laurent"
+        return "li"
     if kind == "shapes":
         try:
             if is_1d:
@@ -688,14 +734,13 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
                     return "laurent"
                 return "li"
             if _li_rect_shapes_problem(shapes) is not None:
-                return "laurent"
-            vals = _concrete_eps_values(
-                [eps_background] + [sh.get("eps") for sh in shapes])
-            if vals is None:                  # dispersive 2-D layer
-                return "laurent"
+                return "laurent"              # a disk / ellipse: no 2-D 'li'
+            # (a zero shape eps is refused by the shapes validation)
+            if callable(eps_background):
+                return "li"
             if abs(_C(eps_background)) < 1e-12:
                 return "laurent"
-            return "li" if bool(np.any(vals.real < 0.0)) else "laurent"
+            return "li"
         except (KeyError, IndexError, TypeError, ValueError, AttributeError):
             # malformed shape list: the shapes validation that follows names
             # the problem; the resolution does not try to
@@ -798,15 +843,15 @@ def _layer_offplane_or_traced(data):
     if _tensor_offplane_present(data):
         return True
     if is_jax_array(data):
-        try:
-            return _tensor_offplane_present(np.asarray(to_numpy(data)))
-        except Exception:
+        host = _host_array_or_none(data)
+        if host is None:
             return True                       # tracer -> general path
+        return _tensor_offplane_present(host)
     return False
 
 
 def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
-                     bump=None, rtol=1e-2, atol=None, estimate=False,
+                     bump=None, rtol=None, atol=None, estimate=False,
                      warn=True, **kwargs):
     """Run an RCWA ``solver`` at the requested harmonic count AND a higher one,
     and report whether the answer has converged in the retained order count.
@@ -892,16 +937,24 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
     bump : int, optional
         The ADDITIVE step instead (each order parameter ``+ bump``); the solve
         it compares against is then exactly the one earlier releases used
-        (their default was ``bump=4``).  The verdict still follows ``rtol`` /
-        ``atol`` above, with ``f = N_hi / N``.  Mutually exclusive with
-        ``factor``.
+        (their default was ``bump=4``).  Mutually exclusive with ``factor``.
+        LEGACY CALL FORM: ``bump`` given with ``rtol`` left unset (and no
+        ``estimate``) keeps the verdict of releases up to 5.50 exactly --
+        ``converged = delta <= atol``, ``atol`` defaulting to ``1e-3`` -- and
+        therefore their warnings too; the error estimate is still in the
+        report.  Pass ``rtol`` as well to have the additive step judged by the
+        estimate (with ``f = N_hi / N``).  The legacy verdict can certify a
+        wrong answer: on a lossless Si lamellar grating ``bump=4,
+        atol=1e-3`` calls ``N`` = 20 / 40 / 60 converged while the estimate
+        says 7.1e-2 / 4.0e-2 / 2.8e-2 and the true error at 60 is 1.07e-2.
     rtol : float, optional
         Tolerance on the estimated RELATIVE error of the top solve (default
-        ``1e-2``).
+        ``1e-2``; not applied in the legacy call form above).
     atol : float, optional
         Additionally require the largest absolute per-order efficiency change
         to be ``<= atol`` (the test earlier releases applied alone, with
-        ``1e-3``).  Default ``None``: not applied.
+        ``1e-3``).  Default ``None``: not applied (``1e-3``, alone, in the
+        legacy call form).
     estimate : bool, optional
         Third solve and per-quantity local exponent (see above).  Default
         ``False``.
@@ -933,7 +986,8 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
         return _rcwa_convergence_stack(solver, factor=factor, bump=bump,
                                        rtol=rtol, atol=atol,
                                        estimate=estimate, warn=warn)
-    _convergence_args("rcwa_convergence", factor, bump, rtol, atol)
+    rtol, atol, legacy = _convergence_args("rcwa_convergence", factor, bump,
+                                           rtol, atol, estimate)
     for p in order_params:
         if p not in kwargs:
             raise ValueError(
@@ -958,10 +1012,11 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
     def _rung(out):
         amps = []
         for x in tuple(out)[3:]:
-            try:
-                a = np.asarray(to_numpy(x))
-            except Exception:
-                continue
+            # no guard: the solves here are concrete, and an output that
+            # cannot be read must raise rather than drop out of the comparison
+            # (a non-array output reads as an object array and is skipped by
+            # the complex-amplitude test below, by design)
+            a = np.asarray(to_numpy(x))
             if np.iscomplexobj(a) and a.size and len(amps) < 2:
                 amps.append(("R" if not amps else "T", a))
         return (out[0], out[1], out[2], amps)
@@ -969,7 +1024,7 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
     report = _convergence_report(
         [_rung(o) for o in outs],
         [tuple(lev[p] for p in params) for lev in levels],
-        rtol=rtol, atol=atol)
+        rtol=rtol, atol=atol, legacy=legacy)
     report.update(n_orders_low=levels[0], n_orders_high=levels[-1])
     if estimate:
         report["n_orders_mid"] = levels[1]
@@ -1745,7 +1800,7 @@ class RCWAResult:
         Only the depth rule (``nz_per_layer``) is approximate there.
 
         A layer solved with ``formulation='li'`` (the default resolves 1-D
-        patterned layers and 2-D metallic ones to it) is instead attributed
+        patterned layers and every 2-D layer it supports to it) is instead attributed
         the POYNTING-FLUX DIFFERENCE between its two faces -- by Poynting's
         theorem that IS its absorbed power (the lateral flux cancels over a
         period) -- evaluated exactly from the retained modal fields, with no
@@ -2177,7 +2232,13 @@ class RCWAStack:
         * ``formulation`` -- the factorization that RUNS, ``'laurent' | 'li'``
           (``'li'`` only on iso layers, and shapes layers -- on a 2-D stack,
           rectangles only); never ``'auto'``, which :meth:`add_layer`
-          resolves when the layer is added;
+          resolves when the layer is added.  For a DISPERSIVE layer left at
+          ``'auto'`` this add-time value is provisional (the cell cannot be
+          evaluated without a wavelength): :meth:`solve_vs_wavelength`
+          applies the same rule to the materialised values at each
+          wavelength, so a y-varying cell of a 1-D stack or a layer holding
+          an exact zero runs ``'laurent'`` exactly as its concrete twin
+          does;
         * ``formulation_requested`` -- what was asked, ``'auto' | 'laurent' |
           'li'`` (``'fff'`` reads ``'li'``; a builder records its own
           argument on every layer it adds);
@@ -2296,16 +2357,16 @@ class RCWAStack:
         1-D stack, ``eps_cell`` varying along y         ``'laurent'``
         1-D stack, ``shapes``/``segments`` (y-flat)     ``'li'``
         1-D stack, ``shapes`` varying along y           ``'laurent'``
-        2-D stack, METALLIC ``eps_cell``                ``'li'``
-        2-D stack, METALLIC rectangle ``shapes``        ``'li'``
-        2-D stack, any other layer (dielectric; disks,  ``'laurent'``
-        ellipses; dispersive)
+        2-D stack, ``eps_cell`` (any material)          ``'li'``
+        2-D stack, rectangle ``shapes`` (any material)  ``'li'``
+        2-D stack, ``shapes`` with a disk / ellipse     ``'laurent'``
         a JAX ``eps_cell`` (traced or not)              ``'laurent'``
         an exact zero permittivity in the cell or the   ``'laurent'``
         background
         ==============================================  ==============
 
-        "Metallic" means ``Re(eps) < 0`` somewhere in the layer.  The value
+        Dispersive layers resolve like concrete ones (the rule never reads
+        the material, so it cannot switch inside a spectrum).  The value
         that RAN is ``layers[i].formulation``; the request is
         ``layers[i].formulation_requested``.  Pass ``formulation='laurent'``
         to reproduce results computed with earlier releases, whose default it
@@ -2329,11 +2390,42 @@ class RCWAStack:
         (at ``n_orders`` 50 the direct rule returns the wrong sign of
         ``Re(r)``), while TE (``E_y``, tangential to every wall of a 1-D
         grating) is the same under both rules to round-off (measured 4.5e-13).
-        The default is NOT ``'li'`` on 2-D dielectric layers: there the two
-        rules differ by a few 1e-3 at practical truncations and the 2-D
-        single-layer functions default to ``'laurent'``, so those results stay
-        where they were; pass ``'li'`` explicitly for them, and for a
-        dispersive metal layer on a 2-D stack.  ``'li'`` does not trace a JAX
+        On a 2-D stack the rule is per SHAPE class, not per material,
+        because that is what was measured (zeroth-order Jones error against
+        the pure 2-D polynomial modal solver ``PMM2DStackPure``, a 300 nm
+        square or disk of 60-200 nm in a 600 nm cell at 1310 nm;
+        ``docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md``):
+
+        ================================  ===========  ===========  =======
+        cell (normal incidence)           'laurent'    'li'         N
+        ================================  ===========  ===========  =======
+        square, eps 4                     2.9e-3       7.2e-5       20
+        square, eps 12                    1.77e-2      2.8e-4       16
+        checkerboard, eps 2.25            1.25e-3      8.5e-5       14
+        square, eps -70+5i (on a mirror)  2.8e-1       1.4e-2       24
+        square, eps -10+1i                3.3e-2       1.7e-2       20
+        square, eps -3+1i                 1.1e-3       2.0e-3       16
+        disk, eps 12                      1.85e-2      3.2e-3       16
+        disk, eps -70+5i (on a mirror)    2.1e-1       1.8e-1       16
+        disk, eps -10+1i                  3.2e-2       2.0e-2       16
+        disk, eps -3+1i                   1.7e-3       1.7e-3       16
+        ================================  ===========  ===========  =======
+
+        (On the disks 'laurent' is the ANALYTIC disk and 'li' a 1024 x 1024
+        raster of it, Li's staircase.  The reference's own uncertainty is
+        3e-4 .. 6e-3 on the metal cells, 4e-5 .. 3e-4 on the dielectric
+        ones.)  Oblique incidence (0.3 rad, both polarizations) orders the
+        rules the same way.  The one cell where Laurent's rule overtakes is
+        the weak metal (``eps`` near -3, where the corner of a rectangle sits
+        at the border of the irregular field singularity of Li and Granet,
+        J. Opt. Soc. Am. A 28, 738 (2011)): ``'li'`` leads below
+        ``n_orders`` of about 14 and trails above it (at 24: 1.8e-3 against
+        1.6e-4), both within 2e-3 of a reference uncertain to 4e-4.  On the
+        metal cells both rules converge slowly, and erratically on the
+        strong metal below ``n_orders`` 20 (``'li'`` 3x-50x closer on every
+        rung there).  The 2-D single-layer
+        functions (``rcwa_efficiency_2d`` ...) keep their ``'laurent'``
+        default.  ``'li'`` does not trace a JAX
         ``eps_cell`` (its contrast test reads the cell on the host), so a JAX
         cell resolves to ``'laurent'`` -- a concrete one too, so that a
         function evaluated eagerly and under ``jax.grad`` / ``jax.jit`` sees
@@ -2364,8 +2456,13 @@ class RCWAStack:
         exactly (direct rule along y) into ``Cxx``; ``Cyy`` swaps the axes.
         It is the ``S -> inf`` limit of the ``eps_cell`` 'li' path on a raster
         of the same cell.  Disks, ellipses and rotated rectangles raise (Li's
-        rule for curved shapes is future work); a band whose ``[[1/eps]]`` is
-        singular raises ``LinAlgError``.  Uniform and tensor layers accept
+        rule for curved shapes is future work; a disk rasterized into an
+        ``eps_cell`` takes ``'li'`` as Li's staircase and measured closer to
+        the reference than the analytic disk under ``'laurent'`` -- table
+        above); a band whose ``[[1/eps]]`` is singular raises
+        ``LinAlgError``.  An EXPLICIT ``'li'`` on a 2-D cell with sharp
+        corners of a weak metal (``eps`` near -3) is measured less accurate
+        than ``'laurent'`` above ``n_orders`` of about 14 (table above).  Uniform and tensor layers accept
         ``'auto'`` and ``'laurent'`` only.
 
         ``eps_cell_normal`` (audit W9, ``formulation='li'`` only): the
@@ -2655,23 +2752,25 @@ class RCWAStack:
             widths.append(w)
             epss.append(e)
         w = np.asarray(widths, dtype=float)
-        if not np.all(np.isfinite(w)) or np.any(w <= 0.0):
+        if not np.all(np.isfinite(w)):
+            # (the shared validator's comparisons are False for a NaN)
             raise ValueError(
                 f"add_layer: every segment width FRACTION must be finite and "
                 f"> 0 (got {list(w)}).")
-        if abs(float(w.sum()) - 1.0) > 1e-6:
+        # THE segment validator of the library (PMMStack's): fractions > 0,
+        # summing to 1 within 1e-6, walls normalized to land EXACTLY on 0 and
+        # the period (here the unit period: fractions).
+        try:
+            xw = _segment_walls(1.0, w)
+        except ValueError as e:
             raise ValueError(
-                f"add_layer: segment width FRACTIONS must sum to 1 within 1e-6 "
-                f"(got {float(w.sum()):.6g}).  They are fractions of the "
-                f"period, not absolute widths.")
+                f"add_layer: {e}  They are fractions of the period, not "
+                f"absolute widths.") from None
         if len(epss) == 1:
             e = epss[0]
             self.add_layer(thickness, eps=e)
             self._layers[-1].formulation_requested = f_req
             return self
-        # Walls normalized to land EXACTLY on 0 and the period.
-        edges = np.concatenate([[0.0], np.cumsum(w)])
-        xw = edges / edges[-1]
         Px, Py = self.period_x, self.period_y
         shapes = [dict(shape="rectangle", eps=epss[i],
                        center=(float(0.5 * (xw[i] + xw[i + 1]) * Px), 0.5 * Py),
@@ -2709,9 +2808,9 @@ class RCWAStack:
             Factorization handed to :meth:`add_layer` for every ``(Sx, Sy)``
             slice (audit W9).  ``'auto'`` (the default) is resolved by
             :meth:`add_layer` slice by slice, with its table: on a 1-D stack a
-            y-invariant cell is ``'li'``, on a 2-D stack a cell is ``'li'``
-            when it is metallic, and a slice returned with its companion pair
-            is ``'li'``.  Pass ``'laurent'`` to reproduce earlier releases.
+            y-invariant cell is ``'li'``, on a 2-D stack every cell is
+            ``'li'`` (whatever its material), and a slice returned with its
+            companion pair is ``'li'``.  Pass ``'laurent'`` to reproduce earlier releases.
             ``'li'`` is what makes ``raster='harmonic'`` in the tapered builders
             do anything -- the companion pair it emits is read only by the
             inverse Toeplitz.  Scalar (uniform) and ``(Sx, Sy, 3, 3)`` tensor
@@ -2790,8 +2889,8 @@ class RCWAStack:
     def _builder_formulation(self, fn_name, formulation, eps_values):
         """Resolve a tapered builder's ``formulation`` ONCE per call, from the
         concrete permittivities it rasterises (``'auto'`` -> the
-        :meth:`add_layer` rule for an isotropic cell: ``'li'`` on a 1-D stack,
-        ``'li'`` on a 2-D stack only when a value is metallic).  Returns
+        :meth:`add_layer` rule for an isotropic cell: ``'li'`` on a 1-D stack and
+        on a 2-D stack, ``'laurent'`` for an exact zero or a JAX value).  Returns
         ``(requested, resolved)``."""
         f_req = _normalize_formulation(fn_name, formulation)
         return f_req, _resolve_formulation(
@@ -2851,9 +2950,8 @@ class RCWAStack:
             Factorization the emitted slices are solved with (audit W9).
             ``'auto'`` (the default) is resolved ONCE for the whole call from
             ``eps_ridge`` / ``eps_groove`` with the :meth:`add_layer` rule for
-            an isotropic cell: ``'li'`` on a 1-D stack; on a 2-D stack ``'li'``
-            only when one of them is metallic (``Re(eps) < 0``), else
-            ``'laurent'``.  Pass ``'laurent'`` to reproduce earlier releases.
+            an isotropic cell: ``'li'`` on a 1-D and on a 2-D stack, whatever
+            the material (``'laurent'`` for an exact zero).  Pass ``'laurent'`` to reproduce earlier releases.
             ``'li'`` is what activates ``raster='harmonic'``; the ``raster``
             default stays ``'hard'``.
 
@@ -3074,9 +3172,9 @@ class RCWAStack:
         ``raster`` is ``'hard'`` (default, bit-preserved), ``'area'`` or
         ``'harmonic'``, and ``formulation`` is ``'auto'`` (default),
         ``'laurent'`` or ``'li'``, exactly as in :meth:`add_tapered_grating`
-        -- on this 2-D builder ``'auto'`` is ``'li'`` only when a pillar or
-        the host is metallic (``Re(eps) < 0``), so dielectric pillar layers
-        keep the direct rule.  Each pillar
+        -- on this 2-D builder ``'auto'`` is ``'li'`` for dielectric and
+        metal pillars alike (the 2-D rule is per shape class; see
+        :meth:`add_layer`).  Each pillar
         occupies the HALF-OPEN box
         ``[cx - wx/2, cx + wx/2) x [cy - wy/2, cy + wy/2)`` (audit W8), and the
         rectangle is SEPARABLE so the ``'area'`` weight is the exact product of
@@ -3327,6 +3425,22 @@ class RCWAStack:
                 arrs.append(L.data)
         return _passive_media(eps_sup, eps_sub, *arrs)
 
+    def _auto_at_wavelength(self, layer, kind, **concrete):
+        """The factorization of a DISPERSIVE layer at one wavelength: an
+        explicit request as stored; ``'auto'`` resolved AGAIN, by
+        :func:`_resolve_formulation`, from the materialised (concrete) values,
+        so the layer runs exactly the rule the same layer given concretely
+        would run (a y-varying cell of a 1-D stack: ``'laurent'``; an exact
+        zero: ``'laurent'``) -- independent of the other wavelengths of a
+        sweep.  The add-time resolution of a callable is only provisional: it
+        cannot evaluate the cell."""
+        if (getattr(layer, "formulation_requested", None) != "auto"
+                or layer.normal_cells is not None):
+            return layer.formulation
+        return _resolve_formulation(
+            "solve_vs_wavelength", "auto", kind=kind, is_1d=self.is_1d,
+            period_y=self.period_y, **concrete)
+
     def _materialized_layers(self, wl, layers=None):
         """Concrete layer list at one wavelength: every DISPERSIVE
         (``wl -> value``) layer spec is resolved and validated; non-dispersive
@@ -3353,7 +3467,8 @@ class RCWAStack:
                 _warn_if_y_averaged("solve_vs_wavelength", cell, self.noy,
                                     strict_y=not self.is_1d, stacklevel=5)
                 out.append(_RCWALayer(L.thickness, "iso", cell,
-                                      formulation=L.formulation,
+                                      formulation=self._auto_at_wavelength(
+                                          L, "iso", cell=cell),
                                       formulation_requested=L.formulation_requested))
             elif L.kind == "shapes":
                 bg, shapes = L.data
@@ -3367,14 +3482,16 @@ class RCWAStack:
                                            self.period_y, self.noy,
                                            strict_y=not self.is_1d,
                                            stacklevel=5)
-                if L.formulation == "li" and self.is_1d:
+                f = self._auto_at_wavelength(L, "shapes", shapes=sh,
+                                             eps_background=bgv)
+                if f == "li" and self.is_1d:
                     # the per-wavelength eps values are only known now
                     _check_li_shapes("solve_vs_wavelength", sh, self.period_y,
                                      bgv)
-                elif L.formulation == "li":
+                elif f == "li":
                     _check_li_shapes_2d("solve_vs_wavelength", sh, bgv)
                 out.append(_RCWALayer(L.thickness, "shapes", (bgv, sh),
-                                      formulation=L.formulation,
+                                      formulation=f,
                                       formulation_requested=L.formulation_requested))
             else:
                 tcell = np.asarray(L.data(wl), dtype=_C)
@@ -3820,18 +3937,21 @@ class RCWAStack:
                     complex(eps_bg),
                     tuple(tuple(sorted((k, repr(v)) for k, v in s.items()))
                           for s in shapes))
-        try:                                   # iso / tensor: hash the cell
-            arr = np.ascontiguousarray(to_numpy(data))
-            # The INVERSE-RULE companion pair is part of the eigenproblem (audit
-            # W9): two layers with the SAME eps_cell but different companions
-            # factorize differently, so the pair must enter the key or the second
-            # one would silently reuse the first one's modes.
-            comp = ()
-            for c in (getattr(layer, "normal_cells", None) or ()):
-                ca = np.ascontiguousarray(to_numpy(c))
-                comp += (ca.shape, str(ca.dtype), ca.tobytes())
-        except Exception:                      # traced array -> no dedup
+        arr = _host_array_or_none(data)        # iso / tensor: hash the cell
+        if arr is None:                        # traced array -> no dedup
             return None
+        arr = np.ascontiguousarray(arr)
+        # The INVERSE-RULE companion pair is part of the eigenproblem (audit
+        # W9): two layers with the SAME eps_cell but different companions
+        # factorize differently, so the pair must enter the key or the second
+        # one would silently reuse the first one's modes.
+        comp = ()
+        for c in (getattr(layer, "normal_cells", None) or ()):
+            ca = _host_array_or_none(c)
+            if ca is None:
+                return None
+            ca = np.ascontiguousarray(ca)
+            comp += (ca.shape, str(ca.dtype), ca.tobytes())
         return (kind, getattr(layer, "formulation", "laurent"), arr.shape,
                 str(arr.dtype), arr.tobytes()) + comp
 

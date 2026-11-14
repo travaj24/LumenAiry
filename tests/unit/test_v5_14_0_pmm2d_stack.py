@@ -120,8 +120,17 @@ def test_two_patterned_layers_vs_rcwastack():
         assert abs(float(R1[row].sum() + T1[row].sum()) - 1.0) < 2e-2
     rc = RCWAStack(_P, period_y=_P, n_substrate=1.5, n_superstrate=1.0,
                    n_orders=4, n_orders_y=4)
-    rc.add_layer(0.15e-6, eps_cell=np.kron(cell_a, np.ones((5, 5))))
-    rc.add_layer(0.10e-6, eps_cell=np.kron(cell_b, np.ones((5, 5))))
+    # The hybrid engine is compared with RCWA under the same (direct) rule.
+    # Zeroth-order T (x / y incidence), measured 2026-11-14: hybrid 0.37732 /
+    # 0.42510; RCWA n_orders 4 'laurent' 0.37972 / 0.43063, 'li' 0.38004 /
+    # 0.45118; the factorization-free pure engine (n_modes 5 / 6) 0.38026 /
+    # 0.45000 and 0.38036 / 0.45026.  'li' ('auto' since 2026-11-14) is the
+    # closest to the pure engine; the hybrid's 2.5e-2 in y is its own
+    # direct-rule error, so this cross-engine check pins 'laurent'.
+    rc.add_layer(0.15e-6, eps_cell=np.kron(cell_a, np.ones((5, 5))),
+                 formulation="laurent")
+    rc.add_layer(0.10e-6, eps_cell=np.kron(cell_b, np.ones((5, 5))),
+                 formulation="laurent")
     res = rc.set_source(_WL, theta=0.0).solve()
     o2, R2, T2 = res.efficiencies()
     m1, m2 = _o0(o1), _o0(o2)

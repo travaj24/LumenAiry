@@ -190,15 +190,20 @@ def test_r2v_rcwa_jones_2d_lossy_cross_cell():
 def test_r2v_rcwastack_two_patterned_layers_and_a_spacer():
     """RCWAStack (JAX): cross 6.25 (t on its +x half-arm) | spacer 2.1 |
     lossy cross 3.0+0.2j (0.5 t), n_orders 3 (7 x 7 = 49 orders), normal incidence.  ON
-    5.2e-10 (Windows), OFF 0.21.  Bars 1e-7 and 1e-2."""
+    5.2e-10 (Windows), OFF 0.21.  Bars 1e-7 and 1e-2.  The factorization is
+    pinned to 'laurent': 'auto' gives the JAX cell 'laurent' and the NumPy
+    cell of the finite-difference side 'li' on a 2-D stack (2026-11-14), and
+    the check compares ONE function."""
     from lumenairy.elements.rcwa import RCWAStack
 
     def f(t, xp):
         st = RCWAStack(1.3, period_y=1.3, n_superstrate=1.0, n_substrate=1.5,
                        n_orders=3, n_orders_y=3)
-        st.add_layer(0.2, eps_cell=_cross(6.25 + 0j, xp, t))
+        st.add_layer(0.2, eps_cell=_cross(6.25 + 0j, xp, t),
+                     formulation="laurent")
         st.add_layer(0.1, eps=2.1)
-        st.add_layer(0.15, eps_cell=_cross(3.0 + 0.2j, xp, 0.5 * t))
+        st.add_layer(0.15, eps_cell=_cross(3.0 + 0.2j, xp, 0.5 * t),
+                     formulation="laurent")
         st.set_source(1.0, theta=0.0, phi=0.0)
         _o, R, T = st.solve().efficiencies()
         return xp.concatenate([xp.ravel(R), xp.ravel(T)])
@@ -302,7 +307,8 @@ def test_r2v_a_symmetry_keeping_parameter_is_exact_with_the_rule_on_and_off():
         st = RCWAStack(1.3, period_y=1.3, n_superstrate=1.0, n_substrate=1.5,
                        n_orders=3, n_orders_y=3)
         st.add_layer(0.2, eps_cell=_cross(6.25 + 0j, xp, t,
-                                          dirn=_CROSS.astype(float)))
+                                          dirn=_CROSS.astype(float)),
+                     formulation="laurent")      # one function for AD and FD
         st.set_source(1.0, theta=0.0, phi=0.0)
         _o, R, T = st.solve().efficiencies()
         return xp.concatenate([xp.ravel(R), xp.ravel(T)])
@@ -337,9 +343,12 @@ def _uniform_over_cross(theta, phi, eps_u):
     def f(t, xp):
         st = RCWAStack(1.3, period_y=1.3, n_superstrate=1.0, n_substrate=1.5,
                        n_orders=3, n_orders_y=3)
+        # 'laurent' on both sides: 'auto' resolves the JAX cell to
+        # 'laurent' and the NumPy cell to 'li' on a 2-D stack (2026-11-14)
         st.add_layer(0.25, eps_cell=xp.asarray(np.full((_S, _S), eps_u))
-                     + t * xp.asarray(_RND0))
-        st.add_layer(0.2, eps_cell=_cross(4.0 + 0j, xp))
+                     + t * xp.asarray(_RND0), formulation="laurent")
+        st.add_layer(0.2, eps_cell=_cross(4.0 + 0j, xp),
+                     formulation="laurent")
         st.set_source(1.0, theta=theta, phi=phi)
         _o, R, T = st.solve().efficiencies()
         return xp.concatenate([xp.ravel(R), xp.ravel(T)])
