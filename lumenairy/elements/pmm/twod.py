@@ -102,6 +102,7 @@ from ._core import (
     _propagation_smatrix,
     _propagation_star,
     _redheffer_star,
+    _safe_lam,
     _stabilize_scalar,
     _StabilizeScanExhausted,
 )
@@ -680,7 +681,7 @@ def _assemble_2d(ax, ay, eps_tile, k0):
 # =========================================================================== #
 
 def _inv_lam(lam):
-    safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
+    safe = _safe_lam(lam)
     return 1.0 / safe
 
 

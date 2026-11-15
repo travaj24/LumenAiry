@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from ._core import _safe_lam
+
 _C = np.complex128
 
 __all__ = ["_pmm_stack2d_solve_jax"]
@@ -182,7 +184,7 @@ def _pmm_stack2d_solve_jax(stack):
     kyv = ky0 + jnp.asarray(order_y) * (wl_t / stack.period_y)
 
     def _inv_lam(lam):
-        safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
+        safe = _safe_lam(lam, jnp)
         return 1.0 / safe
 
     def _kz_fwd(eps, kx, ky):

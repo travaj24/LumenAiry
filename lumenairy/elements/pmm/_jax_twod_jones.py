@@ -77,6 +77,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ._core import _safe_lam
 from ._jax_twod import (
     _host_incidence_guard,
     _proj_sandwich_jnp,
@@ -198,7 +199,7 @@ def _pmm_jones_2d_cell_jax(period_x, period_y, eps_tensor_cell, region_layout,
 
     # ---- isotropic half-space modes (analytic Rayleigh, W = I) --------------
     def _inv_lam(lam):
-        safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
+        safe = _safe_lam(lam, jnp)
         return 1.0 / safe
 
     def _kz_fwd(eps, kx, ky):

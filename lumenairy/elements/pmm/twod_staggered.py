@@ -364,6 +364,7 @@ from ._core import (
     _interface_smatrix,
     _propagation_smatrix,
     _redheffer_star,
+    _safe_lam,
 )
 
 # Tensor-entry guards shared with the hybrid 2-D Jones solver (the RELATIVE
@@ -3971,7 +3972,7 @@ class Granet2DTransverseE:
 # decay-branch helpers (public exp(-i w t))
 # =========================================================================== #
 def _inv_lam(lam, xp=np):
-    safe = xp.where(xp.abs(lam) < 1e-12, 1e-12, lam)
+    safe = _safe_lam(lam, xp)
     return 1.0 / safe
 
 
