@@ -1,6 +1,6 @@
 """PMMStack's element-layout state: no per-solve state on the shared stack,
 a fixed-point ``grade``, prepared caches keyed and guarded by the layout, and
-the small-element guard's scope (review findings A1-A4, B2; 2026-11-14).
+the small-element guard's scope.
 
 Every test here fails on the code before the fix (numbers in each docstring).
 """
@@ -13,27 +13,27 @@ import pytest
 import lumenairy.elements.pmm.stack as ps
 from lumenairy.elements.pmm import PMMStack
 
-P = 370e-9
-E_STRIP, E_MIR = -74 + 6j, -160 + 30j
+P = 500e-9
+E_STRIP, E_MIR = -90 + 7j, -130 + 20j
 
 
 def _strip(grade="geometric", n_el=12, degree=8, metal=E_STRIP):
     st = PMMStack(P, n_superstrate=1.0, n_substrate=np.sqrt(E_MIR),
                   degree=degree, elements_per_region=n_el, grade=grade)
-    st.add_layer(50e-9, segments=[(175 / 370, metal), (195 / 370, 1.0)])
-    st.add_layer(21e-9, eps=2.1)
+    st.add_layer(40e-9, segments=[(0.36, metal), (0.64, 1.0)])
+    st.add_layer(19e-9, eps=2.1)
     return st
 
 
 def test_overlapping_prepared_solves_at_two_wavelengths(monkeypatch):
-    """Two threads solve one prepared stack at 1300 / 1600 nm (default
+    """Two threads solve one prepared stack at 1500 / 1800 nm (default
     geometric floor: the wavelength part binds, so the two layouts differ),
     choreographed A enters, B enters, A exits, B resumes.  Before the fix
     the solve wrote its layout onto the shared stack: both answers came
-    back 2.5e-2 off and the prepared cache kept the wrong modes (a later
-    single-threaded solve was still 2.5e-2 off).  Now: identical to the
-    references bit for bit."""
-    wl_a, wl_b = 1300e-9, 1600e-9
+    back wrong at the layout-change level and the prepared cache kept the
+    wrong modes (a later single-threaded solve was still wrong).  Now:
+    identical to the references bit for bit."""
+    wl_a, wl_b = 1500e-9, 1800e-9
     ref_a = _strip().prepare().solve(wavelength=wl_a, angle=0.3)[3]
     ref_b = _strip().prepare().solve(wavelength=wl_b, angle=0.3)[3]
     pr = _strip().prepare()
@@ -78,16 +78,16 @@ def test_stored_grade_is_a_fixed_point():
     """``PMMStack(..., grade=st.grade)`` and ``st.grade = st.grade`` must
     reproduce the layout.  Before the fix the stored spec carried the period
     part of the default floor as an EXPLICIT floor, so both raised the
-    small-element error at 370 nm / 1300 nm."""
+    small-element error wherever that period part lies below the bar."""
     st = _strip()
     assert st.grade == ("geometric", 0.17, None)
-    J0 = st.prepare().solve(wavelength=1300e-9, angle=0.2)[3]
+    J0 = st.prepare().solve(wavelength=1500e-9, angle=0.2)[3]
     st2 = _strip(grade=st.grade)
     assert st2.grade == st.grade
-    assert np.array_equal(st2.prepare().solve(wavelength=1300e-9,
+    assert np.array_equal(st2.prepare().solve(wavelength=1500e-9,
                                               angle=0.2)[3], J0)
     st.grade = st.grade
-    assert np.array_equal(st.prepare().solve(wavelength=1300e-9,
+    assert np.array_equal(st.prepare().solve(wavelength=1500e-9,
                                              angle=0.2)[3], J0)
     # the explicit-floor form round-trips too
     st3 = _strip(grade=("geometric", 0.2, 2e-11))
@@ -97,47 +97,50 @@ def test_stored_grade_is_a_fixed_point():
 def test_layout_change_after_prepare_is_refused():
     """``st.grade = True`` after ``prepare()``: before the fix the next
     prepared solve mixed the cached geometric half-space operators with
-    Chebyshev layer operators and returned an answer 1.055 off both
-    references.  Now any layout change is refused."""
+    Chebyshev layer operators and returned an O(1) wrong answer.  Now any layout change is refused."""
     st = _strip(metal="metal")
     pr = st.prepare()
-    pr.solve(wavelength=1300e-9, materials={"metal": E_STRIP}, angle=0.3)
+    pr.solve(wavelength=1500e-9, materials={"metal": E_STRIP}, angle=0.3)
     st.grade = True
     with pytest.raises(ValueError, match="changed after prepare"):
-        pr.solve(wavelength=1300e-9, materials={"metal": -60 + 5j}, angle=0.3)
+        pr.solve(wavelength=1500e-9, materials={"metal": -60 + 5j}, angle=0.3)
     st.grade = "geometric"                       # back to the prepared layout
-    pr.solve(wavelength=1300e-9, materials={"metal": -60 + 5j}, angle=0.3)
+    pr.solve(wavelength=1500e-9, materials={"metal": -60 + 5j}, angle=0.3)
     st.degree = 10
     with pytest.raises(ValueError, match="changed after prepare"):
-        pr.solve(wavelength=1300e-9, materials={"metal": -60 + 5j}, angle=0.3)
+        pr.solve(wavelength=1500e-9, materials={"metal": -60 + 5j}, angle=0.3)
 
 
-def test_default_grading_thin_liner_still_solves():
-    """A 1.2 nm liner on a Si ridge (1000 nm period, 1550 nm), degree 10,
-    Chebyshev 16 elements per region: 5.50.2 solved it; the guard of the
-    first staging cut refused it (wall element 7.4e-6 wavelengths) with
-    geometric-grading advice.  Measured 2026-11-14: the Chebyshev ladder
-    4 .. 20 elements converges monotonically toward a geometric reference
-    down to 4.8e-6 wavelengths (TM 6.7e-5 -> 1.5e-6), so Chebyshev / uniform
-    layouts now refuse only below 3e-6 wavelengths."""
-    st = PMMStack(1000e-9, n_superstrate=1.0, n_substrate=1.45, degree=10,
-                  elements_per_region=16)
-    lf = 1.2e-3
-    st.add_layer(200e-9, segments=[(0.4, 3.48 ** 2), (lf, -10 + 5j),
-                                    (0.6 - lf, 1.0)])
-    st.set_source(1550e-9, angle=0.2)
+def _wall_layer(n_el, degree=10):
+    """A dielectric ridge (eps 6, 45 % of an 800 nm period) with a 1 nm
+    lossy wall layer (eps -8+4i) on one side, 1200 nm, theta 0.2."""
+    st = PMMStack(800e-9, n_superstrate=1.0, n_substrate=1.5, degree=degree,
+                  elements_per_region=n_el)
+    lf = 1e-9 / 800e-9
+    st.add_layer(200e-9, segments=[(0.45, 6.0), (lf, -8 + 4j),
+                                    (0.55 - lf, 1.0)])
+    return st.set_source(1200e-9, angle=0.2)
+
+
+def test_default_grading_thin_wall_layer():
+    """A 1 nm wall layer (a cell the geometry makes thin), Chebyshev
+    grading.  16 / 24 elements per region (wall element 8.0e-6 / 3.6e-6
+    wavelengths) solve silently, measured 5.1e-7 / 2.9e-6 from a degree-24 x
+    6 reference at degree 10; 40 elements (1.3e-6, where this cell's
+    round-off was measured at 1.5e-5) solve with the band's warning; 64
+    (5.0e-7) are refused with the Chebyshev advice."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ref = np.asarray(_wall_layer(6, degree=24).solve()[3])
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        o, R, T, J = st.solve()
-    assert np.all(np.isfinite(J))
-    # far below the Chebyshev bar it is refused, with Chebyshev advice
-    st2 = PMMStack(1000e-9, n_superstrate=1.0, n_substrate=1.45, degree=10,
-                   elements_per_region=40)
-    st2.add_layer(200e-9, segments=[(0.4, 3.48 ** 2), (lf, -10 + 5j),
-                                     (0.6 - lf, 1.0)])
-    st2.set_source(1550e-9, angle=0.2)
+        for n in (16, 24):
+            J = np.asarray(_wall_layer(n).solve()[3])
+            assert np.abs(J - ref).max() < 1e-5
+    with pytest.warns(UserWarning, match="round-off"):
+        _wall_layer(40, degree=4).solve()
     with pytest.raises(ValueError, match="fewer elements_per_region") as e:
-        st2.solve()
+        _wall_layer(64).solve()
     assert "geometric" not in str(e.value).split("grade=True.")[-1]
 
 
@@ -152,6 +155,6 @@ def test_traced_wavelength_with_default_geometric_floor_is_refused():
     def f(wl):
         return st._effective_grade(wl)[2]
     with pytest.raises(ValueError, match="concrete positive number"):
-        jax.grad(lambda wl: f(wl) * wl)(1.3e-6)
+        jax.grad(lambda wl: f(wl) * wl)(1.5e-6)
     st_e = _strip(grade=("geometric", 0.17, 2e-11))
     assert st_e._effective_grade(None) == ("geometric", 0.17, 2e-11)

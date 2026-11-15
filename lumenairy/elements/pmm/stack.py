@@ -494,13 +494,13 @@ _MIN_FEATURE_DEFAULT_FRAC = 1.0e-3
 # ===========================================================================
 # THE DEFECT, AND ITS CAUSE.  At fixed polynomial degree, a solve whose element
 # grid carried a very small element could return an O(1) wrong answer with no
-# warning.  Measured 2026-11-14 on one metal-strip layer (eps -74+6i, 50 nm,
-# duty 0.47, air above, n = 1.447 below, 1300 nm), geometric layout of 12
-# elements per region, wall element ``h`` scanned (1,398 solves on
-# Windows/MKL, 86 wrong; 720 on WSL/OpenBLAS, 62 wrong): every wrong answer
-# super-unity (R + T >= 1.028, often 2-30), none at normal incidence, a
-# failing configuration returned the SAME wrong number at several ``h``, and
-# the largest failing ``h`` was 1.6e-5 x wavelength.  The cause was the modal
+# warning.  Measured on one metal-strip layer (a 40 nm strip of eps -90+7i,
+# 36 % of the period, air above, n = 1.5 below, 1500 nm; periods 250 / 500 /
+# 800 / 1200 nm, theta 0-0.7, degrees 6-20, geometric layout of 12 elements
+# per region, wall element ``h`` 2e-6 .. 3e-5 wavelengths; 900 solves on
+# Windows/MKL with the previous selector restored, 81 of the 720 oblique ones
+# wrong): every wrong answer super-unity, none at normal incidence, and the
+# largest failing ``h`` was 1.25e-5 x wavelength.  The cause was the modal
 # forward/backward selector, not the solve's arithmetic: its passive growth
 # repair took the direction of any forward mode with ``Im q < -1e-6 |q|`` from
 # the sign of ``Im q``, and the eig's round-off -- absolute in ``q^2``, of order
@@ -509,40 +509,43 @@ _MIN_FEATURE_DEFAULT_FRAC = 1.0e-3
 # round-off sent it to the backward branch.  Fixed at the cause in
 # ``_core._growth_mask`` (the bar never undercuts the eig's round-off).
 #
-# AFTER THE FIX (same fixture; 900 Windows/MKL and 360 WSL/OpenBLAS
-# solves, periods 200-1300 nm, theta 0-0.7, degrees 6-20, ``h`` 2e-6 .. 3e-5
-# wavelengths): no wrong branch, every row sub-unity (max R + T 0.99603), and
-# what remains is a gradual round-off floor, the TE deviation (TE converges
-# spectrally, so a correct layout cannot move it) from the same degree at
-# ``h`` = 1e-4 wavelengths:
+# AFTER THE FIX (same scan): no wrong branch, every row sub-unity (max
+# R + T 0.99824), and what remains is a gradual round-off floor, the TE
+# deviation (TE converges spectrally, so a correct layout cannot move it)
+# from the same degree at ``h`` = 1e-4 wavelengths, max over 100 solves per
+# column (4 periods x 5 angles x 5 degrees):
 #
 #     h / wavelength   2e-6     4e-6     8e-6     1e-5     1.25e-5  2e-5
-#     max TE dev       2.7e-5   3.8e-6   1.5e-6   3.2e-7   4.0e-7   2.4e-7
+#     max TE dev       8.2e-6   2.7e-6   5.9e-7   5.4e-7   3.4e-7   1.4e-7
 #
-# (the 324 rows both builds ran agree in R + T to 1.9e-7 and in the TE
-# deviation to 1.2e-8 -- the residual is round-off, not a branch; a period
-# equal to the
-# wavelength at normal incidence -- a grazing order, an ill-conditioned
-# answer at every element size -- is excluded and scatters by 1e-5 .. 5e-4.)
+# CHEBYSHEV / UNIFORM layouts get a lower bar and a warning band.  They carry
+# no 1e-6 accuracy promise (their discretization error is typically larger),
+# and their wall element is set by the caller's elements_per_region, as
+# before this guard existed.  With a realistic element count a Chebyshev or
+# uniform split gets below a few 1e-6 of the wavelength only inside a cell
+# the GEOMETRY makes thin -- a near-coincident wall pair of two layers, a
+# thin wall layer -- and such a cell, once split, loses digits on the SAME
+# ``h / wavelength`` scale as a wide one (the eig's round-off does not know
+# why the element is small), so it is not exempt.  Measured (Chebyshev,
+# error against a degree-20 / 24 reference of the same geometry):
 #
-# Thin cells the GEOMETRY makes (an owned liner next to the strip, one
-# element) shared the defect (garbage at 2e-5 .. 5e-5 x wavelength before) and
-# are repaired by the same fix (108 solves, every row passive; the TE
-# deviation is round-off, <= 1.9e-5 at 1e-5 x wavelength off the grazing
-# point); the guard still does not act on
-# them -- no layout choice can lift the caller's geometry.
+#   * two layers whose walls are 0.6 nm / 2 nm apart (a 40 nm strip of eps
+#     -50+4i, 40 % of a 500 nm period, over a 20 nm layer of eps 2.5 one
+#     cell wider; 1500 nm, theta 0 and 0.3, degree 10, 4 .. 32 elements per
+#     region): within 4.5e-6 at every element count, down to 9.6e-7
+#     wavelengths (2.4e-6 there; 3.0e-6 / 4.5e-6 at 1.7e-6);
+#   * a 1 nm lossy wall layer (eps -8+4i) beside a dielectric ridge (800 nm
+#     period, 1200 nm, theta 0.2, degree 8 / 10, 12 .. 40 elements per
+#     region): 5.7e-7 .. 2.9e-6 down to 3.6e-6 wavelengths, 6.2e-6 at 2.0e-6,
+#     and 1.5e-5 / 1.8e-5 at 1.3e-6 -- round-off past the Chebyshev
+#     accuracy level;
+#   * wide cells (the table above): 8.2e-6 at 2e-6 wavelengths.
 #
-# CHEBYSHEV / UNIFORM layouts get a lower bar.  They carry no 1e-6 accuracy
-# promise (their discretization error is typically larger), and their wall
-# element is set by the caller's elements_per_region, as before this guard
-# existed.  Measured 2026-11-14: a 1.2 nm / 2 nm lossy liner on a Si ridge
-# (1000 nm period, 1550 nm, theta 0.2, degree 10 / 14, Chebyshev 4 .. 20
-# elements per region, wall element 1.9e-4 .. 4.8e-6 wavelengths) converged
-# MONOTONICALLY toward a geometric reference (whose own spread is 2.4e-6):
-# TM error 6.7e-5 at 4 elements down to 1.5e-6 at 20, TE flat at the
-# reference's 1.5e-6 .. 3.4e-6 -- no round-off visible down to 4.8e-6
-# wavelengths.  The table above puts the round-off past 1e-5 below 3e-6
-# wavelengths (2.7e-5 at 2e-6).
+# So a Chebyshev / uniform layout solves silently down to 2e-6 of the
+# wavelength, solves with a warning between 1e-6 and 2e-6 (2.4e-6 .. 1.5e-5
+# measured there, depending on the cell), and is refused below 1e-6.  A cell
+# thinner than the bar itself, or left as one element, is never refused: no
+# layout choice can lift the caller's geometry.
 #
 # So the numbers, all fractions of the WAVELENGTH:
 #
@@ -553,8 +556,13 @@ _MIN_FEATURE_DEFAULT_FRAC = 1.0e-3
 #: refused.
 _SMALL_ELEMENT_FRAC = 1.0e-5
 #: The same refusal for a Chebyshev / uniform layout (``grade`` True /
-#: False): below this the measured round-off can exceed 1e-5 (see above).
-_SMALL_ELEMENT_FRAC_PLAIN = 3.0e-6
+#: False): below this the round-off grows past the measured range (see above;
+#: 1.5e-5 already at 1.3e-6 x wavelength in a thin wall layer).
+_SMALL_ELEMENT_FRAC_PLAIN = 1.0e-6
+#: Between ``_SMALL_ELEMENT_FRAC_PLAIN`` and this, a Chebyshev / uniform
+#: layout solves with a ``UserWarning``: the measured round-off there is
+#: 2.4e-6 .. 1.5e-5 depending on the cell; above it, within 8.2e-6.
+_SMALL_ELEMENT_WARN_FRAC_PLAIN = 2.0e-6
 #: Below THIS, a layout-made element arms the energy backstop in
 #: :func:`_warn_stack_energy`: a provably passive stack that reads super-unity
 #: (beyond ``_SLIVER_TRIGGER_BAR``) is refused instead of returned under a
@@ -1882,18 +1890,23 @@ class PMMStack:
         whose element LAYOUT -- the split of a cell into several elements --
         makes an element smaller than ``1e-5`` of the wavelength under
         geometric grading (an explicit floor below it, a very small ratio with
-        many elements), or smaller than ``3e-6`` of the wavelength under
-        Chebyshev / uniform grading (very many elements per region in a thin
-        cell), raises ``ValueError`` before solving: below those sizes the
-        eigensolve's round-off, which grows like ``1 / (k0 h)^2``, can exceed
-        1e-6 (geometric) / 1e-5 (Chebyshev, uniform) of the answer (measured;
-        see ``_SMALL_ELEMENT_FRAC`` and ``_SMALL_ELEMENT_FRAC_PLAIN``).  With
-        ``True`` the solve runs (with a ``UserWarning``), and an energy check
-        still refuses a super-unity answer on a provably passive stack.  A
-        cell the GEOMETRY makes thinner than the bar (a sub-picometre liner,
-        a near-coincident wall pair) is not subject to this guard: no layout
-        choice can lift it (the sliver refusal and the within-layer warning
-        cover it).
+        many elements), or smaller than ``1e-6`` of the wavelength under
+        Chebyshev / uniform grading (many elements in a thin cell), raises
+        ``ValueError`` before solving: below those sizes the eigensolve's
+        round-off, which grows like ``1 / (k0 h)^2``, can exceed 1e-6
+        (geometric) / 1e-5 (Chebyshev, uniform) of the answer (measured; see
+        ``_SMALL_ELEMENT_FRAC`` and ``_SMALL_ELEMENT_FRAC_PLAIN``).  A
+        Chebyshev / uniform element between ``1e-6`` and ``2e-6`` of the
+        wavelength solves with a ``UserWarning`` (measured round-off 2.4e-6 ..
+        1.5e-5 there, depending on the cell).  A cell the layout splits is
+        subject to this whether the cell itself is wide or thin (a
+        near-coincident wall pair, a thin wall layer: its round-off was
+        measured on the same ``h / wavelength`` scale); a cell thinner than
+        the bar itself, or left as one element, is never refused (no layout
+        choice can lift it; the sliver refusal and the within-layer warning
+        cover it).  With ``True`` the solve runs (with a ``UserWarning``),
+        and an energy check still refuses a super-unity answer on a provably
+        passive stack.
     factorization : {'auto', 'convection', 'covariant'}, optional
         Slant treatment (as in :func:`pmm_jones_1d_slanted`).  ``'auto'``
         (default) uses the SPECTRAL covariant oblique-coordinate generator for
@@ -1961,21 +1974,23 @@ class PMMStack:
     For METAL CORNERS raise ``degree`` with one element per cell, or use
     ``grade='geometric'`` with 8-12 elements per cell at degree 8-10;
     Chebyshev grading only matters from 3 elements per cell up.  Measured on a
-    50 nm metal strip (eps -74+6i, 175 nm in a 370 nm period) 21 nm above a
-    metal mirror, TM, 1300 nm, error in the zeroth-order reflection against an
-    external reference: default (degree 16, 1 element) 1.4e-2; degree 80,
-    1 element 4.2e-4; Chebyshev degree 10 x 8 elements 1.0e-3; geometric
-    degree 8 x 12 elements 7.4e-7 (default floor, 16 pm here; that value
-    sits inside the ~1e-6 round-off of the default floor, see ``grade``).
-    Layout-made elements below 1e-5 of the wavelength (geometric) / 3e-6
-    (Chebyshev, uniform) are refused unless
+    resonant strip / spacer / mirror stack (a 40 nm metal strip, eps
+    -90+7i, 180 nm wide in a 500 nm period, 19 nm above a metal mirror, TM,
+    1500 nm), error in the zeroth-order reflection against a converged
+    reference: default (degree 16, 1 element) 1.7e-2; degree 80, 1 element
+    4.4e-4; Chebyshev degree 10 x 8 elements 1.1e-3; geometric degree 8 x 12
+    elements 1.9e-6 (default floor, 18.75 pm here; that value sits inside the
+    round-off scatter of the default floor, see ``grade``).
+    Layout-made elements below 1e-5 of the wavelength (geometric) / 1e-6
+    (Chebyshev, uniform; a warning between 1e-6 and 2e-6) are refused unless
     ``allow_small_elements=True`` (see that parameter).
 
     AT A RAYLEIGH ANOMALY (a diffraction order exactly at cut-off in some
     medium, e.g. a period equal to the wavelength at normal incidence) the
     answer is ILL-CONDITIONED: the grazing order's two half-space modes
-    coincide, and measured solves there scatter by 1e-5 .. 5e-4 at every
-    element size and degree.  :meth:`solve` therefore runs such a point at a
+    coincide, and measured solves there scatter with element size and degree
+    far above the discretization error.  :meth:`solve` therefore runs such a
+    point at a
     wavelength nudged by ~1e-7 relative and says so with a
     ``lumenairy.elements.rcwa.WoodNudgeWarning`` (as every other 1-D entry
     point does); off an anomaly nothing changes.
@@ -1985,15 +2000,15 @@ class PMMStack:
     and a run of consecutive uniform layers (with the half-spaces) is cascaded
     elementwise as one S-matrix.  Exact in exact arithmetic; in floating
     point the two paths differ by the round-off of the grid (measured
-    agreement with the per-layer dense eig: <= 5e-12 in the Jones on
-    Chebyshev / single-element grids, about 1e-6 at the default geometric
-    floor, where both paths carry that much round-off); 13x faster
-    on a stack with 52 graded oxide sub-layers at degree 12, about 25x at
+    agreement with the per-layer dense eig: <= 4e-12 in the Jones on
+    Chebyshev / single-element grids, up to 5e-7 at the default geometric
+    floor, where both paths carry that much round-off); 13.6x faster
+    on a stack with 52 graded uniform sub-layers at degree 12, about 18x at
     degree 20).  The differentiable (JAX) twin takes the same path with the
     same kernels for concrete uniform isotropic layers and for layers added
     with a TRACED scalar ``eps`` (a traced ``(3, 3)`` tensor keeps the full
     eig: it cannot be inspected for isotropy); measured forward + gradient
-    w.r.t. one uniform eps on 44 layers: 68.5 s -> 1.05 s.
+    w.r.t. one uniform eps on 44 layers: 38.2 s -> 1.12 s.
     """
 
     def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
@@ -2366,15 +2381,20 @@ class PMMStack:
         ``(h, w_cell)`` or ``None``.  An element is layout-made when its cell
         is split into several elements AND the cell itself is at least
         ``size`` wide, i.e. one element per cell would not have been small.
-        A cell the GEOMETRY makes thinner than ``size`` (a liner, a narrow
-        gap, a near-coincident wall pair), or an unsplit cell, is never
+        A cell the GEOMETRY makes thinner than ``size`` (a thin wall layer, a
+        narrow gap, a near-coincident wall pair), or an unsplit cell, is never
         counted: no layout choice can lift it, and it is the territory of the
         sliver refusal (manufactured cells) and the within-layer warning
-        (owned cells)."""
+        (owned cells).  An element exactly ON ``size`` (to 1e-9 relative) is
+        not below it.  A geometry-made thin cell that the layout SPLITS is
+        counted like any other: its round-off was measured on the same
+        ``h / wavelength`` scale (see the block above
+        :data:`_SMALL_ELEMENT_FRAC_PLAIN`)."""
         best = None
+        lim = size * (1.0 - 1e-9)    # an element ON the bar is not below it
         for h, wc, split in cells:
-            if split and wc >= size and h < size and (best is None
-                                                      or h < best[0]):
+            if split and wc >= size and h < lim and (best is None
+                                                     or h < best[0]):
                 best = (h, wc)
         return best
 
@@ -2386,6 +2406,15 @@ class PMMStack:
         if _is_geometric_spec(grade):
             return _SMALL_ELEMENT_FRAC, 1e-6
         return _SMALL_ELEMENT_FRAC_PLAIN, 1e-5
+
+    @staticmethod
+    def _refused_element(cells, grade, wl):
+        """``(h, w_cell, fraction)`` of the smallest layout-made element
+        below the refusal bar of the RESOLVED spec ``grade``
+        (:meth:`_small_element_bar`), or ``None``."""
+        frac, _acc = PMMStack._small_element_bar(grade)
+        hit = PMMStack._layout_made_below(cells, frac * wl)
+        return None if hit is None else hit + (frac,)
 
     def _small_element_watch(self, wavelength, grade=None):
         """``(h, wavelength)`` of the smallest layout-made element below
@@ -2429,10 +2458,11 @@ class PMMStack:
         if not (np.isfinite(wl) and wl > 0.0):
             return grade
         cells = self._element_cells(grade)
-        frac, acc = self._small_element_bar(grade)
-        hit = self._layout_made_below(cells, frac * wl)
+        _frac, acc = self._small_element_bar(grade)
+        hit = self._refused_element(cells, grade, wl)
+        frac = None if hit is None else hit[2]
         if hit is not None and not self.allow_small_elements:
-            h, wc = hit
+            h, wc, _f = hit
             if _is_geometric_spec(grade):
                 remedy = (
                     f"Raise the smallest element: pass an explicit floor, "
@@ -2459,11 +2489,11 @@ class PMMStack:
         if hit is not None:
             # Opted out: solve, but say so -- the round-off grows like
             # 1 / (k0 h)^2 and an answer that is wrong by it can be sub-unity
-            # (measured 2026-11-14: a 1 nm union-grid cell split into 12
-            # geometric elements with no floor, 7e-14 m wall element, read
-            # 0.18 off the converged reflection with R + T = 0.91 on an
-            # absorbing stack -- invisible to the energy backstop).
-            h, wc = hit
+            # (measured: a near-coincident wall pair's union cell split into
+            # 12 geometric elements with no floor read 0.099 off the
+            # converged reflection with R + T = 0.974 on an absorbing stack
+            # -- invisible to the energy backstop).
+            h, wc, _f = hit
             warnings.warn(
                 f"{where}: allow_small_elements=True and the element layout "
                 f"puts an element of {h:.3g} m ({h / wl:.3g} of the "
@@ -2471,6 +2501,21 @@ class PMMStack:
                 f"the modal eigensolve's round-off grows like 1 / (k0 h)^2 "
                 f"there and is not bounded by any check -- verify the answer "
                 f"is stationary in degree.", UserWarning, stacklevel=3)
+        if hit is None and not _is_geometric_spec(grade):
+            band = self._layout_made_below(
+                cells, _SMALL_ELEMENT_WARN_FRAC_PLAIN * wl)
+            if band is not None:
+                h, wc = band
+                warnings.warn(
+                    f"{where}: the Chebyshev / uniform layout puts an element "
+                    f"of {h:.3g} m ({h / wl:.3g} of the wavelength) inside a "
+                    f"{wc:.3g} m cell, below {_SMALL_ELEMENT_WARN_FRAC_PLAIN:g}"
+                    f" x wavelength: there the modal eigensolve's round-off "
+                    f"was measured at 2.4e-6 .. 1.5e-5 of the answer, "
+                    f"depending on the cell.  Fewer elements_per_region "
+                    f"raise the smallest element; check the answer is "
+                    f"stationary in elements_per_region.", UserWarning,
+                    stacklevel=3)
         self._small_element_note = self._small_element_watch(wl, grade)
         return grade
 
@@ -5109,10 +5154,11 @@ class PMMStack:
         wavelength``), while a pointwise :meth:`solve` resolves it at its own
         wavelength.  Where the wavelength part of the floor binds (period
         below about 0.42 x wavelength) the two layouts differ and the answers
-        differ at the layout's accuracy (measured 2026-11-14 on a metal-strip
-        stack, 370 nm period, 12 geometric elements: a sweep over 1300 /
-        1600 nm read at 1300 nm differs from solve() there by 1.4e-7 at
-        normal incidence and 2.8e-7 at theta 0.3).  For
+        differ at the layout's accuracy (measured on the strip / spacer /
+        mirror stack of the tests, 500 nm period, degree 8 x 12 geometric
+        elements: a sweep over 1500 / 1800 nm read at 1500 nm differs from
+        solve() there by 2.5e-7 at normal incidence and 2.0e-7 at theta
+        0.3).  For
         bit-identity pass an explicit floor, ``grade=('geometric', ratio,
         min_element_m)``; Chebyshev and uniform layouts are unaffected.
 
