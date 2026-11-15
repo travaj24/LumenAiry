@@ -220,8 +220,13 @@ def test_diagonal_uses_the_dense_clamp_at_an_exact_anomaly():
     assert np.allclose(V2[:n, n:], Vy, rtol=0, atol=1e-9 * np.max(np.abs(Vx)))
     # the clamp is the COMPLEX 1e-12 + 0j: divide by that, as the dense
     # path does (Python's complex / float division rounds the imaginary part
-    # of this eps one ulp differently)
-    assert D[k] == -eps / np.complex128(1e-12) and D[n + k] == 0
+    # of this eps one ulp differently).  The E_y-type entry is q^2 / lam with
+    # q^2 = 0 exactly: q^2 takes the value the clamped lam implies,
+    # -_LAM_CLAMP^2 (_core._safe_q2; re-pinned from 0 when the exact-cut-off
+    # pole was removed -- a zero there made the mode-match singular)
+    assert D[k] == -eps / np.complex128(1e-12)
+    assert D[n + k] == C._safe_q2(np.complex128(0.0)) / np.complex128(1e-12)
+    assert D[n + k] != 0
 
 
 def test_interface_refuses_non_finite_and_the_cascade_falls_back():

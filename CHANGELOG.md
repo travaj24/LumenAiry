@@ -12,14 +12,16 @@ picks Li's inverse rule wherever the layer supports it.  New in this release:
 geometric element grading for the 1-D PMM family and `PMMStack`, a fast path
 for laterally uniform layers in `PMMStack` (and its JAX twin), adaptive spatial
 resolution for 1-D `RCWAStack` stacks (`asr=`), `RCWAStack.add_layer(segments=)`,
-and a `rcwa_convergence` that judges a relative error estimate.  A defect in the
-PMM forward-mode selector is fixed at its root.  It returned wrong answers on
-very small elements at oblique incidence.
+and a `rcwa_convergence` that judges a relative error estimate.  Two defects
+in the PMM forward-mode selector are fixed at their root: it returned wrong
+answers on very small elements at oblique incidence, and silent garbage for
+gain layers (`Im(eps) < 0`, also in 5.50.2).
 
 **Results change** for patterned `RCWAStack` layers left at the default
-formulation, for `rcwa_convergence` verdicts (except the legacy `bump=` form),
-for the conical PMM path at round-off level, and for PMM solves that the
-selector defect had sent to a wrong branch.  Each changed default and refusal
+formulation (NumPy and JAX cells alike), for `rcwa_convergence` verdicts
+(except the legacy `bump=` form), for the conical PMM path at round-off
+level, and for PMM solves that the selector defects had sent to a wrong
+branch.  Each changed default and refusal
 is listed first, with the setting that restores the old behaviour where one
 exists.
 
