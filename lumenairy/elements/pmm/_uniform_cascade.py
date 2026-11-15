@@ -4,8 +4,8 @@ path of :class:`~lumenairy.elements.pmm.stack.PMMStack`'s vertical cascade.
 
 Two pieces, both exact rewrites (in exact arithmetic) of what the dense path
 computes; in floating point they agree with it to the grid's round-off --
-<= 5e-12 on Chebyshev / single-element grids, about 1e-6 at the default
-geometric floor, where the dense path carries that much itself:
+<= 5e-12 on Chebyshev / single-element grids, up to about 5e-7 at the
+default geometric floor, where the dense path carries that much itself:
 
 1. **Uniform-layer modes from the shared geometric eig.**  For a layer whose
    permittivity is the same isotropic scalar ``eps`` in every union cell, the
@@ -62,7 +62,7 @@ import numpy as np
 
 from ...backend import is_jax_array
 from ..rcwa._core import _propagation_scale, _star_from_blocks
-from ._core import _interface_from_ab, _safe_lam
+from ._core import _interface_from_ab, _safe_lam, _safe_q2
 
 __all__ = []                      # private module
 
@@ -74,6 +74,16 @@ UNIFORM_LAYER_LABEL = "PMM modal solve (uniform layer)"
 # (``_core._LAM_CLAMP`` / ``_core._safe_lam``): the diagonal interface MUST use
 # the same clamped value, or a uniform layer sitting on a Rayleigh anomaly of
 # its own medium (``lam = 0``) divides by zero.
+
+
+def _cutoff_pole_message(where):
+    return (
+        f"{where}: the mode-match between two uniform media is singular -- a "
+        f"mode with q = 0 exactly (a medium's permittivity equal to a "
+        f"geometric eigenvalue of the element grid, a cut-off of the discrete "
+        f"grid a hair away from the analytic one that is nudged "
+        f"automatically).  Move the permittivity or the wavelength by a "
+        f"relative 1e-9.")
 
 
 def _uniform_iso_eps(eps_u):
@@ -126,13 +136,14 @@ def _uniform_medium_diag(eps, lam, mu, xp=np):
     n = mu.shape[0]
     if xp is not np:
         safe = _safe_lam(lam, xp)
-        return xp.concatenate([-eps / safe[:n], (eps - mu) / safe[n:]])
+        return xp.concatenate([-eps / safe[:n],
+                               _safe_q2(eps - mu, xp) / safe[n:]])
     eps = complex(eps)
     safe = _safe_lam(lam)
     D = np.empty(2 * n, dtype=complex)
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
         D[:n] = -eps / safe[:n]
-        D[n:] = (eps - mu) / safe[n:]
+        D[n:] = _safe_q2(eps - mu) / safe[n:]
     return D
 
 
@@ -268,7 +279,14 @@ def _cascade_vertical(media, k0_t, *, interface, star, propagation_star,
             for m in range(j, end + 1):
                 Wa, Va = media[m - 1][0], media[m - 1][1]
                 Wb, Vb, lam_b = media[m][0], media[m][1], media[m][2]
-                S = _append(interface(Wa, Va, Wb, Vb))
+                try:
+                    Si = interface(Wa, Va, Wb, Vb)
+                except np.linalg.LinAlgError:
+                    # the elementwise run was not finite AND the dense
+                    # mode-match is singular: a mode with q = 0 exactly
+                    raise ValueError(
+                        _cutoff_pole_message("PMMStack.solve")) from None
+                S = _append(Si)
                 if _k0t(m) is not None:
                     S = propagation_star(S, lam_b, _k0t(m))
             j = end + 1

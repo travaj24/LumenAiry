@@ -2488,6 +2488,22 @@ def _safe_lam(lam, xp=np):
     return xp.where(xp.abs(lam) < _LAM_CLAMP, _LAM_CLAMP, lam)
 
 
+def _safe_q2(q2, xp=np):
+    """``q^2`` made consistent with :func:`_safe_lam` for a uniform medium's
+    analytic partner (``V = Q W / lam`` with ``Q W = w q^2``): where the clamp
+    replaced ``lam`` by ``_LAM_CLAMP`` (``|q^2| < _LAM_CLAMP^2``), ``q^2`` is
+    replaced by the value that clamped ``lam`` implies, ``-_LAM_CLAMP^2``
+    (``lam = -i q``).  Without it a mode EXACTLY at a cut-off of the grid
+    (``q^2 = 0``: the medium's ``eps`` equal to a geometric eigenvalue) gets a
+    zero partner column, the mode-match into that medium is exactly singular,
+    and the elementwise cascade divides by zero -- NaN on the JAX twin, which
+    cannot branch on finiteness under a trace (constructed: a uniform layer
+    of ``eps`` equal to the grid's eigenvalue 9.0000000032 at period /
+    wavelength = 1/3).  Identity wherever ``|q^2| >= _LAM_CLAMP^2``."""
+    return xp.where(xp.abs(q2) < _LAM_CLAMP * _LAM_CLAMP,
+                    -_LAM_CLAMP * _LAM_CLAMP, q2)
+
+
 def _interface_from_ab(apb, amb, inv, mm):
     """The interface S-matrix ``(S11, S12, S21, S22)`` from ``a + b`` and
     ``a - b`` (``a = Wb^-1 Wa``, ``b = Vb^-1 Va``) -- the ONE formula, shared
@@ -3399,8 +3415,9 @@ def _sem_modes_uniform(mats, k0, kx0, eps, geo=None,
     Z = xp.zeros((n, n), dtype=_C)
     W2 = xp.block([[w, Z], [Z, w]])
     # Q @ W2 for the uniform medium: Q = [[0, eps I - Kx2], [-eps I, 0]] and
-    # Kx2 w = w diag(mu)  =>  (eps I - Kx2) w = w diag(q2)
-    QW = xp.block([[Z, w * q2[None, :]], [-eps * w, Z]])
+    # Kx2 w = w diag(mu)  =>  (eps I - Kx2) w = w diag(q2); q2 consistent
+    # with the lam clamp (identity off an exact cut-off, see _safe_q2)
+    QW = xp.block([[Z, w * _safe_q2(q2, xp)[None, :]], [-eps * w, Z]])
     # a uniform half-space's medium is the SCALAR ``eps`` argument, not the
     # grid it is discretised on (that grid is a patterned layer's).
     passive = (_eps_is_passive(eps) if xp is np
