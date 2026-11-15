@@ -1459,6 +1459,33 @@ def _sliver_refusal(stack, worst, *, evidence=None, refuse=True):
         "the pre-fix warn-and-return behaviour.")
 
 
+def _refuse_gain_substrate(where, n_sub):
+    """Raise for a GAIN substrate (public ``Im(n_substrate) < 0``).
+
+    A gain LAYER is supported (its forward modes follow the analytic
+    continuation from the lossy side, see ``_core._forward_growth_flip``);
+    a gain HALF-SPACE is not: the far field takes every transmitted order's
+    ``kz`` on the ``Im(kz) >= 0`` root, which for a gain medium is the root
+    with ``Re(kz) < 0``, and the ``Re(kz) > 0`` propagating-order mask then
+    drops the whole transmitted power -- measured ``T = 0`` against the
+    analytic 0.965 (air / 100 nm of eps 2.1 / ``n = 1.45 - 0.01i``), with
+    ``R`` correct, so no energy check sees it.  The superstrate has the same
+    refusal (``_require_propagating_incidence``).  A traced (JAX) index
+    cannot be read and is not checked."""
+    try:
+        v = complex(np.asarray(n_sub))
+    except (TypeError, ValueError):            # traced / not a number
+        return
+    if v.imag < 0.0:
+        raise ValueError(
+            f"{where}: gain substrate (Im(n_substrate) = {v.imag:.3g} < 0) is "
+            f"not supported -- the transmitted orders of a gain half-space "
+            f"have no outgoing root the far-field flux bookkeeping accepts, "
+            f"and their power would be dropped silently.  Put the gain medium "
+            f"in a finite layer (add_layer(..., eps=n**2)) above a lossless "
+            f"or lossy substrate; gain layers are supported.")
+
+
 def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
     """Energy tripwire for a stack solve -- the PMM counterpart of RCWA's
     ``_check_energy`` (replicated, not imported: pmm does not depend on rcwa
@@ -2202,7 +2229,8 @@ class PMMStack:
                 f"grade=('geometric', {spec[1]}, min_element_m).")
         return (spec[0], spec[1], _geometric_default_floor(self.period, wl))
 
-    def _wood_nudged(self, wavelength, angle, where, layer_tensors=None):
+    def _wood_nudged(self, wavelength, angle, where, layer_tensors=None,
+                     concrete_only=False):
         """``wavelength`` nudged off an EXACT Rayleigh anomaly of any medium
         of the stack (``_core._wood_safe_wl_1d``, with its
         ``WoodNudgeWarning``); the identity off an anomaly.  One rule for
@@ -2210,29 +2238,83 @@ class PMMStack:
         ``layer_tensors`` (optional) are the layers' resolved tensors (the
         prepared path's material keys, the sweep's dispersive values);
         otherwise the stored ones, callables materialized at
-        ``wavelength``."""
-        w = float(wavelength)
+        ``wavelength``.
+
+        On the JAX twin's path (``concrete_only=True``) a TRACED medium is
+        skipped -- its anomalies cannot be located without severing the
+        trace -- and a traced wavelength, angle or superstrate index leaves
+        the wavelength unchanged (a traced wavelength is refused by the twin
+        itself).  Every concrete medium is nudged for exactly as on the NumPy
+        path, so the two agree at an anomaly of a concrete medium."""
+        def _num(v):
+            try:
+                return np.asarray(v, dtype=_C)
+            except (TypeError, ValueError):     # a tracer has no host value
+                if concrete_only:
+                    return None
+                raise
+        if concrete_only:
+            try:
+                w = float(wavelength)
+                angle = float(angle)
+            except (TypeError, ValueError):
+                return wavelength
+        else:
+            w = float(wavelength)
         if layer_tensors is None:
-            layer_tensors = [np.asarray(self._seg_at(e, w), dtype=_C)
+            layer_tensors = [self._seg_at(e, w)
                              for L in self._layers for _w, e in L[1]]
-        eps = [complex(self._seg_at(self.n_sup, w)) ** 2,
-               complex(self._seg_at(self.n_sub, w)) ** 2]
+        n_sup = _num(self._seg_at(self.n_sup, w))
+        if n_sup is None:
+            return wavelength
+        eps = [complex(n_sup) ** 2]
+        n_sub = _num(self._seg_at(self.n_sub, w))
+        if n_sub is not None:
+            eps.append(complex(n_sub) ** 2)
         for M in layer_tensors:
-            M = np.asarray(M, dtype=_C)
+            M = _num(M)
+            if M is None:
+                continue
             eps.extend(complex(v) for v in (np.diag(M) if M.ndim == 2
                                             else [M]))
         n_max = max(abs(np.sqrt(e)) for e in eps)
         reach = int(np.ceil(2.0 * n_max * self.period / w)) + 1
-        return _wood_safe_wl_1d(w, angle, self._seg_at(self.n_sup, w),
-                                self.period, eps, reach, fn_name=where)
+        return _wood_safe_wl_1d(w, angle, complex(n_sup), self.period, eps,
+                                reach, fn_name=where)
 
     def _layout_signature(self):
         """Everything that fixes the element grids of a solve except the
         wavelength (which enters only through a default geometric floor):
-        what a prepared object must see unchanged to reuse its caches."""
+        what a prepared object must see unchanged to reuse its caches.
+
+        It includes the layers' LATERAL content -- the segment widths, each
+        segment's material (a key string, a callable's identity, or a
+        tensor's bytes) and the slant -- because the prepared object freezes
+        the union grid and the per-layer material table at ``prepare()``.
+        Thicknesses are read live by every prepared solve and are not part
+        of it; neither are the half-space indices, which are part of the
+        prepared solve's cache keys instead."""
         return (float(self.period), int(self.degree), int(self.n_el),
                 self._grade, float(self.min_feature), self.layer_grids,
-                self.window_halfwidth)
+                self.window_halfwidth, self._layer_content_signature())
+
+    def _layer_content_signature(self):
+        """``(widths, materials, slant)`` per layer, hashable (see
+        :meth:`_layout_signature`).  A traced (JAX) material enters by its
+        identity."""
+        out = []
+        for L in self._layers:
+            mats = []
+            for _w, e in L[1]:
+                if isinstance(e, str):
+                    mats.append(("key", e))
+                elif callable(e) or is_jax_array(e):
+                    mats.append(("id", id(e)))
+                else:
+                    mats.append(("val", np.asarray(e, dtype=_C).tobytes()))
+            out.append((tuple(float(w) for w, _e in L[1]), tuple(mats),
+                        float(L[2])))
+        return tuple(out)
 
     def _solve_grids(self):
         """The fractional cell widths of every element grid the classical
@@ -3409,7 +3491,10 @@ class PMMStack:
         pure-geometry cross-layer SLIVER screen runs before the twin and
         WARNS; and the energy tripwire (non-finite -> raise, negative ->
         raise, ``R+T > 1`` -> warn) runs on the returned arrays whenever they
-        are CONCRETE, i.e. on an ordinary eager call.  What does NOT run:
+        are CONCRETE, i.e. on an ordinary eager call.  The Rayleigh-anomaly
+        nudge (``WoodNudgeWarning``) runs on both branches too, from the
+        CONCRETE media: an anomaly of a traced permittivity cannot be located
+        and is not nudged.  What does NOT run:
         inside ``jit`` / ``grad`` the outputs are Tracers, so the energy
         tripwire is skipped (its comparison cannot be taken without severing
         the trace); a TRACED ``n_superstrate`` / ``angle`` skips the incidence
@@ -3467,6 +3552,7 @@ class PMMStack:
                 f"PMMStack.solve: unresolved material keys {_unresolved}; "
                 f"pass materials={{...}} via prepare()/solve(materials=...) "
                 f"or use concrete permittivities.")
+        _refuse_gain_substrate("PMMStack.solve", self.n_sub)
         # ---- small-element guard, BEFORE any dispatch -----------------------
         # Every path below builds its element grids from the same walls,
         # ``min_feature``, ``degree`` / ``elements_per_region`` / ``grade``,
@@ -3556,12 +3642,16 @@ class PMMStack:
             # arbiter that turns a screen hit into the NumPy path's refusal
             # needs three re-solves that a trace cannot supply.
             _warn_jax_stack_sliver(self)
+            # the same Rayleigh-anomaly nudge as the NumPy branch below, on
+            # the concrete media (see _wood_nudged)
+            wl_j = self._wood_nudged(self._src["wl"], self._src["angle"],
+                                     "PMMStack.solve", concrete_only=True)
             if self.layer_grids == "per-layer":
                 from ._jax_stack import _pmm_stack_solve_jax_perlayer
-                out = _pmm_stack_solve_jax_perlayer(self, grade)
+                out = _pmm_stack_solve_jax_perlayer(self, grade, wl=wl_j)
             else:
                 from ._jax_stack import _pmm_stack_solve_jax
-                out = _pmm_stack_solve_jax(self, grade)
+                out = _pmm_stack_solve_jax(self, grade, wl=wl_j)
             # Energy tripwire on CONCRETE outputs (an eager call): raises on a
             # non-finite or negative total and warns above the super-unity bar,
             # exactly as the NumPy branch does.  Skipped under jit / grad,
@@ -5235,6 +5325,7 @@ class PMMStack:
             _require_propagating_incidence(
                 "PMMStack.solve_vs_wavelength", np.conj(_C(eps_sup)),
                 (kx0 / k0) ** 2)
+            _refuse_gain_substrate("PMMStack.solve_vs_wavelength", n_sub_w)
             # The cap is applied ONCE by the caller, around the whole dispatch
             # below -- NOT here.  Applying a cap is PROCESS-GLOBAL on OpenBLAS
             # (threadpoolctl calls ``openblas_set_num_threads``); only the
@@ -5450,6 +5541,7 @@ class PMMStack:
             _require_propagating_incidence(
                 "PMMStack.solve_vs_wavelength", np.conj(_C(eps_sup)),
                 (kx0 / k0) ** 2)
+            _refuse_gain_substrate("PMMStack.solve_vs_wavelength", n_sub_w)
             # The cap is applied ONCE by the caller, around the whole dispatch
             # below -- NOT here.  Applying a cap is PROCESS-GLOBAL on OpenBLAS
             # (threadpoolctl calls ``openblas_set_num_threads``); only the
@@ -5763,7 +5855,7 @@ class _PreparedPMMStack:
                 "(the assemble-once eig is the in-plane 2n solver); call "
                 "PMMStack.solve() per point.")
         self._st = stack
-        # the layout the caches below are valid for (A4): a solve after any
+        # the layout the caches below are valid for: a solve after any
         # layout-affecting attribute of the stack changed is refused.
         self._layout = stack._layout_signature()
         self._uwidths, self._layer_eps_u = _pmm_union_grid(
@@ -5807,8 +5899,9 @@ class _PreparedPMMStack:
         keys = self._layer_keys[i]
         # the resolved layout is part of the key: a solve at another
         # wavelength (whose default geometric floor differs) never reads
-        # this one's modes
-        layout = (st.degree, st.n_el, grade)
+        # this one's modes; so is the Bloch wavenumber, which moves with
+        # the superstrate index at oblique incidence
+        layout = (st.degree, st.n_el, grade, float(kx0))
         if keys:
             resolved = self._resolve(self._layer_eps_u[i], materials,
                                      wavelength)
@@ -5856,9 +5949,9 @@ class _PreparedPMMStack:
             raise ValueError(
                 "PMMStack.prepare().solve: the stack's layout (period, "
                 "degree, elements_per_region, grade, min_feature, "
-                "layer_grids, window_halfwidth) changed after prepare(); the "
-                "prepared grids and caches belong to the old layout.  Call "
-                "prepare() again.")
+                "layer_grids, window_halfwidth, or the layers' segments) "
+                "changed after prepare(); the prepared grids and caches "
+                "belong to the old layout.  Call prepare() again.")
         st._internal = None  # prepared solve supersedes retained internals (audit P1-04)
         materials = dict(materials or {})
         angle = _resolve_incidence_checked(
@@ -5890,11 +5983,15 @@ class _PreparedPMMStack:
         # third classical cascade entry; eps_sup is PUBLIC here -> conj).
         _require_propagating_incidence("PMMStack.prepare().solve",
                                        np.conj(_C(eps_sup)), (kx0 / k0) ** 2)
+        _refuse_gain_substrate("PMMStack.prepare().solve", st.n_sub)
         nU = len(self._uwidths)
         # the guard resolves the layout this solve uses (a default geometric
         # floor depends on the wavelength); it is passed down, never stored
         grade = st._guard_small_elements(wl, "PMMStack.prepare().solve")
-        rk = (wl, angle, st.degree, st.n_el, grade)
+        # the half-space modes are built from the two indices, which are
+        # plain public attributes of the stack: they are part of the key
+        rk = (wl, angle, st.degree, st.n_el, grade, complex(st.n_sup),
+              complex(st.n_sub))
         with self._cache_lock:
             entry = self._mats_cache.get(rk)
             if entry is not None:

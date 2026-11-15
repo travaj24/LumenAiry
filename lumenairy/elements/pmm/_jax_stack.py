@@ -36,8 +36,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..rcwa._core import _star_from_blocks
 from ._core import (
     _gll_nodes_weights,
+    _interface_from_ab,
     _jpmm_fourier_projection,
     _jpmm_order_set,
     _jpmm_sem_modes_tensor,
@@ -235,7 +237,7 @@ def _grazing_guard_concrete(n_sup, angle):
             "Reduce the incidence angle below grazing.")
 
 
-def _pmm_stack_solve_jax(stack, grade):
+def _pmm_stack_solve_jax(stack, grade, wl=None):
     """The JAX twin of the all-vertical in-plane branch of
     :meth:`PMMStack.solve`.  Consumes the stack's stored (possibly traced)
     layers / half-spaces / source -- and ``grade``, the grading spec the
@@ -249,7 +251,9 @@ def _pmm_stack_solve_jax(stack, grade):
     _require_jax_x64("PMMStack.solve")
     cj = jnp.complex128
 
-    wl = stack._src["wl"]
+    # ``wl`` is the caller's Rayleigh-anomaly-nudged wavelength (the NumPy
+    # branch's rule, PMMStack._wood_nudged); the stored one otherwise
+    wl = stack._src["wl"] if wl is None else wl
     angle = stack._src["angle"]
     # W7 F-E: the propagating-order SET is selected from the wavelength, so a
     # TRACED wl silently solved a smaller order set than the NumPy path (and
@@ -370,12 +374,11 @@ def _pmm_stack_solve_jax(stack, grade):
 
         # ---- Redheffer cascade (verbatim the single-layer twin's blocks) ------
         def _ismat(Wa, Va, Wb, Vb):
+            # the shared interface formula (pmm._core._interface_from_ab) on
+            # jnp: the same products in the same order as the NumPy twin
             a = jnp.linalg.solve(Wb, Wa)
             b = jnp.linalg.solve(Vb, Va)
-            apb, amb = a + b, a - b
-            iapb = jnp.linalg.inv(apb)
-            return (-iapb @ amb, 2.0 * iapb,
-                    0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+            return _interface_from_ab(a + b, a - b, jnp.linalg.inv, jnp.matmul)
 
         def _psmat(lam, k0_L):
             m = lam.shape[0]
@@ -384,14 +387,10 @@ def _pmm_stack_solve_jax(stack, grade):
             return (Z, X, X, Z)
 
         def _star(SA, SB):
-            A11, A12, A21, A22 = SA
-            B11, B12, B21, B22 = SB
-            m = A11.shape[0]
-            eye = jnp.eye(m, dtype=cj)
-            D = jnp.linalg.inv(eye - B11 @ A22)
-            F = jnp.linalg.inv(eye - A22 @ B11)
-            return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
-                    B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
+            # the shared Redheffer star (rcwa._core._star_from_blocks) on jnp
+            return _star_from_blocks(
+                SA, SB, jnp.eye(SA[0].shape[0], dtype=cj), jnp.matmul,
+                lambda A, M, _what: A @ jnp.linalg.inv(M))
 
         def _D(e, lam):
             return _uniform_medium_diag(e, lam, mu_geo, jnp) if fast else None
@@ -472,7 +471,7 @@ def _pmm_stack_solve_jax(stack, grade):
     R_eff, T_eff, jones = _jax_cluster_routed(_solve)
     return jnp.asarray(orders), R_eff, T_eff, jones
 
-def _pmm_stack_solve_jax_perlayer(stack, grade):
+def _pmm_stack_solve_jax_perlayer(stack, grade, wl=None):
     """The JAX twin of the PER-LAYER all-vertical in-plane branch (audit R-6).
 
     Geometry is CONCRETE and frozen exactly as in the NumPy per-layer path:
@@ -499,7 +498,9 @@ def _pmm_stack_solve_jax_perlayer(stack, grade):
     _require_jax_x64("PMMStack.solve")
     cj = jnp.complex128
 
-    wl = stack._src["wl"]
+    # ``wl`` is the caller's Rayleigh-anomaly-nudged wavelength (the NumPy
+    # branch's rule, PMMStack._wood_nudged); the stored one otherwise
+    wl = stack._src["wl"] if wl is None else wl
     angle = stack._src["angle"]
     _require_concrete_wavelength(
         wl, "PMMStack.solve",
@@ -631,12 +632,11 @@ def _pmm_stack_solve_jax_perlayer(stack, grade):
 
         # ---- cascade: plain interface on conforming pairs, mortar otherwise ---
         def _ismat(Wa, Va, Wb, Vb):
+            # the shared interface formula (pmm._core._interface_from_ab) on
+            # jnp: the same products in the same order as the NumPy twin
             a = jnp.linalg.solve(Wb, Wa)
             b = jnp.linalg.solve(Vb, Va)
-            apb, amb = a + b, a - b
-            iapb = jnp.linalg.inv(apb)
-            return (-iapb @ amb, 2.0 * iapb,
-                    0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+            return _interface_from_ab(a + b, a - b, jnp.linalg.inv, jnp.matmul)
 
         def _imort(Wa, Va, Wb, Vb, i):
             Cba, Cab = crosses[i]
@@ -678,14 +678,9 @@ def _pmm_stack_solve_jax_perlayer(stack, grade):
             # ``_redheffer_star_rect``'s docstring for the identity pin that
             # refused the solve.  The common subexpressions are named once (the
             # bit-identical half of M3 / N-3 item 4).
-            A11, A12, A21, A22 = SA
-            B11, B12, B21, B22 = SB
-            m = A22.shape[0]
-            eye = jnp.eye(m, dtype=cj)
-            AD = A12 @ jnp.linalg.inv(eye - B11 @ A22)
-            BF = B21 @ jnp.linalg.inv(eye - A22 @ B11)
-            return (A11 + AD @ B11 @ A21, AD @ B12,
-                    BF @ A21, B22 + BF @ A22 @ B12)
+            return _star_from_blocks(
+                SA, SB, jnp.eye(SA[3].shape[0], dtype=cj), jnp.matmul,
+                lambda A, M, _what: A @ jnp.linalg.inv(M))
 
         def _ifc(Wa, Va, Wb, Vb, i):
             # i = the LOWER layer index of an interior interface; None = half-space

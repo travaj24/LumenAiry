@@ -1773,6 +1773,13 @@ PMM_FORWARD_GROWTH_REPAIR = True
 #: switches together reproduce either shipped selector exactly.
 PMM_FORWARD_GROWTH_PASSIVE = True
 
+#: FAIL-BEFORE SWITCH for the gain-medium sector rule of
+#: :func:`_forward_growth_flip` (a mode of a non-passive layer is decided by
+#: its flux only when ``|Re q| > |Im q|``).  ``False`` restores the bare flux
+#: rule on non-passive layers bit for bit -- and with it the growing
+#: evanescent modes that made gain stacks return ``R + T`` of 1e1 .. 1e4.
+_PMM_GAIN_SECTOR = True
+
 
 def _forward_growth_flip(flux, q, thr, prop, xp=np, passive=False):
     """The forward/backward selector, with the ROUND-OFF BAND repaired.
@@ -1885,7 +1892,40 @@ def _forward_growth_flip(flux, q, thr, prop, xp=np, passive=False):
     is data-dependent control flow and it traces.
 
     No constant is added: ``near | passive`` either widens the mask to the
-    whole ``grow`` set or leaves it exactly where it was."""
+    whole ``grow`` set or leaves it exactly where it was.
+
+    ---------------------------------------------------------------------
+    GAIN MEDIA -- which modes the flux rule may decide
+    ---------------------------------------------------------------------
+    On a layer that is NOT provably passive the propagating test
+    ``|flux| > thr`` is not a test of "propagating" at all: in a gain medium
+    an EVANESCENT mode carries real z-power.  For a uniform medium,
+    ``q^2 = eps - kx^2`` with ``eps = eps' - i eps''`` and ``eps' < kx^2``
+    gives ``q = -a + i b`` with ``b >> a > 0``: the DECAYING root (the
+    forward one, ``b > 0``) carries power toward ``-z`` (``Re q < 0``), with a
+    flux ``~ a / b ~ eps'' / (2 |eps' - kx^2|)`` of the field norm -- many
+    decades above the round-off cut.  The bare flux rule therefore flipped
+    every such mode onto its GROWING root, put ``exp(+b k0 d)`` into the layer
+    propagator and returned ``R + T`` of 1e1 .. 1e4 (patterned gain ridge,
+    diagonal-tensor gain layer, every layer at conical incidence).
+
+    The forward root of a non-passive mode is the analytic continuation from
+    the lossy side: as the gain goes to zero a mode's ``q`` goes to the real
+    axis (a propagating mode, whose direction is its power flow: the flux
+    rule) or to the imaginary axis (an evanescent mode, whose direction is
+    its decay: the ``Im(q)`` rule).  So on a non-passive layer a mode is
+    handed the flux rule only when its root is nearer the real axis than the
+    imaginary one, ``|Re q| > |Im q|``; every other mode takes the ``Im(q)``
+    rule.  Validated against RCWAStack and an analytic transfer matrix
+    (``tests/unit/test_pmm_stack_gain_media.py``): uniform gain layers
+    (isotropic and diagonal-tensor), a patterned gain ridge, and a gain layer
+    under a patterned layer, at normal, oblique and conical incidence, all
+    converge with degree toward the RCWA answer as the passive cases do.  A
+    provably passive layer is untouched (bit for bit), and
+    :data:`_PMM_GAIN_SECTOR` ``= False`` restores the bare rule."""
+    if _PMM_GAIN_SECTOR and passive is not True:
+        # ``passive`` may be a traced 0-d boolean (the JAX twins): elementwise
+        prop = prop & (passive | (xp.abs(q.real) > xp.abs(q.imag)))
     flip = xp.where(prop, flux < 0.0, q.imag < 0.0)
     if not PMM_FORWARD_GROWTH_REPAIR:
         return flip
