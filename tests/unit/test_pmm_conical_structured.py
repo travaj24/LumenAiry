@@ -186,14 +186,31 @@ def test_geometric_conical_matches_the_asr_reference():
     assert e[0, 0] < XX_BAR and e[1, 1] < XX_BAR, e
 
 
+#: Five inputs equal to 1e-10 relative: ``phi * (1 + k * 1e-10)``.
+_DENSE_PHI_DRAWS = tuple(0.3 * (1.0 + k * 1e-10) for k in range(5))
+
+
 def test_dense_conical_eig_fails_the_same_comparison(dense_conical):
     """Decision pair with the test above (fail-before): the dense eig of
-    M = -(P Q) on the same layout.  RE-MEASURED 2026-11-15 on the generic
-    fixture: xy 1.2e-4 (Windows/MKL), 4x above the bar; it is round-off
-    (the dense J_xy moves 4.4e-4 under a 1e-10 relative change of phi and
-    3.6e-4 between degree 8 and 12)."""
-    J = _J(_strip(8, 12, "geometric"))
-    assert abs(J[0, 1] - R_STRIP[0, 1]) > 3e-5
+    M = -(P Q) on the same layout misses the reference by more than 100x
+    ``XY_BAR``.
+
+    The dense J_xy is ROUND-OFF (it moves 4.4e-4 under a 1e-10 relative
+    change of phi and 3.6e-4 between degree 8 and 12), so a single draw of
+    its error is a random variable, not a property of the solve: over 120
+    draws per build with phi scaled by ``1 + k * 1e-13`` its error reads
+    median 2.4e-4 .. 2.7e-4 but lands below the 3e-5 bar in 4 .. 8 % of the
+    draws (min 4.9e-6; WSL OpenBLAS numpy 2.2.6 / 2.4.6 / 2.5.4, Windows
+    MKL numpy 2.4.4), where the structured solve reads <= 7.5e-8 on every
+    draw.  So the arm reads the WORST of five inputs equal to 1e-10
+    relative, which the structured solve meets ``XY_BAR`` on and the dense
+    eig cannot.  Measured on the same four builds over 30 groups of five
+    (group offset ``g * 1e-12``): the worst-of-five error is >= 1.6e-4
+    (median 4.9e-4 .. 5.9e-4) in every group, 5x above the bar, although
+    5 .. 6 % of those single draws fall below it (min 1.1e-6)."""
+    errs = [abs(_J(_strip(8, 12, "geometric", phi=phi))[0, 1]
+                - R_STRIP[0, 1]) for phi in _DENSE_PHI_DRAWS]
+    assert max(errs) > 3e-5, errs
 
 
 def test_geometric_conical_cross_polarization_converges_in_degree():
