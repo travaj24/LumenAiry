@@ -49,7 +49,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from ._core import _freeze_cached
+from ._core import _freeze_cached, _safe_lam
 
 _C = np.complex128
 # LRU-bounded (audit P3-28): the key includes the CONTINUOUS pillar bounds /
@@ -389,7 +389,7 @@ def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
     cj = jnp.complex128
 
     def _inv_lam(lam):
-        safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
+        safe = _safe_lam(lam, jnp)
         return 1.0 / safe
 
     def _kz_fwd(eps, kx, ky):

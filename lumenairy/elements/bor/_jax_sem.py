@@ -93,10 +93,9 @@ def _build_bnd(stack, wall_list, segs, k0):
         bnd[-1] = stack.Rbig
     k = stack.elements_per_segment
     if k > 1:
-        if stack.grade:
-            sloc = 0.5 * (1.0 - np.cos(np.pi * np.arange(k + 1) / k))
-        else:
-            sloc = np.linspace(0.0, 1.0, k + 1)
+        # the ONE grading rule (pmm._core), shared with _solve_sem.build_mesh
+        from ..pmm._core import _graded_fractions
+        sloc = _graded_fractions(k, bool(stack.grade))
         out = [bnd[0]]
         for lo, hi in zip(bnd[:-1], bnd[1:]):
             out.extend(lo + (hi - lo) * sloc[1:])

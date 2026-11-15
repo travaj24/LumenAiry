@@ -377,6 +377,40 @@ E_out, _ = la.propagate_through_system(
     wavelength=0.633e-6, dx=2e-6)
 ```
 
+**Metal gratings: the accuracy settings (5.51).**  A TM metal strip converges
+slowly in the plain Fourier basis.  `segments=` gives the exact lamellar layer,
+`formulation='auto'` (the default) puts it on Li's inverse rule, `asr=True`
+clusters the harmonics at the walls of every patterned layer of a 1-D stack,
+and `rcwa_convergence` judges a relative error estimate.  The polynomial modal
+`PMMStack` with `grade='geometric'` is the independent check:
+
+```python
+strip = [(180 / 500, -90 + 7j), (320 / 500, 1.0)]    # (width fraction, eps)
+
+def rcwa_stack(n_orders, **kw):
+    return (la.RCWAStack(500e-9, n_substrate=1.5, n_orders=n_orders, **kw)
+            .add_layer(40e-9, segments=strip)          # 'auto' -> 'li' here
+            .add_layer(19e-9, eps=3.6)                 # spacer
+            .add_layer(80e-9, eps=-130 + 20j)          # metal mirror
+            .set_source(1500e-9, theta=0.0))
+
+r_li = rcwa_stack(40).solve().jones_reflection()[0, 0]
+r_asr = rcwa_stack(40, asr=True).solve().jones_reflection()[0, 0]
+res, rep = la.rcwa_convergence(rcwa_stack(40, asr=True))  # relative estimate
+print(rep["converged"], rep["err_estimate"])
+
+pmm = la.PMMStack(500e-9, n_substrate=1.5, degree=8, elements_per_region=12,
+                  grade='geometric')                    # corner-refined layout
+pmm.add_layer(40e-9, segments=strip)
+pmm.add_layer(19e-9, eps=3.6)
+pmm.add_layer(80e-9, eps=-130 + 20j)
+r_pmm = pmm.set_source(1500e-9, theta=0.0).solve()[3][0, 0]
+print(abs(r_asr - r_pmm), abs(r_li - r_pmm))
+```
+
+`formulation='laurent'` on `add_layer` restores the direct rule (the default
+before 5.51).  See `docs/rcwa_stack_asr.md` for the convergence tables.
+
 For gradient-based metasurface inverse design, pass `jax.numpy` arrays (and
 set `jax.config.update('jax_enable_x64', True)` — RCWA needs double
 precision); `rcwa_efficiency_1d` / `_2d` then differentiate w.r.t. the

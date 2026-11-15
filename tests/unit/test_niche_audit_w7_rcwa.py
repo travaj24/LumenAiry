@@ -403,7 +403,11 @@ def test_w7d_layer_absorption_split_uses_the_registered_map():
     st = rcwa.RCWAStack(period=0.6e-6, n_substrate=1.5, n_orders=6)
     cw = np.ones((64, 1), dtype=_C)
     cw[:32] = complex(0.15, 3.5) ** 2
-    st.add_layer(0.05e-6, eps_cell=cw)
+    # EXPLICIT 'laurent' (re-pinned 2026-11-14): the pin is the Im(eps)|E|^2
+    # volume integral's cell registration, the path a 'laurent' layer uses;
+    # the formulation default 'auto' resolves this 1-D cell to 'li', whose
+    # absorption is the face-flux difference (and whose TM solve differs).
+    st.add_layer(0.05e-6, eps_cell=cw, formulation="laurent")
     st.add_layer(0.10e-6, eps=complex(1.5, 0.05) ** 2)
     st.set_source(0.633e-6, theta=0.0)
     with warnings.catch_warnings():

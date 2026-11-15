@@ -42,6 +42,28 @@ import pytest  # noqa: E402
 from lumenairy.elements.pmm import PMMStack  # noqa: E402
 from lumenairy.elements.pmm import stack as ps  # noqa: E402
 
+
+# ---------------------------------------------------------------------------
+# 2026-11-14 -- THE WRONG-ANSWER POPULATION THIS FILE TESTS THE GUARD AGAINST
+# was produced by the PMM forward/backward selector defect fixed that day
+# (``_core._growth_mask``): on the sliver's tiny element the eigensolve's
+# round-off pushed a propagating mode's ``Im(q)`` past the growth bar and the
+# sign of that round-off decided its direction.  With the fix every row of
+# these ladders is RIGHT on both builds (asserted in
+# ``tests/unit/test_pmm_eig_roundoff_selector.py``), so the guard's decisions
+# are exercised here on the PRE-FIX selector, restored through its fail-before
+# switch for this module only.  No assertion below is relaxed.
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True, scope="module")
+def _pre_fix_selector():
+    from lumenairy.elements.pmm import _core as _sel
+    was = _sel._PMM_EIG_ROUNDOFF_BAR
+    _sel._PMM_EIG_ROUNDOFF_BAR = False
+    try:
+        yield
+    finally:
+        _sel._PMM_EIG_ROUNDOFF_BAR = was
+
 # ---- the O-11 fixture, the two sibling files' own numbers ------------------
 _P = 1.2e-6
 _WL = 0.85e-6

@@ -323,7 +323,9 @@ def test_rcwa_stack_symmetry_breaking_gradient_at_a_symmetric_cell():
     """``RCWAStack`` on JAX input: the four-fold cell over a uniform spacer
     (eps 2.25, 0.1); t on the two x-side blocks; R, T of (0,0), (+-1,0) for
     both incident polarizations.  Before: 0.13 / 0.14 (probe g1, half-spaces
-    swapped); after: 2.3e-10 / 4.7e-10 (Windows / WSL)."""
+    swapped); after: 2.3e-10 / 4.7e-10 (Windows / WSL) under the direct
+    rule.  The default ``'auto'`` runs ``'li'`` on both sides (a JAX cell
+    resolves as its NumPy twin does): 4.4e-10 (Windows)."""
     import jax
     import jax.numpy as jnp
 

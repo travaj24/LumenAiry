@@ -2289,8 +2289,10 @@ def test_the_passivity_widening_is_a_null_floor_and_an_invariant():
     ``docs/audits/FIX_CI_ROUND2_PMM_2026_08_08.md`` S1.3.
 
       (1) THE NULL FLOOR.  With ``passive`` False -- a gain medium, an
-          off-diagonal tensor, an unknown element payload -- the shipped
-          selector is BIT-IDENTICAL to the 2026-08-06 mask.  Compared against
+          off-diagonal tensor, an unknown element payload -- the selector
+          (with the later gain-medium sector rule switched off; with it on,
+          the same mask on the sector-restricted propagating set) is
+          BIT-IDENTICAL to the 2026-08-06 mask.  Compared against
           a VERBATIM re-implementation of that mask, at tolerance 0.0, not by
           ``array_equal`` on the answer.  Measured 0 differing trials of 400.
       (2) THE INVARIANT.  With ``passive`` True the returned forward set
@@ -2318,7 +2320,13 @@ def test_the_passivity_widening_is_a_null_floor_and_an_invariant():
         qf = np.where(flip, -q, q)
         return bool((qf.imag < -PC._MODE_GROWTH_REL * np.abs(qf)).any())
 
-    n_diff, n_grew_wide, n_grew_narrow = 0, 0, 0
+    # Re-pinned when the gain-medium sector rule was added (a mode of a
+    # NON-passive layer is decided by its flux only when |Re q| > |Im q|; see
+    # _forward_growth_flip).  The null floor of THIS widening is now stated on
+    # the selector with that rule switched off (``_PMM_GAIN_SECTOR = False``),
+    # and the shipped non-passive selector is pinned, at tolerance 0.0, to the
+    # same verbatim mask applied to the sector-restricted ``prop``.
+    n_diff, n_grew_wide, n_grew_narrow, n_diff_sector = 0, 0, 0, 0
     for _trial in range(400):
         n = 40
         flux = rng.standard_normal(n) * 10.0 ** rng.integers(-20, 2, n)
@@ -2329,16 +2337,29 @@ def test_the_passivity_widening_is_a_null_floor_and_an_invariant():
         q[m] = 1j * rng.standard_normal(int(m.sum()))
         thr = float(10.0 ** rng.integers(-20, -2))
         prop = np.abs(flux) > thr
-        narrow = PC._forward_growth_flip(flux, q, thr, prop, np, False)
+        saved = PC._PMM_GAIN_SECTOR
+        try:
+            PC._PMM_GAIN_SECTOR = False
+            narrow = PC._forward_growth_flip(flux, q, thr, prop, np, False)
+        finally:
+            PC._PMM_GAIN_SECTOR = saved
         wide = PC._forward_growth_flip(flux, q, thr, prop, np, True)
         if not np.array_equal(narrow, mask_2026_08_06(flux, q, thr, prop)):
             n_diff += 1
+        shipped = PC._forward_growth_flip(flux, q, thr, prop, np, False)
+        sector = prop & (np.abs(q.real) > np.abs(q.imag))
+        if not np.array_equal(shipped,
+                              mask_2026_08_06(flux, q, thr, sector)):
+            n_diff_sector += 1
         n_grew_wide += grows(wide, q)
         n_grew_narrow += grows(narrow, q)
     assert n_diff == 0, (                        # (1)
         f"{n_diff} of 400 spectra: the selector with passivity NOT PROVEN is "
         f"no longer bit-identical to the 2026-08-06 mask, so the widening has "
         f"stopped being a null floor for gain / off-diagonal / unknown grids")
+    assert n_diff_sector == 0, (
+        f"{n_diff_sector} of 400 spectra: the non-passive selector is not the "
+        f"2026-08-06 mask on the sector-restricted propagating set")
     assert n_grew_wide == 0, (                   # (2)
         f"{n_grew_wide} of 400 spectra leave a GROWING mode in the forward "
         f"set with passive=True -- the invariant is supposed to hold by "

@@ -31,10 +31,10 @@ def _square_cell(eps_hi):
     return np.where((np.abs(X) < 0.25) & (np.abs(Y) < 0.25), eps_hi, 2.1 + 0j)
 
 
-def _stack(eps_hi, n_orders):
+def _stack(eps_hi, n_orders, **kw):
     st = la.RCWAStack(0.5e-6, period_y=0.5e-6, n_substrate=1.5,
                       n_orders=n_orders, n_orders_y=n_orders)
-    st.add_layer(0.10e-6, eps_cell=_square_cell(eps_hi))
+    st.add_layer(0.10e-6, eps_cell=_square_cell(eps_hi), **kw)
     st.add_layer(0.05e-6, eps=2.1)
     st.set_source(0.6e-6, theta=0.001)
     return st
@@ -91,7 +91,10 @@ def test_stabilize_no_harm_on_converged_stack():
 def test_stabilize_under_resolved_warns_and_returns_requested():
     # a hard metal stack at low n_orders has no convergence plateau -> warn +
     # return the requested n_orders (cannot manufacture resolution downward).
-    st = _stack((0.2 + 6j) ** 2, 8)
+    # EXPLICIT 'laurent' (re-pinned 2026-11-14): the under-resolution is the
+    # direct rule's.  The default 'auto' resolves this 2-D METAL cell to 'li',
+    # whose n_orders 4..8 window does form a plateau, so no warning fires.
+    st = _stack((0.2 + 6j) ** 2, 8, formulation="laurent")
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         st.solve(stabilize=True)

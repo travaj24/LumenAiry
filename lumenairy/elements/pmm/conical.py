@@ -36,7 +36,7 @@ from ..rcwa._core import (
     _propagation_smatrix_general,
     _require_propagating_incidence,
 )
-from ._core import _mode_cut_scoped
+from ._core import _is_geometric_spec, _mode_cut_scoped, _normalize_grade
 from .twod import (
     _build_axis,
     _cell_to_walls_tile,
@@ -123,6 +123,91 @@ def _conical_jones_farfield(S11, S21, order_x, order_y, kxv, kyv, kx0, ky0,
     return out
 
 
+#: FAIL-BEFORE SWITCH for the structured conical modal solves (2026-11-14,
+#: :func:`_conical_modes`).  ``False`` restores the dense conical eig of
+#: ``M = -(P @ Q)`` for every layer and half-space of the nodal conical
+#: cascade bit for bit -- and with it the refusal of geometric grading at
+#: conical incidence (:func:`_refuse_geometric_conical`), which that eig
+#: could not support.
+PMM_CONICAL_STRUCTURED = True
+
+
+def _conical_modes(mats, k0, kx0, ky0, eps_row, grade):
+    """Modes ``(W, V, lam, q)`` of one medium of the nodal conical cascade on
+    the grid ``mats`` (``kx0`` / ``ky0`` dimensional).
+
+    A laterally uniform isotropic medium (``eps_row``: its per-cell
+    permittivities, exactly equal) takes the exactly structured modes of
+    :func:`~lumenairy.elements.pmm._core._sem_modes_uniform_conical` (the
+    classical shared-eig modes at ``ky0 = 0``); any other in-plane layer the
+    classical-basis solve :func:`~lumenairy.elements.pmm._core._sem_modes_conical`
+    (the classical eig at ``ky0 = 0``).  See the block comment above
+    ``_conical_khat`` in ``_core.py`` for why the dense eig of
+    ``M = -(P @ Q)`` is not used: it loses the resolved modes' accuracy on
+    small elements.  Where a structured solve is not defined (a singular
+    classical basis, ``eps == kyn^2``) a Chebyshev / uniform layout falls back
+    to that dense eig (adequate on such layouts, whose elements are not
+    small) and a geometric layout, whose small elements it cannot carry,
+    raises."""
+    from ._core import (
+        _sem_modes_conical,
+        _sem_modes_tensor,
+        _sem_modes_uniform,
+        _sem_modes_uniform_conical,
+    )
+    from ._uniform_cascade import UNIFORM_LAYER_LABEL, _uniform_iso_eps
+    if not PMM_CONICAL_STRUCTURED:
+        return _sem_modes_tensor(mats, k0, kx0, ky0=ky0)
+    e = _uniform_iso_eps(eps_row)
+    try:
+        if ky0 == 0.0:
+            if e is not None:
+                return _sem_modes_uniform(mats, k0, kx0, e,
+                                          label=UNIFORM_LAYER_LABEL)
+            return _sem_modes_tensor(mats, k0, kx0, ky0=ky0)
+        if e is not None:
+            return _sem_modes_uniform_conical(mats, k0, kx0, ky0, e)
+        return _sem_modes_conical(mats, k0, kx0, ky0)
+    except FloatingPointError as exc:
+        if _is_geometric_spec(grade):
+            raise ValueError(
+                f"pmm conical: the structured modal solve is not defined for "
+                f"this medium ({exc}); geometric grading needs it at conical "
+                f"incidence.  Use grade=True (Chebyshev) for this geometry.") \
+                from None
+        return _sem_modes_tensor(mats, k0, kx0, ky0=ky0)
+
+
+def _refuse_geometric_conical(grade, where):
+    """Geometric element grading at conical incidence: refused ONLY when the
+    structured conical modal solves are switched off
+    (``PMM_CONICAL_STRUCTURED = False``); ``grade`` is normalized by the
+    caller first, so an invalid value still raises ``ValueError``.
+
+    WHY THE DENSE SOLVE CANNOT TAKE A GEOMETRIC LAYOUT.  The dense conical
+    eigenproblem ``M = -(P @ Q)`` is a product of two factors that each carry
+    the ``1 / (k0 h)^2`` scale of the smallest element, so its absolute
+    round-off reaches the resolved modes on the small wall elements a
+    geometric layout makes; and it splits the exactly degenerate TE/TM pair
+    of every order of an isotropic uniform medium into arbitrary mixtures,
+    each paired with its own round-off-split ``q``, which leaks into the
+    cross-polarized ``J_xy``.  The structured solves (``_core.py``, the block
+    above ``_conical_khat``) form neither the product nor the split pairs;
+    with them a geometric layout converges at conical incidence as it does
+    in the planar mount (``tests/unit/test_pmm_conical_structured.py``
+    measures ``J_xy`` against ``RCWAStack(asr=True)`` and the ``phi -> 0``
+    reduction to the classical solve)."""
+    if _is_geometric_spec(grade) and not PMM_CONICAL_STRUCTURED:
+        raise NotImplementedError(
+            f"{where}: geometric element grading is not available at conical "
+            f"incidence -- the conical cascade loses accuracy on the small "
+            f"wall elements it makes (measured: the cross-polarized Jones "
+            f"term drifts by ~1e-3 across degree 8-24 at the default floor, "
+            f"where the planar solve converges).  Use grade=True (Chebyshev) "
+            f"or False here; geometric grading is validated for the planar "
+            f"(phi = 0) mount.")
+
+
 def _tile_has_offplane_public(tensors):
     """True if any (3, 3) tensor in ``tensors`` carries out-of-plane coupling
     (``xz/yz/zx/zy``) -- conjugation-invariant, so PUBLIC-gauge safe."""
@@ -188,7 +273,6 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
         _sem_cross_mass_cached,
         _sem_fourier_projection,
         _sem_mass_exact_cached,
-        _sem_modes_tensor,
         _tensor3_dict,
     )
 
@@ -299,15 +383,16 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
                 m = _build_sem_tensor_segments(
                     period, w_i, [_tensor3_dict(e) for e in eps_row],
                     degree, n_el, grade)
-                hit = (m, _sem_modes_tensor(m, k0, kx0_dim, ky0=ky0_dim))
+                hit = (m, _conical_modes(m, k0, kx0_dim, ky0_dim, eps_row,
+                                         grade))
                 _eig_memo[ck] = hit
             mats_by.append(hit[0])
             lmodes.append(hit[1])
         wkeys = [w.tobytes() for w, _r in grid_of]
-        Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0_dim,
-                                                 ky0=ky0_dim)
-        Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0_dim,
-                                                 ky0=ky0_dim)
+        Wsup, Vsup, _ls, _qs = _conical_modes(mats_sup, k0, kx0_dim,
+                                              ky0_dim, [eps_sup], grade)
+        Wsub, Vsub, _lb, _qb = _conical_modes(mats_sub, k0, kx0_dim,
+                                              ky0_dim, [eps_sub], grade)
         _mass_memo = {}
 
         def _mass(i):
@@ -349,17 +434,17 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
                                               degree, n_el, grade)
         n_glob_sup = n_glob_sub = mats_sup["n_glob"]
 
-        Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0_dim,
-                                                 ky0=ky0_dim)
-        Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0_dim,
-                                                 ky0=ky0_dim)
+        Wsup, Vsup, _ls, _qs = _conical_modes(mats_sup, k0, kx0_dim,
+                                              ky0_dim, [eps_sup], grade)
+        Wsub, Vsub, _lb, _qb = _conical_modes(mats_sub, k0, kx0_dim,
+                                              ky0_dim, [eps_sub], grade)
         lmodes = []
         _eig_memo = {}
         for eps_u, m in zip(layer_eps_u, layer_mats):
             ck = tuple(np.asarray(e, dtype=_C).tobytes() for e in eps_u)
             hit = _eig_memo.get(ck)
             if hit is None:
-                hit = _sem_modes_tensor(m, k0, kx0_dim, ky0=ky0_dim)
+                hit = _conical_modes(m, k0, kx0_dim, ky0_dim, eps_u, grade)
                 _eig_memo[ck] = hit
             lmodes.append(hit)
 
@@ -456,6 +541,11 @@ def pmm_jones_1d_conical(period, eps_ridge, eps_groove, n_substrate,
     reflection Jones (columns = incident ``[E_x; E_y]``), exactly as
     :func:`~lumenairy.elements.pmm.pmm_jones_2d`.
     """
+    grade = _normalize_grade(grade, period=period,
+                             where="pmm_jones_1d_conical",
+                             elements_per_region=elements_per_region,
+                             wavelength=wavelength)
+    _refuse_geometric_conical(grade, "pmm_jones_1d_conical")
     if n_orders is None:
         n_orders = max(8, degree // 2)
     # PATTERNED grating -> the pure-nodal conical cascade
@@ -579,6 +669,11 @@ def pmm_jones_1d_conical_tensor(period, eps_tensor_cell, n_substrate,
         raise ValueError(
             f"pmm_jones_1d_conical_tensor: formulation must be 'laurent' or "
             f"'li', got {formulation!r}")
+    grade = _normalize_grade(grade, period=period,
+                             where="pmm_jones_1d_conical_tensor",
+                             elements_per_region=elements_per_region,
+                             wavelength=wavelength)
+    _refuse_geometric_conical(grade, "pmm_jones_1d_conical_tensor")
     cell = np.asarray(eps_tensor_cell, dtype=_C)
     if cell.ndim == 3:                             # (Sx, 3, 3) -> (Sx, 1, 3, 3)
         cell = cell[:, None, :, :]

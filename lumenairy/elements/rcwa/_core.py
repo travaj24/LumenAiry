@@ -3098,16 +3098,41 @@ def _redheffer_star(SA, SB):
     if _concrete and not bool(A22.any()):
         # D = F = I and A22 == 0 exactly.
         return (A11 + (A12 @ B11) @ A21, A12 @ B12, B21 @ A21, B22)
-    I = xp.eye(n, dtype=_C)
-    D = _guarded_inverse(I - B11 @ A22, "rcwa Redheffer star (I - B11 A22)")
-    F = _guarded_inverse(I - A22 @ B11, "rcwa Redheffer star (I - A22 B11)")
-    AD = A12 @ D
-    BF = B21 @ F
-    C11 = A11 + (AD @ B11) @ A21
-    C12 = AD @ B12
-    C21 = BF @ A21
-    C22 = B22 + (BF @ A22) @ B12
-    return (C11, C12, C21, C22)
+    return _star_from_blocks(SA, SB, xp.eye(n, dtype=_C), _matmul,
+                             _matmul_guarded_inverse)
+
+
+def _matmul(A, B):
+    return A @ B
+
+
+def _matmul_guarded_inverse(A, M, what):
+    """``A @ M^-1`` with ``M^-1`` from :func:`_guarded_inverse` (the dense
+    star's ``A12 D`` / ``B21 F``)."""
+    return A @ _guarded_inverse(M, "rcwa Redheffer star " + what)
+
+
+def _star_from_blocks(SA, SB, one, mm, rdiv):
+    """THE Redheffer star formula, shared by the dense star
+    (:func:`_redheffer_star`'s general branch: ``one`` the identity, ``mm`` the
+    matrix product, ``rdiv(A, M, what) = A @ M^-1`` through the guarded
+    inverse) and the elementwise star of two DIAGONAL S-matrices in the PMM
+    uniform-layer fast path (``one = 1``, ``mm`` the elementwise product,
+    ``rdiv`` elementwise division; ``pmm._uniform_cascade._diag_star``).
+
+    With ``D = (I - B11 A22)^-1`` and ``F = (I - A22 B11)^-1``::
+
+        C11 = A11 + A12 D B11 A21    C12 = A12 D B12
+        C21 = B21 F A21              C22 = B22 + B21 F A22 B12
+
+    The association order (``AD = A12 D`` hoisted, then left-to-right) is
+    fixed here for both callers."""
+    A11, A12, A21, A22 = SA
+    B11, B12, B21, B22 = SB
+    AD = rdiv(A12, one - mm(B11, A22), "(I - B11 A22)")
+    BF = rdiv(B21, one - mm(A22, B11), "(I - A22 B11)")
+    return (A11 + mm(mm(AD, B11), A21), mm(AD, B12), mm(BF, A21),
+            B22 + mm(mm(BF, A22), B12))
 
 
 
@@ -3173,7 +3198,7 @@ def _redheffer_star_rt(SA, SB, cinc):
     are summed in a different order (mat-vec instead of mat-mat), which moves
     the last bits.  WHILE ``I - B11 A22`` IS WELL CONDITIONED that is the
     whole of the difference.  Measured against the assembled star over the
-    metallic convergence ladder (Ag and Au, ``n_orders`` 100..400, both
+    metallic convergence ladder (two metals, ``n_orders`` 100..400, both
     polarizations) the largest disagreement is 3.3e-16 absolute / 1.7e-15
     relative on a per-order efficiency, and over the whole 1-D + 2-D
     entry-point matrix (both polarizations, ``'laurent'`` / ``'li'`` /
@@ -3297,11 +3322,23 @@ def _propagation_star(S, lam, k0_L):
     ~10-zgemm chain against literal identity/zero blocks (audit RCWA-LEV-2:
     463.5 ms -> 7.3 ms at 2N = 722; one of the two stars in every
     single-layer solve and half the stars in every stack solve)."""
+    xp = array_namespace(S[0], lam)
+    return _propagation_scale(S, xp.exp(-lam * k0_L))
+
+
+def _propagation_scale(S, X):
+    """THE propagation star given ``X = exp(-lam k0 L)``: ``S12`` scaled by
+    columns, ``S21`` by rows, ``S22`` by both, ``S11`` unchanged.  Shared by
+    :func:`_propagation_star` (dense ``2N x 2N`` blocks) and the PMM
+    uniform-layer fast path, whose S-matrices are DIAGONAL and stored as their
+    diagonals (1-D blocks; ``pmm._uniform_cascade._diag_propagate``) -- the
+    same products in the same order, elementwise."""
     A11, A12, A21, A22 = S
-    xp = array_namespace(A11, lam)
-    X = xp.exp(-lam * k0_L)
-    return (A11, A12 * X[None, :], X[:, None] * A21,
-            (X[:, None] * A22) * X[None, :])
+    if A12.ndim == 1:                    # diagonal storage
+        Xr = Xc = X
+    else:
+        Xr, Xc = X[None, :], X[:, None]
+    return (A11, A12 * Xr, Xc * A21, (Xc * A22) * Xr)
 
 
 
@@ -3446,46 +3483,351 @@ def _max_aligned_delta(o_lo, A_lo, o_hi, A_hi):
 
 
 
-def _rcwa_convergence_stack(stack, *, bump, atol, warn):
+# ---------------------------------------------------------------------------
+# Convergence check (``rcwa_convergence``): ONE comparator for the callable and
+# the RCWAStack branch.
+# ---------------------------------------------------------------------------
+#: Relative floor of the per-order efficiency comparison: an order's change is
+#: judged against ``max(R_m, _CONV_REL_FLOOR * sum(R))`` (same for T), so a
+#: near-zero order cannot dominate the verdict through a large relative change
+#: of a negligible amount of power.
+_CONV_REL_FLOOR = 1e-3
+#: Absolute floor in efficiency units (round-off level), so a port that
+#: carries no power at all (a perfect mirror's T) is not judged on noise.
+_CONV_EFF_FLOOR = 1e-12
+#: Default geometric step per truncation axis: x1.5 for one axis, x1.25 per
+#: axis for two, so the retained harmonic count grows about 1.5x either way.
+_CONV_FACTOR_1AXIS = 1.5
+_CONV_FACTOR_2AXIS = 1.25
+#: ``estimate=True``: the local exponent counts as algebraic convergence only
+#: inside this range; outside it (or with successive changes of opposite sign)
+#: the sequence is ERRATIC and no extrapolated error is trusted.
+_CONV_EXPONENT_RANGE = (0.5, 4.0)
+#: Default ``rtol`` of the error-estimate verdict.
+_CONV_RTOL = 1e-2
+#: The LEGACY call form -- an additive ``bump=`` with no ``rtol`` and no
+#: ``estimate`` -- is judged exactly as releases up to 5.50 judged it: the
+#: largest absolute per-order efficiency change against ``atol`` alone, with
+#: their default ``atol``.
+_CONV_LEGACY_ATOL = 1e-3
+
+
+def _algebraic_exponent(n1, n2, n3, target, lo, hi):
+    """The exponent ``p`` of the algebraic tail ``s(N) = L + C N^-p`` through
+    three samples at ``n1 < n2 < n3``, from ``target = (s2 - s1)/(s3 - s2)``:
+    the root of ``(n1^-p - n2^-p)/(n2^-p - n3^-p) = target`` on ``[lo, hi]``
+    by 60 bisections, or ``None`` when the bracket holds no root.  Shared by
+    :func:`rcwa_extrapolate` (``'richardson'``) and the ``estimate=True``
+    branch of :func:`rcwa_convergence`."""
+    def _ratio(p):
+        a, b, c = n1 ** -p, n2 ** -p, n3 ** -p
+        d = b - c
+        return (a - b) / d if abs(d) > 1e-300 else np.inf
+
+    flo, fhi = _ratio(lo) - target, _ratio(hi) - target
+    if not np.isfinite(flo) or not np.isfinite(fhi) or flo * fhi > 0:
+        return None
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        fmid = _ratio(mid) - target
+        if flo * fmid <= 0:
+            hi, fhi = mid, fmid
+        else:
+            lo, flo = mid, fmid
+    return 0.5 * (lo + hi)
+
+
+def _convergence_step(n, *, factor=None, bump=None, keep_zero=False):
+    """The next truncation on ONE axis: ``n + bump`` (the additive legacy
+    step), else ``max(n + 1, ceil(factor n))``.  With ``keep_zero`` an axis at
+    ``n = 0`` (the second axis of a 2-D problem that carries no harmonics,
+    e.g. ``n_orders_y = 0`` on a y-invariant cell) stays 0 on the geometric
+    step."""
+    n = int(n)
+    if bump is not None:
+        return n + int(bump)
+    if keep_zero and n <= 0:
+        return n
+    return max(n + 1, int(np.ceil(float(factor) * n - 1e-9)))
+
+
+def _convergence_rows(A):
+    """Efficiencies as ``(P, N)`` rows (one per incident polarization)."""
+    A = np.asarray(to_numpy(A))
+    return A.reshape(1, -1) if A.ndim <= 1 else A.reshape(A.shape[0], -1)
+
+
+def _convergence_vector(rung, keys):
+    """The compared quantities of one solve, flattened: the per-order R and T
+    of every incident polarization at the orders ``keys`` (aligned by order
+    index / pair), then every complex amplitude.  Returns ``(values,
+    scales, n_eff)``: the SCALE of each quantity -- what its change is
+    measured against -- and how many leading entries are efficiencies.
+
+    Scales: an order's efficiency ``max(R_m, 1e-3 sum(R), 1e-12)`` (sum over
+    the orders of that incident polarization; T likewise); an amplitude
+    ``max(|J|, sqrt(1e-3 sum(R)), 1e-6)`` with the sum of the port it belongs
+    to, per incident polarization (column) when the amplitude is a ``(P, P)``
+    Jones matrix."""
+    o, R, T, amps = rung
+    omap = {_order_key(x): j for j, x in enumerate(np.asarray(to_numpy(o)))}
+    idx = [omap[k] for k in keys]
+    vals, scales = [], []
+    sums = {}
+    for port, A in (("R", R), ("T", T)):
+        rows = _convergence_rows(A).astype(float)
+        tot = rows.sum(axis=1)
+        sums[port] = tot
+        sel = rows[:, idx]
+        sc = np.maximum(np.maximum(sel, _CONV_REL_FLOOR * tot[:, None]),
+                        _CONV_EFF_FLOOR)
+        vals.append(sel.ravel().astype(complex))
+        scales.append(sc.ravel())
+    n_eff = int(sum(v.size for v in vals))
+    for port, a in amps:
+        a = np.asarray(to_numpy(a)).astype(complex)
+        tot = sums[port]
+        if a.ndim == 2 and a.shape[1] == tot.size:
+            floor = np.sqrt(_CONV_REL_FLOOR * tot)[None, :] * np.ones_like(
+                a.real)
+        else:
+            floor = np.full(a.shape, np.sqrt(_CONV_REL_FLOOR * tot.max()))
+        sc = np.maximum(np.maximum(np.abs(a), floor),
+                        np.sqrt(_CONV_EFF_FLOOR))
+        vals.append(a.ravel())
+        scales.append(sc.ravel())
+    return np.concatenate(vals), np.concatenate(scales), n_eff
+
+
+def _convergence_report(rungs, ns, *, rtol, atol, legacy=False):
+    """THE comparator of :func:`rcwa_convergence`, shared by its callable and
+    :class:`RCWAStack` branches.
+
+    ``rungs`` are two or three solves at increasing truncation, each
+    ``(orders, R, T, amps)`` with ``amps`` a list of ``(port, complex array)``
+    (``port`` ``'R'`` or ``'T'``); ``ns`` are their per-axis truncations.
+    Returns the report dict (everything but the ``n_orders_*`` labels).
+
+    * ``delta`` -- the largest ABSOLUTE per-order efficiency change of the top
+      step (what the additive check compared against ``atol``);
+    * ``delta_rel`` -- the largest RELATIVE per-order change, each order
+      against ``max(R_m, 1e-3 sum(R))`` (T likewise);
+    * ``delta_amp`` -- the largest relative change of a complex amplitude
+      (a zeroth-order Jones element), against ``max(|J|, sqrt(1e-3 sum(R)))``;
+    * ``err_estimate`` -- two solves: the conservative ALGEBRAIC p = 1 bound
+      ``max(delta_rel, delta_amp) / (f - 1)`` on the error of the top solve,
+      ``f`` the step's truncation ratio; three solves: the Richardson error of
+      the top solve with each quantity's own local exponent;
+    * ``factor`` -- ``f`` of the top step (the smallest per-axis ratio);
+    * three solves only: ``exponent`` (that of the quantity with the largest
+      estimate; ``None`` when every quantity is already inside ``rtol``) and
+      ``erratic``.
+
+    ``converged`` is ``err_estimate <= rtol``, not erratic, and -- when
+    ``atol`` is given -- ``delta <= atol``.  ``legacy=True`` (the legacy call
+    form, see :func:`_convergence_args`) judges ``delta <= atol`` alone, as
+    releases up to 5.50 did; the estimate is still reported."""
+    def _ratio(a, b):
+        r = [nb / na for na, nb in zip(a, b) if int(na) > 0]
+        return float(min(r)) if r else 1.0
+
+    lo, hi = rungs[-2], rungs[-1]
+    o_lo = np.asarray(to_numpy(rungs[0][0]))
+    hi_keys = {_order_key(x) for x in np.asarray(to_numpy(hi[0]))}
+    keys = [k for k in (_order_key(x) for x in o_lo) if k in hi_keys]
+    delta = max(_max_aligned_delta(lo[0], lo[1], hi[0], hi[1]),
+                _max_aligned_delta(lo[0], lo[2], hi[0], hi[2]))
+    dsR = abs(float(np.sum(to_numpy(lo[1]))) - float(np.sum(to_numpy(hi[1]))))
+    dsT = abs(float(np.sum(to_numpy(lo[2]))) - float(np.sum(to_numpy(hi[2]))))
+    vecs = [_convergence_vector(r, keys) for r in rungs]
+    scale, n_eff = vecs[-1][1], vecs[-1][2]
+    f_top = _ratio(ns[-2], ns[-1])
+    d = np.abs(vecs[-1][0] - vecs[-2][0]) / scale
+    d_rel = float(np.max(d[:n_eff])) if n_eff else 0.0
+    d_amp = float(np.max(d[n_eff:])) if d.size > n_eff else 0.0
+    report = dict(delta=delta, delta_sum_R=dsR, delta_sum_T=dsT,
+                  delta_rel=d_rel, delta_amp=d_amp, factor=f_top)
+    if len(rungs) == 2:
+        err = max(d_rel, d_amp) / (f_top - 1.0) if f_top > 1.0 else np.inf
+        erratic = False
+    else:
+        f1 = _ratio(ns[0], ns[1])
+        s1, s2, s3 = vecs[0][0], vecs[1][0], vecs[2][0]
+        a = np.abs(s2 - s1) / scale
+        b = np.abs(s3 - s2) / scale
+        err, erratic, exponent = -1.0, False, None
+        lo_p, hi_p = _CONV_EXPONENT_RANGE
+        for i in range(scale.size):
+            bound = b[i] / (f_top - 1.0)
+            if max(a[i] / (f1 - 1.0), bound) <= rtol:
+                err_i, p_i, bad = bound, None, False    # inside rtol either way
+            else:
+                turn = np.real((s3[i] - s2[i]) * np.conj(s2[i] - s1[i]))
+                p_i = None
+                if a[i] > 0.0 and b[i] > 0.0 and turn > 0.0:
+                    # scale-free: the rungs sit at 1, f1, f1 * f_top
+                    p_i = _algebraic_exponent(1.0, f1, f1 * f_top,
+                                              a[i] / b[i], 1e-3, 50.0)
+                bad = p_i is None or not (lo_p <= p_i <= hi_p)
+                err_i = bound if bad else b[i] / (f_top ** p_i - 1.0)
+            erratic = erratic or bad
+            if err_i > err:
+                err, exponent = err_i, p_i
+        err = max(err, 0.0)
+        report.update(exponent=exponent, erratic=bool(erratic))
+    if legacy:
+        converged = delta <= atol
+    else:
+        converged = (not erratic) and err <= rtol
+        if atol is not None:
+            converged = converged and delta <= atol
+    report.update(converged=bool(converged), err_estimate=float(err))
+    return report
+
+
+def _convergence_args(fn_name, factor, bump, rtol, atol, estimate=False):
+    """Validate the step / tolerance arguments of :func:`rcwa_convergence` and
+    return ``(rtol, atol, legacy)``.
+
+    ``legacy`` is the LEGACY call form: an additive ``bump=`` with ``rtol``
+    left unset and no ``estimate``.  It reproduces the verdict of releases up
+    to 5.50 exactly (``delta <= atol``, ``atol`` defaulting to 1e-3), so a call
+    written for them keeps its answer and its warnings.  Any other form takes
+    the error-estimate verdict with ``rtol`` defaulting to 1e-2."""
+    if factor is not None and bump is not None:
+        raise ValueError(
+            f"{fn_name}: pass factor (geometric step) OR bump (additive step), "
+            f"not both.")
+    if bump is not None and (int(bump) != bump or int(bump) < 1):
+        raise ValueError(f"{fn_name}: bump must be an integer >= 1, got "
+                         f"{bump!r}.")
+    if factor is not None and not (float(factor) > 1.0):
+        raise ValueError(f"{fn_name}: factor must be > 1, got {factor!r}.")
+    if rtol is not None and not (float(rtol) > 0.0):
+        raise ValueError(f"{fn_name}: rtol must be > 0, got {rtol!r}.")
+    if atol is not None and not (float(atol) >= 0.0):
+        raise ValueError(f"{fn_name}: atol must be >= 0, got {atol!r}.")
+    legacy = bump is not None and rtol is None and not estimate
+    if legacy:
+        return None, (_CONV_LEGACY_ATOL if atol is None else atol), True
+    return (_CONV_RTOL if rtol is None else rtol), atol, False
+
+
+def _convergence_warn(report, rtol, atol, stacklevel):
+    """The one ``NOT converged`` warning of :func:`rcwa_convergence`."""
+    why = []
+    if rtol is not None and report.get("erratic"):
+        why.append("the three truncations do not converge algebraically "
+                   "(successive changes turn around, or the local exponent "
+                   "leaves [0.5, 4]), so no extrapolated error is trusted")
+    if rtol is not None and report["err_estimate"] > rtol:
+        why.append(f"the estimated relative error of the top solve is "
+                   f"{report['err_estimate']:.2e} > rtol={rtol:.1e}")
+    if atol is not None and report["delta"] > atol:
+        why.append(f"the per-order efficiency changed by "
+                   f"{report['delta']:.2e} > atol={atol:.1e}")
+    warnings.warn(
+        f"rcwa_convergence: NOT converged going from "
+        f"{report['n_orders_low']} to {report['n_orders_high']}: "
+        f"{'; '.join(why)}.  The result may be unreliable (a too-low "
+        f"truncation can fabricate a spurious resonance / null); increase the "
+        f"order count -- geometrically, by x1.5 or x2.", stacklevel=stacklevel)
+
+
+def _rcwa_convergence_stack(stack, *, factor=None, bump=None, rtol=None,
+                            atol=None, estimate=False, warn=True):
     """``rcwa_convergence`` for a configured :class:`RCWAStack`: solve at its
-    current ``n_orders`` AND a ``bump``-higher count, compare the per-order
-    efficiencies, and return ``(high_result, report)`` (the bumped
-    :class:`RCWAResult`).
+    current truncation and at a higher one (two higher ones with
+    ``estimate=True``), compare through :func:`_convergence_report`, and
+    return ``(highest_result, report)``.
 
     The stack's truncation lives on the object (``nox`` / ``noy``), not in a
-    kwarg, so it is bumped in place and RESTORED in a ``finally`` (a 2-D stack
-    bumps both axes).  The two solves are compared on their ``(2, N)`` per-order
-    R / T, aligned by order index (the high solve retains strictly more orders).
-    """
+    kwarg, so it is raised in place and RESTORED in a ``finally``; a 2-D stack
+    raises both axes.  Every concrete pixel / tensor cell is checked against
+    the Fourier sampling bound of each higher truncation first, so the check
+    never compares against an aliased solve.
+
+    ADAPTIVE RESOLUTION (``RCWAStack(asr=...)``) with ``eta='auto'``: the
+    stretch is a function of ``n_orders`` (it ramps from 0 at 5 to 1 at 15
+    orders), so rungs at different truncations would solve in different
+    bases and the change between them would mix a basis change into the
+    truncation change the estimate reads.  The stretch is therefore FROZEN
+    at the base rung's value for every rung of one check (``eta = 0``: the
+    plain basis throughout) and reported as ``asr_eta``; the base rung is
+    the stack's own solve either way."""
+    rtol, atol, legacy = _convergence_args("rcwa_convergence", factor, bump,
+                                           rtol, atol, estimate)
+    if bump is None and factor is None:
+        factor = _CONV_FACTOR_1AXIS if stack.is_1d else _CONV_FACTOR_2AXIS
     base_nox, base_noy = stack.nox, stack.noy
-    low = stack.solve()
-    o_lo, R_lo, T_lo = low.efficiencies()
+
+    def _next(nx, ny):
+        nx2 = _convergence_step(nx, factor=factor, bump=bump)
+        ny2 = ny if stack.is_1d else _convergence_step(
+            ny, factor=factor, bump=bump, keep_zero=True)
+        return nx2, ny2
+
+    trunc = [(base_nox, base_noy)]
+    trunc.append(_next(*trunc[-1]))
+    if estimate:
+        trunc.append(_next(*trunc[-1]))
+    for L in stack._layers:
+        if getattr(L, "dispersive", False) or L.kind not in ("iso", "tensor"):
+            continue
+        if is_jax_array(L.data):
+            continue
+        for nx, ny in trunc[1:]:
+            try:
+                _validate_cell_sampling("rcwa_convergence", L.data, nx, ny,
+                                        strict_y=not stack.is_1d)
+            except ValueError as e:
+                raise ValueError(
+                    f"{e}  rcwa_convergence solves this stack at the higher "
+                    f"truncation {(nx, ny) if not stack.is_1d else nx}, so "
+                    f"sample the cell for it, or pass a smaller factor / "
+                    f"bump.") from None
+
+    def _rung(res):
+        o, R, T = res.efficiencies()
+        return (o, R, T, [("R", res.jones_reflection()),
+                          ("T", res.jones_transmission())])
+
+    base_asr = getattr(stack, "_asr", None)
+    asr_eta = None
+    if base_asr is not None:
+        from ._asr_stack import _resolved_eta
+        asr_eta = _resolved_eta(base_asr[1], base_nox)
+    top = None
     try:
-        stack.nox = base_nox + int(bump)
-        if not stack.is_1d:
-            stack.noy = base_noy + int(bump)
-        high = stack.solve()
+        if base_asr is not None and base_asr[1] == "auto":
+            # one basis for every rung (eta = 0 is the plain basis)
+            stack._asr = None if asr_eta == 0.0 else (base_asr[0], asr_eta)
+        rungs = [_rung(stack.solve())]
+        for nx, ny in trunc[1:]:
+            stack.nox, stack.noy = nx, ny
+            top = stack.solve()
+            rungs.append(_rung(top))
     finally:
         stack.nox, stack.noy = base_nox, base_noy
-    o_hi, R_hi, T_hi = high.efficiencies()
-    delta = max(_max_aligned_delta(o_lo, R_lo, o_hi, R_hi),
-                _max_aligned_delta(o_lo, T_lo, o_hi, T_hi))
-    dsR = abs(float(np.sum(to_numpy(R_lo))) - float(np.sum(to_numpy(R_hi))))
-    dsT = abs(float(np.sum(to_numpy(T_lo))) - float(np.sum(to_numpy(T_hi))))
-    converged = delta <= atol
-    no_lo = {"n_orders": base_nox} if stack.is_1d else {
-        "n_orders": base_nox, "n_orders_y": base_noy}
-    no_hi = {"n_orders": base_nox + int(bump)} if stack.is_1d else {
-        "n_orders": base_nox + int(bump), "n_orders_y": base_noy + int(bump)}
-    report = dict(converged=converged, delta=delta, delta_sum_R=dsR,
-                  delta_sum_T=dsT, n_orders_low=no_lo, n_orders_high=no_hi)
-    if warn and not converged:
-        warnings.warn(
-            f"rcwa_convergence: RCWAStack NOT converged at {no_lo} -- the "
-            f"per-order efficiency changed by {delta:.2e} (> atol={atol:.1e}) "
-            f"going to {no_hi}; the lower-order result may be unreliable. "
-            f"Increase n_orders.", stacklevel=3)
-    return high, report
+        if base_asr is not None:
+            stack._asr = base_asr
+
+    def _label(nx, ny):
+        return ({"n_orders": nx} if stack.is_1d
+                else {"n_orders": nx, "n_orders_y": ny})
+
+    ns = [(nx,) if stack.is_1d else (nx, ny) for nx, ny in trunc]
+    report = _convergence_report(rungs, ns, rtol=rtol, atol=atol,
+                                 legacy=legacy)
+    report.update(n_orders_low=_label(*trunc[0]),
+                  n_orders_high=_label(*trunc[-1]))
+    if estimate:
+        report["n_orders_mid"] = _label(*trunc[1])
+    if base_asr is not None:
+        report["asr_eta"] = asr_eta
+    if warn and not report["converged"]:
+        _convergence_warn(report, rtol, atol, stacklevel=4)
+    return top, report
 
 
 
@@ -3516,7 +3858,7 @@ def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
        for clean dielectric convergence and as a per-order error gauge.
 
     .. note::
-       LOSSY-METAL CORNERS (audit L-1, 2026-11-02 DynaMeta bridge audit).
+       LOSSY-METAL CORNERS.
        Even a monotone tail can be PRE-ASYMPTOTIC: the corner singularity
        makes every method algebraic, and the local exponent keeps drifting
        over the ``N`` range a user can afford, so the three-point
@@ -3535,6 +3877,18 @@ def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
        above (0.50945 at N = 768).  For a 1-D metallic reference use PMM
        degree extrapolation; for ``'li'`` quote the spread of the last two
        windows as the uncertainty.
+
+    .. note::
+       RESONANT METAL STRIPS: NO SMOOTH TAIL BELOW N ~ 100.  On a resonant
+       metal-strip stack (a 180 nm strip, eps -90+7i, on a 19 nm spacer stack
+       over a metal mirror; period 500 nm, 1500 nm, TM; ``RCWAStack``
+       ``'li'``) consecutive truncations scatter by a factor 2-4 around the
+       N^-1.1..1.2 trend for N = 40 ... 70 (zeroth-order reflection errors
+       3.07e-2 at N = 40, 2.98e-2 at 44, 9.08e-2 at 45, 1.91e-2 at 50,
+       2.58e-2 at 70).  Both estimators need a smooth tail, which this class
+       does not have there: sample N geometrically (x1.5 or x2) and only from
+       N of about 100 up, check that consecutive windows agree, and prefer a
+       ``PMMStack`` reference (``grade='geometric'``) for 1-D metal strips.
 
     Parameters
     ----------
@@ -3599,27 +3953,11 @@ def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
         if abs(denom) < 1e-300 or abs(s2 - s1) < 1e-300:
             return float(s3)                 # already converged at the tail
         target = (s2 - s1) / denom
-
-        def _ratio(p):
-            a, b, c = n1 ** -p, n2 ** -p, n3 ** -p
-            d = b - c
-            return (a - b) / d if abs(d) > 1e-300 else np.inf
-
         # bisect p in [0.2, 8] for the monotone ratio == target; fall back to
         # the dominant p = 1 rate if the bracket does not contain a root.
-        lo, hi = 0.2, 8.0
-        flo, fhi = _ratio(lo) - target, _ratio(hi) - target
-        if not np.isfinite(flo) or not np.isfinite(fhi) or flo * fhi > 0:
+        p = _algebraic_exponent(n1, n2, n3, target, 0.2, 8.0)
+        if p is None:
             p = 1.0
-        else:
-            for _ in range(60):
-                mid = 0.5 * (lo + hi)
-                fmid = _ratio(mid) - target
-                if flo * fmid <= 0:
-                    hi, fhi = mid, fmid
-                else:
-                    lo, flo = mid, fmid
-            p = 0.5 * (lo + hi)
         # model s = L + C N^-p  ->  s2 - s1 = C (N2^-p - N1^-p)
         C = (s2 - s1) / (n2 ** -p - n1 ** -p)
         return float(s1 - C * n1 ** -p)
@@ -5922,6 +6260,8 @@ __all__ = [
     "_interface_smatrix",
     "_propagation_smatrix",
     "_propagation_star",
+    "_propagation_scale",
+    "_star_from_blocks",
     "_propagation_star_general",
     "_modes_to_M",
     "_interface_smatrix_general",
@@ -5929,6 +6269,18 @@ __all__ = [
     "_order_key",
     "_max_aligned_delta",
     "_rcwa_convergence_stack",
+    "_CONV_REL_FLOOR",
+    "_CONV_EFF_FLOOR",
+    "_CONV_FACTOR_1AXIS",
+    "_CONV_FACTOR_2AXIS",
+    "_CONV_EXPONENT_RANGE",
+    "_algebraic_exponent",
+    "_convergence_step",
+    "_convergence_rows",
+    "_convergence_vector",
+    "_convergence_report",
+    "_convergence_args",
+    "_convergence_warn",
     "rcwa_extrapolate",
     "uniaxial_tensor",
     "_step_coeffs",

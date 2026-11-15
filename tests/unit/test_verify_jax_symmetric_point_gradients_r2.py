@@ -190,7 +190,9 @@ def test_r2v_rcwa_jones_2d_lossy_cross_cell():
 def test_r2v_rcwastack_two_patterned_layers_and_a_spacer():
     """RCWAStack (JAX): cross 6.25 (t on its +x half-arm) | spacer 2.1 |
     lossy cross 3.0+0.2j (0.5 t), n_orders 3 (7 x 7 = 49 orders), normal incidence.  ON
-    5.2e-10 (Windows), OFF 0.21.  Bars 1e-7 and 1e-2."""
+    5.2e-10 (Windows), OFF 0.21 under the direct rule; the default 'auto'
+    runs 'li' on both sides (a JAX cell resolves as its NumPy twin does):
+    ON 2.3e-10, OFF 6.9e-2 (Windows).  Bars 1e-7 and 1e-2."""
     from lumenairy.elements.rcwa import RCWAStack
 
     def f(t, xp):
@@ -284,7 +286,9 @@ def test_r2v_a_symmetry_keeping_parameter_is_exact_with_the_rule_on_and_off():
     """t on ALL four arms of the cross (C4v kept: the clusters stay
     degenerate and the parameter does not split them).  ON and OFF agree
     (2.3e-14 relative on Windows, the lifted average of a non-splitting
-    direction) and both match the FD (2.5e-10).  Bars 1e-9 / 1e-7.
+    direction) and both match the FD (2.5e-10) under the direct rule; under
+    the default 'auto' ('li' on both sides) 2.7e-14 and 1.3e-11.  Bars 1e-9 /
+    1e-7.
 
     RESTATED 2026-10-04 (CI run 37199167691, shard 1, jax 0.11.2 on the
     Linux runner): the FD PREMISE failed there, not the claim -- on the
@@ -352,7 +356,8 @@ def test_r2v_eight_member_clusters_just_off_the_uniform_point():
     (8 members) and (+-1, +-1) x 2 (8) degenerate; at t = +-1e-6 x a
     zero-mean random pattern they split by ~1e-6 x the pattern, INSIDE the
     rule's gap_rel, so the lifted branch handles 8-member clusters.  The
-    mean of AD(+1e-6) and AD(-1e-6) vs the FD at 0: 4.1e-9 (Windows).
+    mean of AD(+1e-6) and AD(-1e-6) vs the FD at 0: 4.1e-9 (Windows) under
+    the direct rule, 5.9e-9 under the default 'auto' ('li' on both sides).
     Bar 1e-7.  (AD AT t = 0 is a defect: the strict xfail below.)"""
     f = _uniform_over_cross(0.0, 0.0, 2.25 + 0j)
     fd = _fd(lambda t: f(t, np), 0.0, hs=_HS_RCWA)

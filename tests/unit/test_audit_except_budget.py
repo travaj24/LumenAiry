@@ -75,7 +75,6 @@ _TRACER_GUARDS = {
                                       # all-zero tensor probe, offplane-or-traced,
                                       # _reject_jax_offplane
     'elements/rcwa/oned.py': 2,       # _resolve_incidence_checked, _metallic
-    'elements/rcwa/stack.py': 2,      # _layer_offplane_or_traced, _layer_eig_key
     'elements/rcwa/twod.py': 1,       # rcwa_jones_2d general-path routing
     'optimize/jax_merits.py': 1,      # _ensure_jax_x64
     'propagators/asymptotic_jax_twin.py': 1,  # _require_jax_x64

@@ -21,6 +21,7 @@ from ._core import (
     _C,
     _COV_MIN_SLANT_RAD,
     _lossy_incidence,
+    _normalize_grade,
     _pmm_efficiency_1d_jax,
     _pmm_jones_1d_jax,
     _pmm_jones_oblique_segments_solve,
@@ -130,10 +131,16 @@ def pmm_jones_1d(
         Default 16.
     elements_per_region : int, optional
         Spectral elements per homogeneous subsection (ridge / groove).  Default
-        1.  Raise with ``grade=True`` to resolve the wall-corner field.
-    grade : bool, optional
-        Cluster the elements toward the walls when
-        ``elements_per_region > 1``.  Default ``True``.
+        1.  For a metal (or any high-contrast) corner in TM, either raise
+        ``degree`` with one element, or use ``grade='geometric'`` with 8-12
+        elements per region at degree 8-10 (measured comparison in
+        :func:`pmm_efficiency_1d`).
+    grade : bool, str or tuple, optional
+        Element layout inside each region; see :func:`pmm_efficiency_1d`.
+        ``True`` (default; alias ``'chebyshev'``) clusters the elements toward
+        the walls and is inert at 1 or 2 elements; ``False`` is uniform;
+        ``'geometric'`` / ``('geometric', ratio[, min_element_m])`` is the
+        corner-refined geometric layout (needs ``elements_per_region >= 3``).
     far_field_orders : int, optional
         Rayleigh order count for the once-only forward far-field projection
         (auto-grown to cover the propagating orders).  Default 21.  Accepts
@@ -221,6 +228,10 @@ def pmm_jones_1d(
     """
     angle = _resolve_incidence_checked("pmm_jones_1d", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_jones_1d",
+        elements_per_region=elements_per_region,
+        wavelength=wavelength)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
     # A TRACED (jit) duty_cycle has no concrete value to range-check.
@@ -281,7 +292,7 @@ def pmm_jones_1d(
         return _pmm_jones_1d_jax(
             period, er_j, eg_j, n_substrate, n_superstrate, depth, duty_cycle,
             wavelength, angle=angle, degree=int(degree),
-            elements_per_region=int(elements_per_region), grade=bool(grade),
+            elements_per_region=int(elements_per_region), grade=grade,
             far_field_orders=int(far_field_orders))
 
     er = np.asarray(eps_ridge, dtype=_C)
@@ -302,7 +313,7 @@ def pmm_jones_1d(
         sargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
                  duty_cycle, wavelength, 0.0)
         skw = dict(n_ridge_el=int(elements_per_region),
-                   n_groove_el=int(elements_per_region), grade=bool(grade),
+                   n_groove_el=int(elements_per_region), grade=grade,
                    far_field_orders=int(far_field_orders), angle=float(angle))
         if not stabilize:
             o, R, T, J, _ = _pmm_jones_slant_solve(*sargs, degree=int(degree),
@@ -316,7 +327,7 @@ def pmm_jones_1d(
     args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
             duty_cycle, wavelength)
     kw = dict(n_ridge_el=int(elements_per_region),
-              n_groove_el=int(elements_per_region), grade=bool(grade),
+              n_groove_el=int(elements_per_region), grade=grade,
               far_field_orders=int(far_field_orders), angle=float(angle))
 
     if not stabilize:
@@ -402,17 +413,75 @@ def pmm_efficiency_1d(
             144     --          5.61e-6       9.40e-6       5.98e-6
             192     --          9.90e-7       2.97e-6       1.23e-6
 
-        and the eig cost goes as DOF^3, so raising ``degree`` is the cheaper
-        route to a given error.  Grading does beat non-grading at fixed
-        ``elements_per_region`` (1.5-3x), which is why it is the default when
-        this knob is raised at all -- but uniform-degree grading is not
-        hp-refinement, and hp (geometric grading WITH a degree decreasing
-        toward the corner, Babuska-Guo) is what would give ``exp(-c sqrt(DOF))``
-        here.  Raise it when you need a specific element layout, not for speed.
-    grade : bool, optional
-        When ``elements_per_region > 1``, cluster the elements toward the walls
-        (Chebyshev-Lobatto) to resolve the corner singularity.  Default
-        ``True`` (no effect for ``elements_per_region == 1``).
+        and the eig cost goes as DOF^3, so with the Chebyshev layout raising
+        ``degree`` is the cheaper route to a given error.  The reason is that
+        only the element TOUCHING each wall resolves the corner field, and
+        Chebyshev clustering shrinks it only like ``2.5 / n^2`` of the region.
+        The GEOMETRIC layout (``grade='geometric'``) shrinks it like ``r^m``
+        and changes the picture.  Measured (TM, 1500 nm, ``stabilize=False``,
+        a 40 nm metal strip of eps ``-90 + 7i``, 180 nm wide in a 500 nm
+        period, air above; error in the zeroth-order ``J[0, 0]``):
+
+            layout                       DOF   strip on     strip 19 nm over
+                                               n = 1.5      a metal mirror
+            one element, degree 16        32   --           1.7e-2
+            one element, degree 80       160   9.5e-6       4.4e-4
+            Chebyshev, 10 x 8 elements   160   2.5e-5       1.1e-3
+            geometric,  8 x 10           160   1.8e-7       1.1e-5
+            geometric,  8 x 12           192   6.5e-8       1.9e-6 (1.5e-6)
+            geometric, 10 x 12           240   5.2e-8       1.3e-6 (9.1e-7)
+
+        (single layer: against geometric degree 20 x 12, which agrees with
+        degree 14 / 24 to 3e-8, the round-off floor of this comparison; the
+        right column is :class:`~lumenairy.elements.pmm.PMMStack` on a stack
+        with thin (2-6 nm) layers between strip and mirror, on its gap
+        resonance, against the converged geometric degree 24 x 12 value,
+        which an independent Fourier-modal solve confirms to 1.5e-7; in
+        brackets, the same layout with an explicit 3e-5 x period (15 pm)
+        floor instead of the default one, 18.75 pm here.)  The gain
+        is largest where thin layers or a gap concentrate the field at the
+        corner; on an isolated layer single-element ``degree`` still competes
+        with Chebyshev grading.  Recommended for metal corners:
+        ``grade='geometric'``, 8-12 elements per region, degree 8-10.  That
+        recipe is for VERTICAL walls: on a slanted wall (the covariant path of
+        :func:`pmm_jones_1d_slanted`) the same strip at a 0.2 rad slant needs
+        degree 16 with 12 geometric elements (degree 8 / 12 / 16 is 8.8e-5 /
+        1.7e-5 / 2.4e-8 off a degree-24 solve; Chebyshev 20 x 8 is 4.1e-6).
+    grade : bool, str or tuple, optional
+        Element layout inside each region (ridge / groove), used when
+        ``elements_per_region > 1``:
+
+        * ``True`` (default; alias ``'chebyshev'``) -- Chebyshev-Lobatto
+          clustering toward the walls.  INERT at 1 and 2 elements (both give
+          the midpoint split), so the default does nothing at the default
+          ``elements_per_region=1``.
+        * ``False`` -- uniform elements.
+        * ``'geometric'`` -- geometric grading toward both walls: successive
+          boundary distances from a wall shrink by the ratio 0.17, half the
+          elements per side (an odd count adds one central element; the
+          layout is mirror-symmetric), with a floor of
+          ``max(3e-5 * period, 1.25e-5 * wavelength)`` on the smallest
+          element.  Needs ``elements_per_region >= 3`` (raises
+          otherwise).  ``('geometric', ratio)`` and
+          ``('geometric', ratio, min_element_m)`` set the ratio
+          (``0 < ratio < 1``) and the floor (metres) explicitly.
+
+        Why the floor: tiny elements cost accuracy through ROUND-OFF -- the
+        modal eigensolve's error grows like ``1 / (k0 h)^2`` on an element of
+        width ``h``.  Measured (one metal strip layer, 1500 nm, periods
+        250-1200 nm, theta 0-0.7, degrees 6-20, Windows/MKL): the spectrally
+        converging TE channel, which a correct layout cannot move, deviates
+        by at most 3.4e-7 at ``h = 1.25e-5 * wavelength`` (the wavelength
+        part of the default floor; in a multilayer ``PMMStack`` the same
+        floor carries about 5e-7), 5.9e-7 at 8e-6, 2.7e-6 at 4e-6 and 8.2e-6
+        at 2e-6.  (Before
+        2026-11-14 a mode-selector defect also made such solves fail
+        outright, with ``R + T > 1``; that is fixed.)  When the requested
+        ratio would put an element below the floor the ratio is raised until
+        it does not (if no graded layout can, the uniform one is used); the
+        element count never changes.  An explicit floor is used as given.
+
+        Any other value raises ``ValueError``.
     far_field_orders : int, optional
         Rayleigh order count for the once-only forward far-field projection
         (auto-grown to cover the propagating orders; kept well below the nodal
@@ -472,7 +541,8 @@ def pmm_efficiency_1d(
     docstring said "a warning fires" until audit M10 2026-07-25, describing the
     behaviour that guard replaced).  TM converges monotone-with-no-floor but only
     spectral-*ish* (the discontinuous TM partner is C0-averaged at the wall);
-    ``elements_per_region>1, grade=True`` recovers the rate for metals.
+    for a metal corner see ``grade='geometric'`` above (NumPy path only: the
+    JAX path is single-element).
 
     INCIDENCE-MEDIUM SCOPE (the rcwa audit-P1 guard, mirrored suite-wide): a
     GAIN superstrate (public ``Im(n_superstrate) < 0`` -- even ``-1e-9``) or a
@@ -507,6 +577,10 @@ def pmm_efficiency_1d(
     """
     angle = _resolve_incidence_checked("pmm_efficiency_1d", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_efficiency_1d",
+        elements_per_region=elements_per_region,
+        wavelength=wavelength)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
         raise ValueError(
@@ -542,12 +616,12 @@ def pmm_efficiency_1d(
             period, n_ridge, n_groove, n_substrate, n_superstrate, depth,
             duty_cycle, wavelength, angle=angle, polarization=pol,
             degree=int(degree), elements_per_region=int(elements_per_region),
-            grade=bool(grade), far_field_orders=int(far_field_orders))
+            grade=grade, far_field_orders=int(far_field_orders))
 
     args = (period, _C(n_ridge), _C(n_groove), _C(n_substrate),
             _C(n_superstrate), depth, duty_cycle, wavelength)
     kw = dict(polarization=pol, n_ridge_el=int(elements_per_region),
-              n_groove_el=int(elements_per_region), grade=bool(grade),
+              n_groove_el=int(elements_per_region), grade=grade,
               far_field_orders=int(far_field_orders), angle=float(angle))
 
     if not stabilize:
@@ -677,6 +751,10 @@ def pmm_efficiency_1d_segments(
     """
     angle = _resolve_incidence_checked("pmm_efficiency_1d_segments", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_efficiency_1d_segments",
+        elements_per_region=elements_per_region,
+        wavelength=wavelength)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
         raise ValueError(
@@ -692,7 +770,7 @@ def pmm_efficiency_1d_segments(
     sa = (period, widths, seg_n, _C(n_substrate), _C(n_superstrate), depth,
           wavelength)
     kw = dict(polarization=pol, n_el_per_region=int(elements_per_region),
-              grade=bool(grade), far_field_orders=int(far_field_orders),
+              grade=grade, far_field_orders=int(far_field_orders),
               angle=float(angle))
 
     if not stabilize:
@@ -759,6 +837,10 @@ def pmm_jones_1d_segments(
     """
     angle = _resolve_incidence_checked("pmm_jones_1d_segments", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_jones_1d_segments",
+        elements_per_region=elements_per_region,
+        wavelength=wavelength)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_segments: degree must be >= 2.")
     if len(segments) < 1:
@@ -784,7 +866,7 @@ def pmm_jones_1d_segments(
     if off > 1e-9 * scale:
         oargs = (period, widths, tensors, _C(n_substrate), _C(n_superstrate),
                  depth, wavelength, 0.0)
-        okw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
+        okw = dict(n_el_per_region=int(elements_per_region), grade=grade,
                    far_field_orders=int(far_field_orders), angle=float(angle))
         if not stabilize:
             o, R, T, J, _ = _pmm_jones_slant_segments_solve(
@@ -796,7 +878,7 @@ def pmm_jones_1d_segments(
             super_unity_ok=_lossy_incidence(n_superstrate))
     sa = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
           wavelength)
-    kw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
+    kw = dict(n_el_per_region=int(elements_per_region), grade=grade,
               far_field_orders=int(far_field_orders), angle=float(angle))
 
     if not stabilize:
@@ -912,6 +994,10 @@ def pmm_efficiency_1d_slanted(
     """
     angle = _resolve_incidence_checked("pmm_efficiency_1d_slanted", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_efficiency_1d_slanted",
+        elements_per_region=elements_per_region,
+        wavelength=wavelength)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
         raise ValueError(
@@ -938,7 +1024,7 @@ def pmm_efficiency_1d_slanted(
             period, (_C(n_ridge) ** 2) * eye3, (_C(n_groove) ** 2) * eye3,
             _C(n_substrate), _C(n_superstrate), depth, duty_cycle, wavelength,
             float(slant_angle), angle=float(angle), degree=int(degree),
-            elements_per_region=int(elements_per_region), grade=bool(grade),
+            elements_per_region=int(elements_per_region), grade=grade,
             far_field_orders=int(far_field_orders), stabilize=bool(stabilize))
         row = 1 if pol == "te" else 0
         return o, R_j[row], T_j[row]
@@ -947,7 +1033,7 @@ def pmm_efficiency_1d_slanted(
             _C(n_superstrate), depth, duty_cycle, wavelength,
             float(slant_angle))
     kw = dict(angle=float(angle), polarization=pol,
-              elements_per_region=int(elements_per_region), grade=bool(grade),
+              elements_per_region=int(elements_per_region), grade=grade,
               far_field_orders=int(far_field_orders))
 
     if not stabilize:
@@ -1121,6 +1207,10 @@ def pmm_jones_1d_slanted(
     """
     angle = _resolve_incidence_checked("pmm_jones_1d_slanted", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_jones_1d_slanted",
+        elements_per_region=elements_per_region,
+        wavelength=wavelength)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted: degree must be >= 2.")
     if not (0.0 < float(duty_cycle) < 1.0):
@@ -1208,14 +1298,14 @@ def pmm_jones_1d_slanted(
                             n_superstrate, depth, duty_cycle, wavelength,
                             angle=float(angle), degree=int(degree),
                             elements_per_region=int(elements_per_region),
-                            grade=bool(grade),
+                            grade=grade,
                             far_field_orders=int(far_field_orders),
                             stabilize=True)
     if factorization == "covariant":
         cargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
                  duty_cycle, wavelength, float(slant_angle))
         ckw = dict(n_ridge_el=int(elements_per_region),
-                   n_groove_el=int(elements_per_region), grade=bool(grade),
+                   n_groove_el=int(elements_per_region), grade=grade,
                    far_field_orders=int(far_field_orders), angle=float(angle))
         if not stabilize:
             o, R, T, J, _ = _pmm_jones_oblique_solve(*cargs, degree=int(degree),
@@ -1262,7 +1352,7 @@ def pmm_jones_1d_slanted(
         dargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
                  duty_cycle, wavelength, float(slant_angle))
         dkw = dict(elements_per_region=int(elements_per_region),
-                   grade=bool(grade), far_field_orders=int(far_field_orders),
+                   grade=grade, far_field_orders=int(far_field_orders),
                    angle=float(angle))
         if not stabilize:
             return _pmm_jones_slant_diag_solve(*dargs, degree=int(degree),
@@ -1275,7 +1365,7 @@ def pmm_jones_1d_slanted(
     args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
             duty_cycle, wavelength, float(slant_angle))
     kw = dict(n_ridge_el=int(elements_per_region),
-              n_groove_el=int(elements_per_region), grade=bool(grade),
+              n_groove_el=int(elements_per_region), grade=grade,
               far_field_orders=int(far_field_orders), angle=float(angle))
 
     if not stabilize:
@@ -1364,6 +1454,10 @@ def pmm_jones_1d_slanted_segments(
     """
     angle = _resolve_incidence_checked("pmm_jones_1d_slanted_segments", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_jones_1d_slanted_segments",
+        elements_per_region=elements_per_region,
+        wavelength=wavelength)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted_segments: degree must be >= 2.")
     if len(segments) < 1:
@@ -1412,12 +1506,12 @@ def pmm_jones_1d_slanted_segments(
         return pmm_jones_1d_segments(
             period, segments, n_substrate, n_superstrate, depth, wavelength,
             angle=float(angle), degree=int(degree),
-            elements_per_region=int(elements_per_region), grade=bool(grade),
+            elements_per_region=int(elements_per_region), grade=grade,
             far_field_orders=int(far_field_orders), stabilize=True)
     if factorization == "covariant":
         ca = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
               wavelength, float(slant_angle))
-        ckw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
+        ckw = dict(n_el_per_region=int(elements_per_region), grade=grade,
                    far_field_orders=int(far_field_orders), angle=float(angle))
         if not stabilize:
             o, R, T, J, _ = _pmm_jones_oblique_segments_solve(
@@ -1436,7 +1530,7 @@ def pmm_jones_1d_slanted_segments(
     # (no scalar diagonal cure here), so no out-of-plane dispatch guard is needed.
     sa = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
           wavelength, float(slant_angle))
-    kw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
+    kw = dict(n_el_per_region=int(elements_per_region), grade=grade,
               far_field_orders=int(far_field_orders), angle=float(angle))
 
     if not stabilize:
@@ -1512,6 +1606,10 @@ def pmm_1d(
     """
     angle = _resolve_incidence_checked("pmm_1d", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_1d",
+        elements_per_region=elements_per_region,
+        wavelength=wavelength)
     has_binary = eps_ridge is not None or eps_groove is not None
     if (segments is None) == (not has_binary):
         raise ValueError(
@@ -1519,7 +1617,7 @@ def pmm_1d(
             "(+ `duty_cycle`), not both / neither.")
     common = dict(angle=float(angle), degree=int(degree),
                   elements_per_region=int(elements_per_region),
-                  grade=bool(grade), far_field_orders=int(far_field_orders),
+                  grade=grade, far_field_orders=int(far_field_orders),
                   stabilize=bool(stabilize))
     slanted = abs(float(slant_angle)) > 1e-12
     if segments is not None:
@@ -1580,7 +1678,9 @@ def grating_convergence_class(eps_quadrants):
     -------------------------------
     * **Type I**  ``0 < Delta < 1`` (all-dielectric): REGULAR singularity;
       modal methods converge ALGEBRAICALLY at rate ``Re[tau]`` (slow as
-      ``Re[tau] -> 0``; ``elements_per_region>1, grade=True`` recovers it).
+      ``Re[tau] -> 0``; corner-refined elements --
+      ``grade='geometric'`` with ``elements_per_region >= 8`` -- or a higher
+      ``degree`` reduce the error; measure the convergence).
     * **Type II** ``Delta < 0`` (LOSSLESS metal-dielectric): IRREGULAR
       singularity; NO method (FMM/AMM/PMM) converges.  Mitigate with metal
       loss, a rounded corner, or accept non-convergence.
@@ -1658,8 +1758,9 @@ def grating_convergence_class(eps_quadrants):
     if rate < 0.3:
         warning = (
             f"WEAK Type-I singularity (Re[tau]={rate:.4f} < 0.3): algebraic "
-            "convergence is SLOW (~N^-tau); use elements_per_region>1, "
-            "grade=True to recover the rate.")
+            "convergence is SLOW (~N^-tau); refine toward the corner "
+            "(grade='geometric' with elements_per_region >= 8) or raise "
+            "degree, and check the convergence.")
     return dict(type="I", tau=tau, delta=delta, delta_prime=delta_prime,
                 predicted_rate=float(rate), converges=True, warning=warning)
 
@@ -1731,6 +1832,10 @@ def pmm_efficiency_1d_vs_wavelength(
     """
     angle = _resolve_incidence_checked("pmm_efficiency_1d_vs_wavelength", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_efficiency_1d_vs_wavelength",
+        elements_per_region=elements_per_region,
+        wavelength=wavelengths)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
         raise ValueError(
@@ -1792,6 +1897,10 @@ def pmm_jones_1d_vs_wavelength(
     """
     angle = _resolve_incidence_checked("pmm_jones_1d_vs_wavelength", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_jones_1d_vs_wavelength",
+        elements_per_region=elements_per_region,
+        wavelength=wavelengths)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
         raise ValueError(
@@ -1849,6 +1958,10 @@ def pmm_jones_1d_segments_vs_wavelength(
     """
     angle = _resolve_incidence_checked("pmm_jones_1d_segments_vs_wavelength", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    grade = _normalize_grade(
+        grade, period=period, where="pmm_jones_1d_segments_vs_wavelength",
+        elements_per_region=elements_per_region,
+        wavelength=wavelengths)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
         raise ValueError(

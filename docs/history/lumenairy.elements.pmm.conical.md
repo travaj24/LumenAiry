@@ -1,12 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/conical.py
-ast_sha256: dd5305a98365e8d9312a0bd763b30d27af3d20f7314f5cca5991b24a8428f6ec
-token_sha256: 10d850e5b6d1220f425203d2de7538274780affd6f5de2ad9697d6cfaab5e6f1
+ast_sha256: 34a489d5c1b65f66c1ec8e8eef6c70504ab4950c7bc815e872481bd0d1731ed2
+token_sha256: 803d51a8632d583d4a0f703eaafc13eb5ce46d0a0647a9aa989aa1e420f065d6
 pre_relocation_lines: 693
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-11-14 -- grade normalized at the 1-D conical entry points; geometric grading refused at conical incidence (_refuse_geometric_conical, measured inaccurate there)
+re_recorded: 2026-11-14 -- 2026-11-14 -- the nodal conical cascade takes its modes from _conical_modes (structured uniform / classical-basis layer solves); geometric grading refused only with PMM_CONICAL_STRUCTURED=False; wavelength passed to the grade normalizer
 -->
 
 # Version history -- `lumenairy/elements/pmm/conical.py`
@@ -74,3 +76,22 @@ below as *Left in the source*.
     # out-of-plane cell is rejected loudly (the old path returned silently
     # wrong numbers for it); a UNIFORM cell of any tensor keeps the exact
 ```
+
+### 2026-11-14 -- the conical cascade's modal solves are structured; geometric grading accepted at conical incidence
+
+`_conical_nodal_solve` now takes every medium's modes from `_conical_modes`:
+exactly structured modes for laterally uniform isotropic media
+(`_core._sem_modes_uniform_conical`; the classical shared-eig modes at
+``ky0 = 0``) and the classical-basis solve for every other layer
+(`_core._sem_modes_conical`).  The refusal `_refuse_geometric_conical` added
+the same day now fires only with the fail-before switch
+`PMM_CONICAL_STRUCTURED = False`; its docstring states why the dense solve
+cannot take a geometric layout (the measurement narrative it first carried was
+removed from the source).  The 1-D conical entry points pass their wavelength
+to the grade normalizer (the default geometric floor then includes the
+wavelength part, as on every other 1-D entry point).  On Chebyshev layouts the
+results move at the old path's round-off (largest measured: 8.0e-10 on one
+rotated tensor layer, 2.2e-8 on two patterned layers over a metal film, where
+the discretization errors are 3e-4 .. 2e-2), with the round-off scatter under
+a 1e-10 change of phi down from 3.0e-9 to 4.2e-11 on the strip / spacer /
+mirror stack of the tests.
