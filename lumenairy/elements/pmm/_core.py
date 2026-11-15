@@ -476,11 +476,11 @@ def _lagrange_derivative_matrix(nodes):
 # the measured rate is DOF^-2.2, no better than raising ``degree`` on one
 # element.  A geometric layout (ratio ``r`` between successive element
 # boundaries, the classical corner-refined hp mesh) shrinks the wall element
-# like ``r^m`` and converges much faster: on a 50 nm metal strip (eps
-# -74 + 6i, 175 nm in a 370 nm period) 21 nm above a metal mirror (TM,
-# 1300 nm), degree 8 x 12 elements is 7.4e-7 off with the default floor below
-# (1.5e-6 with an explicit 11 pm floor) where Chebyshev grading at degree
-# 10 x 8 elements is 1.0e-3 off.
+# like ``r^m`` and converges much faster: on a 40 nm metal strip (eps
+# -90 + 7i, 180 nm in a 500 nm period) 19 nm above a metal mirror (TM,
+# 1500 nm, on the gap resonance), degree 8 x 12 elements is 1.9e-6 off with
+# the default floor below (1.5e-6 with an explicit 3e-5 x period floor) where
+# Chebyshev grading at degree 10 x 8 elements is 1.1e-3 off.
 #
 # Why a floor.  Tiny elements cost accuracy through ROUND-OFF, not
 # discretisation: a backward-stable eig returns every modal ``q^2`` with an
@@ -488,34 +488,37 @@ def _lagrange_derivative_matrix(nodes):
 # ``(degree^2 / (k0 h))^2`` on an element of width ``h`` -- so the danger scale
 # is ``h / wavelength``.  (Up to 2026-11-14 the same scale also produced
 # OUTRIGHT, silent O(1) failures -- R + T > 1 on an absorbing grating, up to
-# ``h`` = 1.6e-5 of the wavelength at oblique incidence -- which this comment
-# block used to describe as a round-off band; they were a mode-selector defect
-# that let that round-off decide a propagating order's direction, fixed in
-# :func:`_growth_mask`.)  What remains is gradual.
-# Measured after the fix on one 50 nm metal strip layer (eps -74+6i, duty
-# 0.47, periods 200-1300 nm, 1300 nm, theta 0-0.7, degrees 6-20, 12 geometric
-# elements per region; TE deviation from the same degree at h = 1e-4
-# wavelengths, max over the grid, Windows/MKL and WSL/OpenBLAS):
+# ``h`` = 1.25e-5 of the wavelength at oblique incidence (none measured at
+# 1.6e-5) -- which this comment block used to describe as a round-off band;
+# they were a mode-selector defect that let that round-off decide a
+# propagating order's direction, fixed in :func:`_growth_mask`.)  What
+# remains is gradual.  Measured after the fix on one 40 nm metal strip layer
+# (eps -90 + 7i, 0.36 of the period, air above, n = 1.5 below; periods 250 /
+# 500 / 800 / 1200 nm at 1500 nm, theta 0 / 0.15 / 0.3 / 0.5 / 0.7, degrees
+# 6 / 8 / 10 / 14 / 20, 12 geometric elements per region; TE deviation from
+# the same degree at h = 1e-4 wavelengths, max over the grid of 100 solves
+# per column, Windows/MKL):
 #
 #     h / wavelength   2e-6    4e-6    8e-6    1e-5    1.25e-5  2e-5    3e-5
-#     max TE dev       2.7e-5  3.8e-6  1.5e-6  3.2e-7  4.0e-7   2.4e-7  1.6e-7
+#     max TE dev       8.2e-6  2.7e-6  5.9e-7  5.4e-7  3.4e-7   1.4e-7  6.4e-8
 #
-# (900 Windows/MKL + 360 WSL/OpenBLAS solves; the 1e-5 column is WSL only.
-# Excluded: a period equal to the wavelength at normal incidence, where a
-# diffraction order is at grazing and the answer itself is ill-conditioned --
-# 1e-5 .. 5e-4 of scatter at every element size, before and after the fix.)
+# (A period equal to the wavelength at normal incidence, where a diffraction
+# order is at grazing and the answer itself is ill-conditioned, is not in the
+# grid.)
 #
 # The default floor :func:`_geometric_default_floor` is therefore
 # ``max(GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * period,
 # GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength)`` = ``max(3e-5 P,
 # 1.25e-5 wavelength)``: the period part is where the corner error of the
-# strip fixture bottoms out, the wavelength part keeps the
-# round-off on one patterned layer to about 4e-7 (TE deviation); a full stack
-# at the default floor carries about 1e-6 of it (measured 2026-11-14 on the
-# strip / spacer / mirror stacks: the uniform fast path and the dense path
-# differ by up to 1.1e-6, and errors against a converged reference
-# scatter from 1.4e-7 to 2.4e-6 across degree 8-14 -- convergence in degree
-# is not monotone below about 2e-6).  Every 1-D entry point knows its wavelength and passes it;
+# strip / spacer / mirror stack bottoms out, the wavelength part keeps the
+# round-off on one patterned layer to about 3e-7 (TE deviation); a full stack
+# at the default floor carries about 5e-7 of it (measured 2026-11-15 on the
+# strip / spacer / mirror stack: the uniform fast path and the dense path
+# differ by up to 4.6e-7 across degree 8-14 at theta 0 and 0.3, and errors
+# against a converged reference fall from 1.9e-6 to 3.9e-7 across degree
+# 8-14 -- below a few 1e-7 convergence in degree stalls; the reference
+# agrees with an independent Fourier-modal solve to 1.5e-7).  Every 1-D
+# entry point knows its wavelength and passes it;
 # without one (a traced value) the period part applies alone.  The tests that
 # pin these numbers are ``tests/unit/test_pmm_geometric_grading.py`` and
 # ``tests/unit/test_pmm_eig_roundoff_selector.py``.
@@ -530,14 +533,16 @@ GEOMETRIC_DEFAULT_RATIO = 0.17
 #: geometric layout is made smaller than the default floor (the ratio is
 #: raised instead); see :func:`_geometric_default_floor` for how this part and
 #: the wavelength part combine, and the comment block above for the
-#: measurements.  3e-5 x period is where the corner error of the strip fixture
-#: bottoms out (1.5e-6 at an 11.1 pm wall element on the 370 nm period).
+#: measurements.  3e-5 x period is where the corner error of the strip /
+#: spacer / mirror stack bottoms out (degree 12 x 12 elements on its 500 nm
+#: period: 2.4e-7 at a 15 pm wall element, against 8.9e-7 at 10 pm and
+#: 9.5e-7 at 25 pm).
 GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC = 3e-5
 
 #: Default absolute floor of the geometric layout, WAVELENGTH part
 #: (``GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * wavelength``): the round-off of
 #: the modal eig grows like ``1 / (k0 h)^2``, so this part keeps it to about
-#: 4e-7 on one patterned layer and about 1e-6 in a full stack (measured, see
+#: 3e-7 on one patterned layer and about 5e-7 in a full stack (measured, see
 #: the comment block above).  Applied wherever the
 #: wavelength is known (every 1-D single-layer entry point and every PMMStack
 #: solve).
@@ -1452,22 +1457,24 @@ _MODE_GROWTH_REL = 1.0e-6
 # operator of a uniform medium (where the exact spectrum is REAL, so its
 # imaginary part is pure round-off), oblique incidence, geometric layouts with
 # the smallest element ``h`` (12 elements per region, degrees 8 / 14, periods
-# 370 / 700 nm, 1300 nm wavelength):
+# 500 / 1000 nm, theta 0.3 / 0.5, 1500 nm wavelength; the range over those
+# eight grids, Windows/MKL):
 #
-#     h / wavelength   max|q^2|   |Im q^2| of the propagating modes
-#     1e-4             4.8e9      1e-8 .. 2e-8
-#     2e-5             1.2e11     1e-7 .. 3e-7
-#     1.25e-5          3.1e11     2e-7 .. 9e-7
-#     4e-6             3.0e12     2e-6 .. 6e-6
+#     h / wavelength   max|q^2|           |Im q^2| of the propagating modes
+#     1e-4             3.3e9 .. 2.8e10    1e-10 .. 1e-8
+#     2e-5             8.4e10 .. 7.0e11   8e-9 .. 1e-7
+#     1.25e-5          2.1e11 .. 1.8e12   2e-9 .. 2e-7
+#     4e-6             2.1e12 .. 1.7e13   1e-7 .. 3e-6
 #
 # -- i.e. ``|Im q^2| <= 0.02 * eps * max|q^2|`` on every reading, a
 # NORMWISE bound, while ``|Im q| / |q|`` of a genuinely propagating mode
-# reached 2.1e-6 at ``h = 1.25e-5`` wavelengths: past ``_MODE_GROWTH_REL``.
-# The passive widening of :func:`_forward_growth_flip` then took such a mode's
-# direction from the SIGN OF THAT ROUND-OFF instead of from its flux (which sat
-# 1e9 x the cut -- unambiguous power), sent a propagating substrate order to
+# reached 2.1e-6 at ``h = 1.25e-5`` wavelengths (the -1 order in air of a
+# 1200 nm metal-strip grating at theta 0.3, degree 8): past
+# ``_MODE_GROWTH_REL``.  The passive widening of :func:`_forward_growth_flip`
+# then took such a mode's direction from the SIGN OF THAT ROUND-OFF instead of
+# from its flux (unambiguous power), sent a propagating half-space order to
 # the backward branch, and the cascade returned a super-unity answer
-# (R + T = 2.55 on an absorbing strip; a discrete wrong branch, the same
+# (R + T = 20.6 on that absorbing strip; a discrete wrong branch, the same
 # number at every ``h`` and degree that flips the same mode, decided by the
 # BLAS build's round-off sign, never at normal incidence, where the geometric
 # operator is real and a simple real eigenvalue carries no imaginary part).
@@ -1486,14 +1493,16 @@ _MODE_GROWTH_REL = 1.0e-6
 # either branch), so its propagation factor over a thickness ``t`` carries an
 # error of order ``exp(sqrt(d) k0 t) - 1`` -- a growth of up to that factor if
 # the round-off lands on ``Im q < 0``.  At the default geometric floor
-# (``h`` = 1.25e-5 wavelength, ``max|q^2|`` ~ 3e11) ``sqrt(d)`` ~ 8e-3: a factor
-# 1.04 over 1 um and 1.5 over 10 um at 1300 nm; with ``h`` = 4e-6 wavelength
-# (``allow_small_elements``) ``sqrt(d)`` ~ 0.026, 3.5 over 10 um.  No branch
-# choice removes it -- it is the eig's round-off on ``q`` itself -- and it
-# needs a mode within ``|q| < sqrt(d)`` of cut-off, i.e. a thick layer within
-# ~``d / 2`` (relative, ~3e-5) of one of its own Rayleigh anomalies, where the
-# answer is ill-conditioned anyway (review finding B1, 2026-11-14: bounded
-# here, not constructed).
+# (``h`` = 1.25e-5 wavelength, ``max|q^2|`` 2e11 .. 2e12 for degree 8 .. 14,
+# table above) ``sqrt(d)`` is 7e-3 .. 2e-2: a factor 1.03 .. 1.09 over 1 um
+# and 1.3 .. 2.3 over 10 um at 1500 nm; with ``h`` = 4e-6 wavelength
+# (``allow_small_elements``) ``sqrt(d)`` reaches 0.06, a factor 14 over
+# 10 um.  No branch choice removes it -- it is the eig's round-off on ``q``
+# itself -- and it needs a mode within ``|q| < sqrt(d)`` of cut-off, i.e. a
+# thick layer within ~``d / 2`` (relative, 2e-5 .. 2e-4 at the default
+# floor) of one of its own Rayleigh anomalies, where the answer is
+# ill-conditioned anyway.  It is bounded here; no configuration showing it
+# has been constructed.
 #: Multiple of the normwise eigenvalue round-off bound ``eps * max|q^2|``
 #: below which a forward mode's ``Im(q) < 0`` is NOT counted as growth.  The
 #: measured round-off is <= 0.02 of the bound (table above), so 1.0 is a 50x
@@ -3227,9 +3236,10 @@ def _hx_partner_rows(W2, q2, safe, n, xp=np):
     size ``eps ||Kx2|| / |q|^2`` -- every digit is lost for a TE-like mode at
     or near its cut-off (``q -> 0``), and the loss grows like ``1 / (k0 h)^2``
     on small elements.  Measured: a laterally uniform air layer whose -1
-    order sits exactly at cut-off (1000 nm period, 1300 nm, the dense
-    per-layer eig): TE ``R + T`` = 1.257 / 1.156 at degree 10 / 14 with the
-    ``Q``-route, against 0.983202 at both degrees with this one -- identical to
+    order sits exactly at cut-off (1000 nm period, 1500 nm, under a metal
+    strip grating, the dense per-layer eig): TE ``R + T`` = 1.365 / 1.332 at
+    degree 10 / 14 with the ``Q``-route, against 0.98253 at both degrees with
+    this one -- identical to
     the structured uniform-medium solve (``_sem_modes_uniform``, whose
     ``V_top = w q^2 / lam`` is this same expression).  ``q2`` is the eig's own
     eigenvalue (unchanged by the forward/backward flip), ``safe`` the clamped
@@ -3444,10 +3454,11 @@ def _select_forward_modes(mats, W2, QW, q, passive, label, patterned,
 # (ky0 = 0) operator needs no such product -- ``Mbig`` is assembled from the
 # factors times DIAGONAL nodal operators only -- which is why the planar
 # solve keeps its accuracy on a geometric grid and the conical one did not
-# (measured, fixture strip 50 nm / 21 nm spacer / mirror, 370 nm period,
-# 1300 nm, theta 0.2, phi 0.3, geometric 12 el.: the cross-polarized J_xy
-# moved 1e-4 under a 1e-10 relative change of phi at degree 16, and drifted
-# 3e-2 over degree 8 .. 24; on Chebyshev grids the same round-off is ~1e-11).
+# (measured on a metal strip (40 nm, 180 nm in a 500 nm period) over a 19 nm
+# spacer and a metal mirror, 1500 nm, theta 0.2, phi 0.3, geometric 12 el.:
+# the cross-polarized J_xy moved 2.4e-4 under a 1e-10 relative change of phi
+# at degree 16, and wandered by 2e-2 over degree 8 .. 24; on a Chebyshev
+# grid (3 el., degree 16) the same round-off is ~1e-10).
 #
 # THE CURE has two parts, both exact rewrites in exact arithmetic:
 #
@@ -3465,8 +3476,9 @@ def _select_forward_modes(mats, W2, QW, q, passive, label, patterned,
 #    and no product with a ``1 / (k0 h)^2`` operator is ever formed.  Its
 #    eigenvectors ``Z`` give ``W = W0 Z`` and ``Q W = V0 (Qh Z)``.  At
 #    ``ky0 -> 0`` ``Ph Qh -> -diag(q0^2)`` and the solve reduces continuously to
-#    the classical one (measured 2.8e-10 at phi = 1e-9 on the geometric grid,
-#    against 3.4e-11 for the physical cross-polarized term itself).
+#    the classical one (measured: phi = 1e-9 differs from phi = 0 by
+#    3.7e-11 on the geometric grid of the stack above, the size of the
+#    physical cross-polarized term itself, 3.8e-11).
 #
 # 2. UNIFORM ISOTROPIC MEDIA -- exactly structured modes.  With ``A`` the
 #    geometric ``Kx^2`` of :func:`_uniform_geo_eig` and ``K`` the Bloch-shifted

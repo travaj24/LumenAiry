@@ -12,18 +12,19 @@ import pytest
 
 from lumenairy.elements.pmm import PMMStack
 
-WL, P, W = 1300e-9, 370e-9, 175e-9
+WL, P, W = 1500e-9, 500e-9, 180e-9
 F = W / P
-N_SUB = 1.447
+N_SUB = 1.5
 
 
-def _fixture_a(n_orders):
+def _strip_stack(n_orders):
+    """The strip / spacer / mirror stack (a generic fixture)."""
     st = PMMStack(P, n_substrate=N_SUB, n_superstrate=1.0, degree=20,
                   elements_per_region=3, n_orders=n_orders)
-    for t, es, eg in [(50e-9, -74 + 6j, 1.0), (1e-9, 3.05, 3.05),
-                      (7e-9, 3.53, 3.53), (5e-9, 2.5 + 0.5j, 2.5 + 0.5j),
-                      (7e-9, 3.53, 3.53), (1e-9, 3.05, 3.05),
-                      (70e-9, -160 + 30j, -160 + 30j)]:
+    for t, es, eg in [(40e-9, -90 + 7j, 1.0), (2e-9, 2.8, 2.8),
+                      (6e-9, 4.2, 4.2), (3e-9, 2.2 + 0.6j, 2.2 + 0.6j),
+                      (6e-9, 4.2, 4.2), (2e-9, 2.8, 2.8),
+                      (80e-9, -130 + 20j, -130 + 20j)]:
         if es == eg:
             st.add_layer(t, eps=es)
         else:
@@ -33,10 +34,10 @@ def _fixture_a(n_orders):
 
 
 def test_n_orders_is_not_an_accuracy_knob():
-    """``n_orders`` 3 / 21 / 61 give the same zeroth-order Jones.  MEASURED
-    2026-11-14: relative differences <= 4.3e-15 (J_xx) / 3.0e-16 (J_yy) on
-    Windows/MKL and <= 3.8e-15 / 2.1e-15 on WSL/OpenBLAS."""
-    J = [np.asarray(_fixture_a(n).solve()[3]) for n in (3, 21, 61)]
+    """``n_orders`` 3 / 21 / 61 give the same zeroth-order Jones.  Fixture
+    replaced by a generic one; RE-MEASURED 2026-11-15: relative differences
+    <= 9.5e-15 (J_xx) / 8.1e-16 (J_yy) on Windows/MKL."""
+    J = [np.asarray(_strip_stack(n).solve()[3]) for n in (3, 21, 61)]
     for Jn in J[1:]:
         assert abs(Jn[0, 0] - J[0][0, 0]) < 1e-12 * abs(J[0][0, 0])
         assert abs(Jn[1, 1] - J[0][1, 1]) < 1e-12 * abs(J[0][1, 1])
@@ -45,7 +46,7 @@ def test_n_orders_is_not_an_accuracy_knob():
 # --------------------------------------------------------------------------- #
 # reference planes
 # --------------------------------------------------------------------------- #
-EPS_FILM, T_FILM, D_PAD = 2.5 + 0.5j, 80e-9, 100e-9
+EPS_FILM, T_FILM, D_PAD = 2.2 + 0.6j, 80e-9, 100e-9
 
 
 def _film(theta, top_air=0.0, bottom_sub=0.0):
@@ -78,10 +79,11 @@ def _closed_form_r(theta, pol):
     return (Y0 - Yin) / (Y0 + Yin)
 
 
-#: MEASURED 2026-11-14 (degree 8, both builds): closed form vs library
-#: <= 3.7e-14; the plane-shift identities <= 4.1e-14 (4.05e-14 WSL); the
-#: substrate pad moves reflection by <= 6.1e-17.  1e-9 is the plan's
-#: statement-level bar; |r| ~ 0.27 and the phase factors are unimodular.
+#: RE-MEASURED 2026-11-15 on the generic film (degree 8, Windows/MKL):
+#: closed form vs library <= 2.7e-14; the plane-shift identities
+#: <= 2.6e-14; the substrate pad moves reflection by <= 4.4e-17.  1e-9 is a
+#: statement-level bar (a docstring contract, not an accuracy claim);
+#: |r| ~ 0.25 and the phase factors are unimodular.
 BAR = 1e-9
 
 

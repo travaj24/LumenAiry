@@ -184,47 +184,19 @@ def _refuse_geometric_conical(grade, where):
     (``PMM_CONICAL_STRUCTURED = False``); ``grade`` is normalized by the
     caller first, so an invalid value still raises ``ValueError``.
 
-    HISTORY (the refusal shipped 2026-11-14 and was lifted the same day).
-    The refusal measured the dense conical eig of ``M = -(P @ Q)``.  The
-    lifting measurement is in ``_core.py`` above ``_conical_khat`` and in
-    ``tests/unit/test_pmm_conical_structured.py``: with the structured solves
-    the cross-polarized ``J_xy`` of the strip / 21 nm spacer / mirror stack
-    (theta 0.2, phi 0.3, geometric 12 el.) agrees with RCWAStack(asr=True)
-    to 1e-8 .. 3e-8 at degree 8 .. 16, and ``phi = 1e-9`` reproduces the
-    classical solve to 3e-10.  The original text follows.
-
-    The conical cascade's per-layer eigenproblem ``M = -(P @ Q)`` carries the
-    element-size scaling of BOTH factors, and it measurably loses accuracy on
-    the small wall elements a geometric layout makes where the planar path
-    does not (2026-11-14, a 50 nm metal strip / 21 nm spacer / metal mirror
-    stack, 370 nm period, 1300 nm, theta 0.2, phi 0.3, 12 elements per region,
-    default floor 37 pm): the cross-polarized ``J_xy`` drifts from
-    0.00596 + 0.00742i to 0.00544 + 0.00833i between degree 8 and 24, while
-    the planar solve of the same layout converges monotonically (1e-6 per
-    step); and at ``ky0 = 0`` the conical cascade reproduces the classical
-    solve only to 5e-8 (Chebyshev, 3 elements: 4.5e-13).  ``grade`` is
-    normalized first, so an invalid value still raises ``ValueError``.
-
-    What this is NOT (2026-11-14): it is not the small-element selector defect
-    of the planar path (a propagating order sent to the backward branch by the
-    sign of eigenvalue round-off, see ``_core._growth_mask``) -- fixing that
-    leaves these readings unchanged.  It is the same ROUND-OFF reaching the
-    cross-polarized channel by a different road: the conical cascade solves
-    every layer, the uniform ones and the half-spaces included, with the
-    dense ``2n`` eig of ``M = -(P @ Q)``, where an isotropic uniform medium
-    carries an EXACTLY degenerate TE/TM pair per order.  On a geometric grid
-    the eig splits each pair by ~1e-7 .. 1e-6 (the ``eps * max|q^2|`` scale)
-    and returns arbitrary TE/TM mixtures, each paired with its own split
-    ``q``; the mismatch leaks into ``J_xy``.  Measured on the fixture-A stack
-    (strip / 1-7-5-7-1 nm films / mirror, theta 0.2, phi 0.3, 12 geometric
-    elements, default floor 52 pm): ``J_xy`` drifts 1.5e-3 over degree 8 .. 24;
-    giving round-off-equal eigenvalues one common value before the square
-    root cuts the drift to 9e-5, and the ky0 -> 0 reduction stays at
-    2e-7 .. 5e-7 (Chebyshev 4e-11).  What would lift the refusal: the
-    structured shared-eig modes for the uniform media of the conical cascade
-    (as the planar path has), measured against the same two readings.  (It
-    was not the degenerate pairs alone: the product ``P @ Q`` itself carries
-    an absolute round-off of the small elements' scale -- see ``_core.py``.)"""
+    WHY THE DENSE SOLVE CANNOT TAKE A GEOMETRIC LAYOUT.  The dense conical
+    eigenproblem ``M = -(P @ Q)`` is a product of two factors that each carry
+    the ``1 / (k0 h)^2`` scale of the smallest element, so its absolute
+    round-off reaches the resolved modes on the small wall elements a
+    geometric layout makes; and it splits the exactly degenerate TE/TM pair
+    of every order of an isotropic uniform medium into arbitrary mixtures,
+    each paired with its own round-off-split ``q``, which leaks into the
+    cross-polarized ``J_xy``.  The structured solves (``_core.py``, the block
+    above ``_conical_khat``) form neither the product nor the split pairs;
+    with them a geometric layout converges at conical incidence as it does
+    in the planar mount (``tests/unit/test_pmm_conical_structured.py``
+    measures ``J_xy`` against ``RCWAStack(asr=True)`` and the ``phi -> 0``
+    reduction to the classical solve)."""
     if _is_geometric_spec(grade) and not PMM_CONICAL_STRUCTURED:
         raise NotImplementedError(
             f"{where}: geometric element grading is not available at conical "

@@ -10,19 +10,23 @@ radius ``max|q^2|`` grows like ``(degree^2 / (k0 h))^2`` on an element of width
    direction from the sign of ``Im(q)`` instead of from its flux.  On grids
    with an element below ~1.6e-5 of the wavelength the round-off imaginary part
    of a genuinely PROPAGATING half-space order crossed that bar, so a
-   propagating order whose flux sat 1e9 x the cut was sent to the backward
+   propagating order carrying unambiguous power was sent to the backward
    branch by the sign of round-off: O(0.1 .. 1) wrong, super-unity answers on an
-   absorbing strip (R + T = 2.55), a discrete wrong branch (the same number at
-   every element size and degree that flips the same order), BLAS-dependent,
-   never at normal incidence (the geometric operator is real there).  The bar
-   now never undercuts the eigensolve's round-off (``_core._growth_mask``).
+   absorbing strip (R + T up to 108), a discrete wrong branch (the same number
+   at every element size and degree that flips the same order),
+   BLAS-dependent, never at normal incidence (the geometric operator is real
+   there).  The bar now never undercuts the eigensolve's round-off
+   (``_core._growth_mask``); ``_core._PMM_EIG_ROUNDOFF_BAR = False`` restores
+   the pre-fix test, which is how the pre-fix readings quoted below were
+   taken.
 
 2. THE PARTNER.  ``V_top = (Cyx W_x + (Cyy - Kx2) W_y) / lam`` loses every
    digit for a TE-like mode at cut-off (catastrophic cancellation, divided by
    ``lam -> 0``); the exact relation ``V_top = W_bot q^2 / lam`` does not
    (``_core._hx_partner_rows``).
 
-Every physics bar carries its measurement (date, both BLAS builds).
+Fixture replaced by a generic one on 2026-11-15; every physics bar carries its
+measurement, re-taken on it (Windows/MKL).
 """
 import warnings
 
@@ -33,9 +37,14 @@ import lumenairy.elements.pmm._core as C
 import lumenairy.elements.pmm.stack as S
 from lumenairy.elements.pmm import PMMStack, pmm_jones_1d_segments
 
-WL = 1300e-9
-E_M = -74.0 + 6.0j
-N_SUB = 1.447
+#: The strip layer of the strip / spacer / mirror stack (a generic fixture):
+#: a 40 nm metal strip (eps -90 + 7i) filling 0.36 of the period, air
+#: between the strips and above, n = 1.5 below, 1500 nm.
+WL = 1500e-9
+E_STRIP = -90.0 + 7.0j
+E_MIRROR = -130.0 + 20.0j
+N_SUB = 1.5
+DUTY = 0.36
 
 
 def _ratio_for(h, width, n_el=12):
@@ -43,14 +52,14 @@ def _ratio_for(h, width, n_el=12):
     return (h / (0.5 * width)) ** (1.0 / (n_el // 2 - 1))
 
 
-def _strip(P, theta, degree, h_over_wl, duty=0.47):
-    """One 50 nm metal strip layer on n = 1.447, air above, geometric layout of
+def _strip(P, theta, degree, h_over_wl, duty=DUTY):
+    """One 40 nm metal strip layer on n = 1.5, air above, geometric layout of
     12 elements per region whose wall element is ``h_over_wl`` wavelengths."""
     W = duty * P
     g = ("geometric", _ratio_for(h_over_wl * WL, W), 1e-30)
     st = PMMStack(P, n_substrate=N_SUB, n_superstrate=1.0, degree=degree,
                   elements_per_region=12, grade=g, allow_small_elements=True)
-    st.add_layer(50e-9, segments=[(duty, E_M), (1.0 - duty, 1.0)])
+    st.add_layer(40e-9, segments=[(duty, E_STRIP), (1.0 - duty, 1.0)])
     st.set_source(WL, theta=theta)
     return st
 
@@ -66,11 +75,15 @@ def _solve(st):
 # 1. the growth mask (pure arithmetic)
 # --------------------------------------------------------------------------- #
 def test_growth_mask_does_not_undercut_the_eig_roundoff():
-    """The measured offending mode: the -1 substrate order of the 700 nm
-    strip at theta 0.5, degree 8, wall element 1.25e-5 wavelengths, in a modal
-    set whose largest ``|q|`` is 5.57e5.  ``|Im q| / |q|`` = 2.1e-6 is past
-    the old bar and 170x inside the round-off bound -- it is not growth."""
-    q_all = np.array([0.442384 - 9.235e-7j, 5.571e5j, -0.9477j, 1.365269])
+    """The measured offending mode (fixture replaced by a generic one;
+    re-measured 2026-11-15, Windows/MKL): the -1 order in air of the 1200 nm
+    strip at theta 0.3, degree 8, wall element 1.25e-5 wavelengths, in a
+    modal set whose largest ``|q|`` is 4.63e5.  ``|Im q| / |q|`` = 2.1e-6 is
+    past the old bar and 250x inside the round-off bound -- it is not
+    growth.  (The other three entries: the largest evanescent ``|q|``, the
+    +1 order in air put on the forward branch with ``Im q < 0``, and the
+    zeroth order in air.)"""
+    q_all = np.array([0.298275 - 6.26e-7j, 4.626e5j, -1.1784j, 0.955336])
     qf = q_all.copy()
     grow = C._growth_mask(qf, q_all)
     assert not grow[0]                   # round-off on a propagating order
@@ -96,7 +109,7 @@ def test_growth_mask_traces_under_jax():
     jax = pytest.importorskip("jax")
     jax.config.update("jax_enable_x64", True)
     import jax.numpy as jnp
-    q_all = np.array([0.442384 - 9.235e-7j, 5.571e5j, -0.9477j, 0.0 + 0.0j])
+    q_all = np.array([0.298275 - 6.26e-7j, 4.626e5j, -1.1784j, 0.0 + 0.0j])
     f = jax.jit(lambda q: C._growth_mask(q, q, jnp))
     assert np.array_equal(np.asarray(f(jnp.asarray(q_all))),
                           C._growth_mask(q_all, q_all))
@@ -106,19 +119,20 @@ def test_growth_mask_traces_under_jax():
 # 2. the selector on the measured failing grid
 # --------------------------------------------------------------------------- #
 def test_power_carrying_halfspace_orders_stay_forward_on_tiny_elements():
-    """Half-space modes on the failing grid (700 nm, theta 0.5, degree 8,
+    """Half-space modes on the failing grid (1200 nm, theta 0.3, degree 8,
     wall element 1.25e-5 wavelengths): every propagating order must be put on
     the FORWARD branch (``Re q > 0``) whatever the sign of its round-off
-    ``Im q``.  Before the fix the substrate's -1 order came back as
-    ``q = -0.442384 + 9.2e-7i`` on Windows/MKL."""
-    P = 700e-9
-    W = 0.47 * P
+    ``Im q``.  With the pre-fix selector restored the -1 order in air comes
+    back as ``q = -0.298275 + 6.3e-7i`` on Windows/MKL (re-measured
+    2026-11-15 on the generic fixture)."""
+    P = 1200e-9
+    W = DUTY * P
     g = C._normalize_grade(("geometric", _ratio_for(1.25e-5 * WL, W), 1e-30),
                            period=P, where="test")
     tens = [C._tensor3_dict(np.eye(3))] * 2
-    mats = C._build_sem_tensor_segments(P, [0.47, 0.53], tens, 8, 12, g)
+    mats = C._build_sem_tensor_segments(P, [DUTY, 1.0 - DUTY], tens, 8, 12, g)
     k0 = 2 * np.pi / WL
-    kx0 = np.sin(0.5) * k0
+    kx0 = np.sin(0.3) * k0
     geo = C._uniform_geo_eig(mats, k0, kx0)
     for eps in (1.0, N_SUB ** 2):
         _W, _V, _lam, q = C._sem_modes_uniform(mats, k0, kx0, eps, geo)
@@ -128,25 +142,27 @@ def test_power_carrying_halfspace_orders_stay_forward_on_tiny_elements():
 
 
 #: |J - J(wall element 1e-4 wavelengths)| at the formerly failing
-#: configurations (same degree).  MEASURED 2026-11-14 after the fix:
-#: <= 4.2e-6 on Windows/MKL and on WSL/OpenBLAS (identical to 2 digits; the
-#: round-off floor of these element sizes); before the fix the first, second,
-#: third and sixth rows read 0.485 / 0.485 / 0.485 / 0.529 off with
-#: R + T = 2.55 / 2.55 / 2.55 / 3.20 on BOTH builds (this branch's pre-fix
-#: head).  Bar 5e-5: 12x above the readings, 4 decades below the pre-fix
+#: configurations (same degree).  Fixture replaced by a generic one;
+#: RE-MEASURED 2026-11-15 (Windows/MKL): <= 3.4e-6 after the fix (the
+#: round-off floor of these element sizes); with the pre-fix selector
+#: restored (``_core._PMM_EIG_ROUNDOFF_BAR = False``, energy backstop off)
+#: the rows read 1.27 / 1.27 / 0.225 / 0.168 / 3.04 / 4.87 / 7.27 / 4.11 off
+#: with R + T = 20.6 / 20.6 / 1.62 / 1.39 / 19.4 / 47.6 / 108 / 84.2.
+#: Bar 5e-5: 15x above the readings, 3.5 decades below the smallest pre-fix
 #: error.
 FORMER_FAILURE_BAR = 5e-5
 
-#: (period, theta, degree, wall element / wavelength): rows that returned
-#: super-unity wrong answers before the fix -- the four named above on this
-#: branch's pre-fix head (both builds), the others in the earlier
-#: 2026-11-14 sweeps of a sibling tree (which rows fail moved with every code
-#: change: the sign of round-off is a lottery over code, degree and build).
+#: (period, theta, degree, wall element / wavelength): rows that return
+#: super-unity wrong answers with the pre-fix selector restored -- 8 of the
+#: 81 such rows of a 720-solve oblique sweep (periods 250 / 500 / 800 /
+#: 1200 nm, theta 0.15-0.7, degrees 6-20, wall 2e-6 .. 3e-5 wavelengths;
+#: none at a wall of 1.6e-5 wavelengths or above).  Which rows fail is a
+#: lottery over code, degree and build (the sign of round-off).
 _FORMER_FAILURES = [
-    (700e-9, 0.5, 8, 1.25e-5), (700e-9, 0.5, 14, 6.5e-6),
-    (700e-9, 0.5, 8, 4e-6), (370e-9, 0.3, 10, 4e-6),
-    (370e-9, 0.15, 8, 4e-6), (1300e-9, 0.15, 8, 5.5e-6),
-    (1300e-9, 0.3, 6, 5.5e-6), (200e-9, 0.3, 6, 4e-6),
+    (1200e-9, 0.3, 8, 1.25e-5), (1200e-9, 0.3, 14, 5.5e-6),
+    (1200e-9, 0.15, 6, 1e-5), (800e-9, 0.5, 20, 5.5e-6),
+    (800e-9, 0.7, 10, 4e-6), (500e-9, 0.7, 10, 4e-6),
+    (250e-9, 0.7, 6, 4e-6), (1200e-9, 0.5, 6, 4e-6),
 ]
 
 
@@ -162,12 +178,13 @@ def test_former_failures_return_the_reference(P, theta, deg, hw):
 def test_no_super_unity_in_a_representative_scan():
     """The strip absorbs, so ``R + T <= 1`` is a theorem.  A grid across the
     whole former failure band (wall element 3e-6 .. 2e-5 wavelengths, oblique,
-    two periods, two degrees).  MEASURED 2026-11-14: max R + T over the full
-    post-fix sweeps (900 Windows/MKL and 360 WSL/OpenBLAS solves, periods
-    200-1300 nm, theta 0-0.7, degrees 6-20, wall 2e-6 .. 3e-5 wavelengths)
-    0.99603 / 0.99601, every row sub-unity."""
+    two periods, two degrees).  RE-MEASURED 2026-11-15 on the generic
+    fixture: max R + T over the full post-fix sweep (900 Windows/MKL solves,
+    periods 250 / 500 / 800 / 1200 nm, theta 0-0.7, degrees 6-20, wall
+    2e-6 .. 3e-5 wavelengths) 0.99824, every row sub-unity; this grid reads
+    0.99297."""
     worst = 0.0
-    for P in (370e-9, 1300e-9):
+    for P in (800e-9, 1200e-9):
         for theta in (0.15, 0.5):
             for deg in (8, 14):
                 for hw in (3e-6, 1.6e-5):
@@ -182,17 +199,19 @@ def test_no_super_unity_in_a_representative_scan():
 def test_single_layer_jones_on_tiny_elements():
     """``pmm_jones_1d_segments`` (the tensor path with the shared-eig
     half-spaces) on a formerly failing grid matches its own 1e-4-wavelength
-    layout.  Bar as ``FORMER_FAILURE_BAR``."""
-    P, theta, deg = 700e-9, 0.5, 8
-    W = 0.47 * P
-    segs = [(0.47, E_M), (0.53, 1.0)]
+    layout.  Bar as ``FORMER_FAILURE_BAR``.  RE-MEASURED 2026-11-15
+    (Windows/MKL): 5.7e-7; 1.27 off with R + T = 20.6 with the pre-fix
+    selector restored."""
+    P, theta, deg = 1200e-9, 0.3, 8
+    W = DUTY * P
+    segs = [(DUTY, E_STRIP), (1.0 - DUTY, 1.0)]
 
     def run(hw):
         g = ("geometric", _ratio_for(hw * WL, W), 1e-30)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             o, R, T, J = pmm_jones_1d_segments(
-                P, segs, N_SUB, 1.0, 50e-9, WL, theta=theta, degree=deg,
+                P, segs, N_SUB, 1.0, 40e-9, WL, theta=theta, degree=deg,
                 elements_per_region=12, grade=g, stabilize=False)
         return np.asarray(J), R.sum(axis=1) + T.sum(axis=1)
     J, tot = run(1.25e-5)
@@ -208,11 +227,13 @@ def test_hx_partner_is_the_q_route_where_that_route_is_accurate():
     """On a default (Chebyshev, 3 elements) patterned layer the new ``H_x``
     rows equal the ``Q``-route rows to round-off for every mode away from
     cut-off -- the same quantity by an exact identity, not a model change.
-    MEASURED 2026-11-14: max relative difference 1.1e-11 (|q| > 0.1, both
-    builds) -- the Q-route's own cancellation error on this spectrum."""
-    P = 370e-9
-    tens = [C._tensor3_dict(E_M * np.eye(3)), C._tensor3_dict(np.eye(3))]
-    mats = C._build_sem_tensor_segments(P, [0.47, 0.53], tens, 10, 3, True)
+    RE-MEASURED 2026-11-15 on the generic strip: max relative difference
+    7.0e-12 (|q| > 0.1, Windows/MKL) -- the Q-route's own cancellation error
+    on this spectrum."""
+    P = 500e-9
+    tens = [C._tensor3_dict(E_STRIP * np.eye(3)), C._tensor3_dict(np.eye(3))]
+    mats = C._build_sem_tensor_segments(P, [DUTY, 1.0 - DUTY], tens, 10, 3,
+                                        True)
     k0 = 2 * np.pi / WL
     kx0 = np.sin(0.3) * k0
     W2, V2, lam, q = C._sem_modes_tensor(mats, k0, kx0, True)
@@ -241,7 +262,7 @@ def _spacer_stack(degree, theta):
     n_sup 1.2, 1000 nm period, sin(theta) = (wl / P - 1) / 1.2."""
     st = PMMStack(1000e-9, n_substrate=N_SUB, n_superstrate=1.2,
                   degree=degree, elements_per_region=2)
-    st.add_layer(40e-9, segments=[(0.4, E_M), (0.6, 1.0)])
+    st.add_layer(40e-9, segments=[(0.4, E_STRIP), (0.6, 1.0)])
     st.add_layer(120e-9, eps=1.0)
     st.add_layer(30e-9, eps=2.25)
     st.set_source(WL, theta=theta)
@@ -249,11 +270,12 @@ def _spacer_stack(degree, theta):
 
 
 #: Dense per-layer eig vs the structured uniform-layer solve, the -1 order at
-#: cut-off inside a uniform spacer.  MEASURED 2026-11-14: max |dJ|
-#: 4.6e-11 (Windows/MKL) / 1.6e-10 (WSL/OpenBLAS) at degree 10 and 14;
-#: before the fix the dense path read TE R + T = 1.257 / 1.156 at degree
-#: 10 / 14 on Windows/MKL.  Bar 1e-7: 600x above, 5 decades below the
-#: pre-fix error.
+#: cut-off inside a uniform spacer.  Fixture replaced by a generic one;
+#: RE-MEASURED 2026-11-15 (Windows/MKL): max |dJ| 2.5e-13 at degree 10 and
+#: 14; the code before the fix (the package at the parent of the fix,
+#: same build) reads TE R + T = 1.365 / 1.332 on the dense path at degree
+#: 10 / 14, 0.10 / 0.14 off the structured solve.  Bar 1e-7: 4e5 x above
+#: the reading, 6 decades below the pre-fix error.
 CUTOFF_DENSE_BAR = 1e-7
 
 
@@ -277,37 +299,38 @@ def test_dense_path_at_a_cutoff_matches_the_structured_solve(deg, monkeypatch):
 #    independent (single high-degree element) reference
 # --------------------------------------------------------------------------- #
 def _two_walls(degree, epr, grade, w2=120.0, **kw):
-    """Two patterned layers with DIFFERENT walls (a 175 nm metal strip over a
-    ``w2`` nm dielectric strip, 370 nm period) on a metal mirror, theta 0.2."""
-    P = 370e-9
+    """Two patterned layers with DIFFERENT walls (a 180 nm metal strip over a
+    ``w2`` nm dielectric strip, 500 nm period) on a metal mirror, theta 0.2."""
+    P = 500e-9
     st = PMMStack(P, n_substrate=N_SUB, n_superstrate=1.0, degree=degree,
                   elements_per_region=epr, grade=grade, **kw)
-    st.add_layer(50e-9, segments=[(175 / 370, E_M), (195 / 370, 1.0)])
-    st.add_layer(30e-9, segments=[(w2 / 370, 2.25), (1 - w2 / 370, 1.0)])
-    st.add_layer(70e-9, eps=-160 + 30j)
+    st.add_layer(40e-9, segments=[(180 / 500, E_STRIP), (320 / 500, 1.0)])
+    st.add_layer(30e-9, segments=[(w2 / 500, 2.25), (1 - w2 / 500, 1.0)])
+    st.add_layer(80e-9, eps=E_MIRROR)
     st.set_source(WL, theta=0.2)
     return st
 
 
-def _lamellar(degree, epr, grade, theta, P=370e-9, **kw):
-    """A lossless lamellar grating (eps 4 / air, duty 0.47, 150 nm) on
+def _lamellar(degree, epr, grade, theta, P=500e-9, **kw):
+    """A lossless lamellar grating (eps 4 / air, duty 0.36, 150 nm) on
     n = 1.5 at oblique incidence."""
     st = PMMStack(P, n_substrate=1.5, n_superstrate=1.0, degree=degree,
                   elements_per_region=epr, grade=grade, **kw)
-    st.add_layer(150e-9, segments=[(0.47, 4.0), (0.53, 1.0)])
+    st.add_layer(150e-9, segments=[(DUTY, 4.0), (1.0 - DUTY, 1.0)])
     st.set_source(WL, theta=theta)
     return st
 
 
-#: Geometric layouts vs ONE Chebyshev element at degree 60.  MEASURED
-#: 2026-11-14, Windows/MKL and WSL/OpenBLAS identical to 2 digits: two-wall
-#: stack, default floor, degrees 12 / 16 / 20: <= 8.9e-6; with NO floor
-#: (wall elements down to 3.9 pm) <= 1.5e-5, where the code before the
-#: selector fix returned 1.87 off with R + T = 1.09 at degree 16.  The
-#: reference itself is the limit: against the adaptive-resolution RCWAStack
-#: (independent, converged to ~1e-7) the degree-60 element is 6.9e-6 off and
-#: geometric degree 16 / 24 are 2.7e-6 / 2.9e-6 off.  Bar 1e-4: 7x above the
-#: readings, 4 decades below the pre-fix error.
+#: Geometric layouts vs ONE Chebyshev element at degree 60.  Fixture replaced
+#: by a generic one; RE-MEASURED 2026-11-15 (Windows/MKL): two-wall stack,
+#: default floor, degrees 12 / 16 / 20: <= 6.0e-6; with NO floor (wall
+#: elements down to 4.3 pm) <= 9.9e-6.  The reference itself is the limit:
+#: against the adaptive-resolution RCWAStack (independent; 150 and 200
+#: orders agree to 3e-9) the degree-60 element is 4.5e-6 off and geometric
+#: degree 12 / 16 / 20 / 24 are 0.8e-6 / 1.6e-6 / 0.4e-6 / 1.7e-6 off.  (This
+#: 500 nm stack has no propagating diffraction order at theta 0.2, so the
+#: pre-fix selector reads the same here; the selector rows are above.)  Bar
+#: 1e-4: 10x above the readings.
 MULTI_LAYER_BAR = 1e-4
 
 
@@ -324,30 +347,31 @@ def test_geometric_two_patterned_layers_with_different_walls(deg):
 
 
 def test_geometric_near_coincident_walls():
-    """Walls 1 nm apart (175 / 176 nm): the union grid carries a 1 nm cell.
+    """Walls 1 nm apart (180 / 181 nm): the union grid carries a 1 nm cell.
     With the default floor the cell's 12 elements fall back to the uniform
-    layout and the answer agrees with the reference (MEASURED 2026-11-14:
-    2.1e-5 at degree 20, both builds).  With the floor disabled the cell's
-    wall element is 7e-14 m -- far inside the round-off band -- and the
-    opted-out solve must say so: it read 0.18 off with R + T = 0.91, a
-    sub-unity error no energy check sees."""
-    Jr, _ = _solve(_two_walls(60, 1, True, w2=176.0))
-    J, tot = _solve(_two_walls(20, 12, "geometric", w2=176.0))
+    layout and the answer agrees with the reference (RE-MEASURED 2026-11-15
+    on the generic fixture: 3.0e-6 at degree 20, Windows/MKL).  With the
+    floor disabled the cell's wall element is 7e-14 m -- far inside the
+    round-off band -- and the opted-out solve must say so: it reads 0.099
+    off with R + T = 0.974, a sub-unity error no energy check sees."""
+    Jr, _ = _solve(_two_walls(60, 1, True, w2=181.0))
+    J, tot = _solve(_two_walls(20, 12, "geometric", w2=181.0))
     assert float(np.max(np.abs(J - Jr))) < MULTI_LAYER_BAR
-    st = _two_walls(20, 12, ("geometric", 0.17, 1e-30), w2=176.0)
+    st = _two_walls(20, 12, ("geometric", 0.17, 1e-30), w2=181.0)
     with pytest.raises(ValueError, match="below the measured safe size"):
         st.solve()
-    st = _two_walls(20, 12, ("geometric", 0.17, 1e-30), w2=176.0,
+    st = _two_walls(20, 12, ("geometric", 0.17, 1e-30), w2=181.0,
                     allow_small_elements=True)
     with pytest.warns(UserWarning, match="allow_small_elements=True"):
         st.solve()
 
 
 #: Lossless lamellar grating, geometric (default floor and no floor) vs ONE
-#: Chebyshev element at degree 60, theta 0.2 and 0.4.  MEASURED 2026-11-14:
-#: <= 7.9e-7 on both builds at degrees 16 / 24, |R + T - 1| <= 5.9e-7 (and
-#: the degree-60 element agrees with the adaptive-resolution RCWAStack to
-#: 8.8e-8 at theta 0.4).  Bar 2e-5: 25x above.
+#: Chebyshev element at degree 60, theta 0.2 and 0.4.  RE-MEASURED
+#: 2026-11-15 on the generic grating (Windows/MKL): <= 6.2e-7 at degrees
+#: 16 / 24, |R + T - 1| <= 2.9e-7 (and the degree-60 element agrees with the
+#: adaptive-resolution RCWAStack to 1.2e-7 at theta 0.4).  Bar 2e-5: 32x
+#: above.
 LAMELLAR_BAR = 2e-5
 
 
@@ -363,19 +387,23 @@ def test_geometric_lossless_oblique_grating(theta):
             assert float(np.max(np.abs(J - Jr))) < LAMELLAR_BAR
 
 
-#: Lossless rows that returned WRONG answers before the selector fix -- the
-#: lossless trap: (370 nm, theta 0.4, degree 12, wall 4e-6 wavelengths) read
-#: 0.131 off its own 1e-4-wavelength layout with R + T = 1.000002, i.e.
-#: energy-conserving; (700 nm, theta 0.4, degree 16 / 12) 6.5 / 0.147 off
-#: (2026-11-14, Windows/MKL, code before the fix).  After it: <= 2.9e-6 on
-#: both builds (bar ``LAMELLAR_BAR``).
-_LOSSLESS_FORMER = [(370e-9, 0.4, 12, 4e-6), (700e-9, 0.4, 16, 4e-6),
-                    (700e-9, 0.4, 12, 8e-6)]
+#: Lossless rows that return WRONG answers with the pre-fix selector
+#: restored (``_core._PMM_EIG_ROUNDOFF_BAR = False``, energy backstop off;
+#: generic grating, re-measured 2026-11-15, Windows/MKL): (800 nm, theta
+#: 0.4, degree 12, wall 8e-6 wavelengths) 0.049 off the degree-60 reference
+#: with R + T = 1.103; (1000 nm, theta 0.6, degree 16, wall 4e-6) 0.152 off,
+#: R + T = 2.64; (500 nm, theta 0.4, degree 16, wall 4e-6) 7.5 off, R + T =
+#: 112.  (On this grating every wrong row of a 108-row sweep was
+#: super-unity; an earlier fixture also produced an energy-conserving wrong
+#: row -- the lossless trap -- which is why R + T alone is no witness.)
+#: After the fix: <= 1.2e-6, |R + T - 1| <= 1.0e-6 (bar ``LAMELLAR_BAR``).
+_LOSSLESS_FORMER = [(800e-9, 0.4, 12, 8e-6), (1000e-9, 0.6, 16, 4e-6),
+                    (500e-9, 0.4, 16, 4e-6)]
 
 
 @pytest.mark.parametrize("P,theta,deg,hw", _LOSSLESS_FORMER)
 def test_lossless_former_failures_match_the_reference(P, theta, deg, hw):
-    g = ("geometric", _ratio_for(hw * WL, 0.47 * P), 1e-30)
+    g = ("geometric", _ratio_for(hw * WL, DUTY * P), 1e-30)
     J, tot = _solve(_lamellar(deg, 12, g, theta, P=P,
                               allow_small_elements=True))
     Jr, _ = _solve(_lamellar(60, 1, True, theta, P=P))
@@ -437,7 +465,7 @@ def test_the_sliver_guard_does_no_harm_in_the_production_configuration():
     its own test modules exercise it with the pre-fix selector restored.
     Here it runs as shipped (fix on, guard on): hazard-band rows of the
     ladder above must solve without a refusal and track the physical
-    shift (review finding B4, 2026-11-14)."""
+    shift: a guard kept as defence in depth must not refuse right answers."""
     assert S.PMM_SLIVER_GUARD
     for deg in (12, 20):
         st0 = PMMStack(_SL_P, n_superstrate=1.0, n_substrate=1.0,

@@ -23,8 +23,9 @@ What is pinned here
   spectrally converging TE channel), and that the default call is unchanged.
 
 Bars are measured, with a gap on both sides (docs/TESTING_STANDARDS.md
-restatement 5); every bar names its measurement.  Windows/MKL and WSL/OpenBLAS
-readings were both taken on 2026-11-14.
+restatement 5); every bar names its measurement.  The fixture was replaced by
+a generic one on 2026-11-15 and every physics reading re-measured on it
+(Windows/MKL).
 """
 import ast
 import os
@@ -46,24 +47,26 @@ PMM_DIR = PKG / "elements" / "pmm"
 # --------------------------------------------------------------------------- #
 # Fixtures
 # --------------------------------------------------------------------------- #
-# Single-layer metal-strip grating: a 50 nm strip (eps -74 + 6i) of width W in
-# a period P, air between the strips, air above, n = 1.447 below.
+# Single-layer metal-strip grating (the strip layer of the strip / spacer /
+# mirror stack): a 40 nm strip (eps -90 + 7i) of width W in a period P, air
+# between the strips, air above, n = 1.5 below.  (Fixture replaced by a
+# generic one; every reading below re-measured on it.)
 GEOM = {
-    # period ~ 0.28 wavelength
-    "A": dict(P=370e-9, W=175e-9, WL=1300e-9),
+    # period ~ wavelength / 3
+    "P500": dict(P=500e-9, W=180e-9, WL=1500e-9),
     # period ~ the wavelength (off the Rayleigh anomaly by 0.8 %)
-    "B": dict(P=1300e-9, W=600e-9, WL=1310e-9),
+    "P1488": dict(P=1488e-9, W=540e-9, WL=1500e-9),
     # period ~ wavelength / 6.5
-    "C": dict(P=200e-9, W=95e-9, WL=1300e-9),
+    "P230": dict(P=230e-9, W=83e-9, WL=1500e-9),
 }
-EPS_METAL = -74.0 + 6.0j
-DEPTH = 50e-9
-N_SUB = 1.447
+E_STRIP = -90.0 + 7.0j
+DEPTH = 40e-9
+N_SUB = 1.5
 
 _CACHE = {}
 
 
-def _jones(grade, degree, epr, theta=0.0, geom="A"):
+def _jones(grade, degree, epr, theta=0.0, geom="P500"):
     """Zeroth-order reflection Jones of the fixture, solved at EXACTLY
     ``degree`` (``stabilize=False``), memoized per process."""
     key = (repr(grade), degree, epr, theta, geom)
@@ -71,7 +74,7 @@ def _jones(grade, degree, epr, theta=0.0, geom="A"):
         g = GEOM[geom]
         f = g["W"] / g["P"]
         out = lum.pmm_jones_1d_segments(
-            g["P"], [(f, EPS_METAL), (1.0 - f, 1.0)], N_SUB, 1.0, DEPTH,
+            g["P"], [(f, E_STRIP), (1.0 - f, 1.0)], N_SUB, 1.0, DEPTH,
             g["WL"], angle=theta, degree=degree, elements_per_region=epr,
             grade=grade, stabilize=False)
         _CACHE[key] = np.asarray(out[3])
@@ -115,7 +118,7 @@ def _graded_fractions_5_50_2(n_el, grade):
     return 0.5 * (1.0 - np.cos(np.pi * i / n_el))
 
 
-_INTERVALS = [(0.0, 175e-9), (175e-9, 370e-9), (0.3, 1.7)]
+_INTERVALS = [(0.0, 180e-9), (180e-9, 500e-9), (0.3, 1.7)]
 _BOOL_LIKE = [True, False, None, 0, 1, np.True_, np.False_]
 
 
@@ -126,7 +129,7 @@ def test_legacy_layouts_are_bit_identical():
                 old = _graded_boundaries_5_50_2(a, b, n_el, g)
                 assert np.array_equal(C._graded_boundaries(a, b, n_el, g), old)
                 # the normalized spec gives the same layout as the raw value
-                ng = C._normalize_grade(g, period=370e-9, where="t")
+                ng = C._normalize_grade(g, period=500e-9, where="t")
                 assert ng is bool(g)
                 assert np.array_equal(C._graded_boundaries(a, b, n_el, ng), old)
             assert np.array_equal(C._graded_fractions(n_el, g),
@@ -138,7 +141,7 @@ def test_legacy_layouts_are_bit_identical():
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("n_el", range(3, 17))
 def test_geometric_layout_shape(n_el):
-    r, width = 0.17, 175e-9
+    r, width = 0.17, 180e-9
     s = C._graded_fractions(n_el, _nofloor(r), width=width)
     assert s.shape == (n_el + 1,)
     assert s[0] == 0.0 and s[-1] == 1.0
@@ -186,7 +189,7 @@ def test_geometric_needs_the_width_for_three_or_more_elements():
 # 3. Floor
 # --------------------------------------------------------------------------- #
 def test_floor_clamps_a_bad_ratio():
-    floor, width = 11.1e-12, 175e-9
+    floor, width = 15e-12, 180e-9
     b = C._graded_boundaries(0.0, width, 16, ("geometric", 0.05, floor))
     h = np.diff(b)
     assert len(h) == 16
@@ -197,30 +200,30 @@ def test_floor_clamps_a_bad_ratio():
 
 
 def test_floor_only_acts_below_it():
-    width = 175e-9
+    width = 180e-9
     free = C._graded_boundaries(0.0, width, 12, _nofloor(0.17))
-    # ratio 0.17 at 12 elements has a 12.4 pm wall element: an 11.1 pm floor
+    # ratio 0.17 at 12 elements has a 12.8 pm wall element: a 12 pm floor
     # leaves the layout bit-identical ...
-    kept = C._graded_boundaries(0.0, width, 12, ("geometric", 0.17, 11.1e-12))
+    kept = C._graded_boundaries(0.0, width, 12, ("geometric", 0.17, 12e-12))
     assert np.array_equal(kept, free)
-    # ... while the default floor of a 370 nm period at 1300 nm (16.25 pm, the
+    # ... while the default floor of a 500 nm period at 1500 nm (18.75 pm, the
     # wavelength part) raises the ratio until the wall element is exactly the
-    # floor (about 0.179 here).
-    spec = C._normalize_grade("geometric", period=370e-9, where="t",
-                              wavelength=1300e-9)
-    assert spec[2] == C.GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * 1300e-9
+    # floor (about 0.184 here).
+    spec = C._normalize_grade("geometric", period=500e-9, where="t",
+                              wavelength=1500e-9)
+    assert spec[2] == C.GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC * 1500e-9
     b = C._graded_boundaries(0.0, width, 12, spec)
     h = np.diff(b)
     assert abs(h[0] / spec[2] - 1.0) <= 1e-9 and abs(h[-1] / spec[2] - 1.0) <= 1e-9
     assert np.all(h >= spec[2] * (1.0 - 1e-12))
     r_eff = (h[0] + h[1]) / (h[0] + h[1] + h[2])
-    assert 0.175 < r_eff < 0.185
+    assert 0.180 < r_eff < 0.188
 
 
 def test_floor_falls_back_to_uniform_when_unreachable():
-    # region of 0.3 nm, floor 11.1 pm, 12 elements: no graded layout with the
-    # wall element smallest can keep every element >= 11.1 pm -> uniform.
-    b = C._graded_boundaries(0.0, 0.3e-9, 12, ("geometric", 0.17, 11.1e-12))
+    # region of 0.3 nm, floor 15 pm, 12 elements: no graded layout with the
+    # wall element smallest can keep every element >= 15 pm -> uniform.
+    b = C._graded_boundaries(0.0, 0.3e-9, 12, ("geometric", 0.17, 15e-12))
     assert np.allclose(np.diff(b), 0.3e-9 / 12, rtol=1e-12, atol=0.0)
     # a requested ratio >= 1/2 whose interior element violates the floor
     # also falls back to uniform (above 1/2 the smallest element is interior)
@@ -235,8 +238,8 @@ def test_floor_falls_back_to_uniform_when_unreachable():
 
 @pytest.mark.parametrize("n_el", [3, 5, 9, 12, 13, 16])
 def test_floor_holds_for_every_element_count(n_el):
-    floor = 11.1e-12
-    for width in (2e-9, 20e-9, 175e-9, 1e-6):
+    floor = 15e-12
+    for width in (2e-9, 20e-9, 180e-9, 1e-6):
         b = C._graded_boundaries(0.0, width, n_el, ("geometric", 0.17, floor))
         h = np.diff(b)
         assert len(h) == n_el
@@ -248,7 +251,7 @@ def test_floor_holds_for_every_element_count(n_el):
 # 4. Normalizer
 # --------------------------------------------------------------------------- #
 def test_normalizer_accepted_forms_round_trip():
-    P = 370e-9
+    P = 500e-9
     fl = C.GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC * P
     # a list, not a dict: True / 1 / np.True_ hash alike and would collapse
     cases = [
@@ -277,16 +280,16 @@ def test_normalizer_accepted_forms_round_trip():
 def test_default_floor_is_completed_by_the_wavelength():
     """max(3e-5 x period, 1.25e-5 x wavelength); the longest wavelength of an
     array binds; no wavelength -> the period part alone; a non-numeric,
-    non-finite or non-positive one raises (it used to drop the wavelength
-    part silently, changing the layout -- review finding A5, 2026-11-14); an
-    explicit floor is never touched."""
-    P = 370e-9
+    non-finite or non-positive one raises (dropping the wavelength part
+    silently would change the layout without a word); an explicit floor is
+    never touched."""
+    P = 500e-9
     f = C._normalize_grade("geometric", period=P, where="t",
-                           wavelength=1300e-9)[2]
-    assert f == 1.25e-5 * 1300e-9
+                           wavelength=1500e-9)[2]
+    assert f == 1.25e-5 * 1500e-9
     f = C._normalize_grade("geometric", period=P, where="t",
-                           wavelength=[1000e-9, 1300e-9, 1100e-9])[2]
-    assert f == 1.25e-5 * 1300e-9
+                           wavelength=[1200e-9, 1500e-9, 1350e-9])[2]
+    assert f == 1.25e-5 * 1500e-9
     f = C._normalize_grade("geometric", period=P, where="t",
                            wavelength=200e-9)[2]             # period part wins
     assert f == 3e-5 * P
@@ -296,7 +299,7 @@ def test_default_floor_is_completed_by_the_wavelength():
             C._geometric_default_floor(P, wl)
     spec = ("geometric", 0.2, 5e-12)
     assert C._normalize_grade(spec, period=P, where="t",
-                              wavelength=1300e-9) == spec
+                              wavelength=1500e-9) == spec
 
 
 @pytest.mark.parametrize("bad", [
@@ -307,7 +310,7 @@ def test_default_floor_is_completed_by_the_wavelength():
     ("geometric",), ("geometric", 0.17, 1e-11, 3), object(), [1, 2]])
 def test_normalizer_rejects(bad):
     with pytest.raises(ValueError, match="t: "):
-        C._normalize_grade(bad, period=370e-9, where="t")
+        C._normalize_grade(bad, period=500e-9, where="t")
 
 
 def test_normalizer_geometric_needs_three_elements():
@@ -330,8 +333,8 @@ def test_normalizer_refuses_geometric_where_not_validated():
                               allow_geometric=False) is True
 
 
-_SEG_ARGS = (370e-9, [(0.47, EPS_METAL), (0.53, 1.0)], N_SUB, 1.0, DEPTH,
-             1300e-9)
+_SEG_ARGS = (500e-9, [(0.36, E_STRIP), (0.64, 1.0)], N_SUB, 1.0, DEPTH,
+             1500e-9)
 
 
 @pytest.mark.parametrize("fn_name", [
@@ -350,11 +353,11 @@ def test_public_1d_rejects_an_unknown_grade_instead_of_reading_it_as_true():
                                   grade="geometirc")
     eye = np.eye(3)
     with pytest.raises(ValueError, match="unknown grade"):
-        lum.pmm_jones_1d(370e-9, EPS_METAL * eye, eye, N_SUB, 1.0, DEPTH, 0.47,
-                         1300e-9, degree=4, grade="yes")
+        lum.pmm_jones_1d(500e-9, E_STRIP * eye, eye, N_SUB, 1.0, DEPTH, 0.36,
+                         1500e-9, degree=4, grade="yes")
     with pytest.raises(ValueError, match="unknown grade"):
-        lum.pmm_efficiency_1d(370e-9, 2.0, 1.0, N_SUB, 1.0, DEPTH, 0.47,
-                              1300e-9, degree=4, grade="yes")
+        lum.pmm_efficiency_1d(500e-9, 2.0, 1.0, N_SUB, 1.0, DEPTH, 0.36,
+                              1500e-9, degree=4, grade="yes")
 
 
 def test_2d_entry_points_refuse_geometric():
@@ -423,14 +426,14 @@ def test_unnormalized_string_reaching_the_kernel_raises():
     # their fail-before switch off; 2-D refuses it (not validated).
     import lumenairy.elements.pmm.conical as CO
     lum.elements.pmm.pmm_jones_1d_conical(
-        370e-9, EPS_METAL, 1.0, N_SUB, 1.0, DEPTH, 0.47, 1300e-9,
+        500e-9, E_STRIP, 1.0, N_SUB, 1.0, DEPTH, 0.36, 1500e-9,
         theta=0.1, phi=0.2, degree=6, elements_per_region=4,
         grade="geometric")
     CO.PMM_CONICAL_STRUCTURED = False
     try:
         with pytest.raises(NotImplementedError, match="conical incidence"):
             lum.elements.pmm.pmm_jones_1d_conical(
-                370e-9, EPS_METAL, 1.0, N_SUB, 1.0, DEPTH, 0.47, 1300e-9,
+                500e-9, E_STRIP, 1.0, N_SUB, 1.0, DEPTH, 0.36, 1500e-9,
                 theta=0.1, phi=0.2, degree=6, elements_per_region=4,
                 grade="geometric")
     finally:
@@ -445,9 +448,9 @@ def test_unnormalized_string_reaching_the_kernel_raises():
 
 def test_sem_modes_uniform_label_is_recorded_and_inert():
     mats = C._build_sem_tensor_segments(
-        370e-9, [0.47, 0.53], [C._tensor3_dict(2.25 * np.eye(3))] * 2, 6, 1,
+        500e-9, [0.36, 0.64], [C._tensor3_dict(2.25 * np.eye(3))] * 2, 6, 1,
         True)
-    k0 = 2.0 * np.pi / 1300e-9
+    k0 = 2.0 * np.pi / 1500e-9
     base = C._sem_modes_uniform(mats, k0, 0.0, 2.25)
     old = C._MODE_CUT_CENSUS
     try:
@@ -535,22 +538,19 @@ def test_census_one_grading_rule():
 # 6. Physics, single layer (stabilize=False: the requested degree is solved)
 # --------------------------------------------------------------------------- #
 # ONE bar separates "converged to the round-off floor" from "a real
-# discretisation or floor error".  Measured 2026-11-14, Windows/MKL and
-# WSL/OpenBLAS (the two builds agree to 3 digits on every reading) at the
-# former 1e-4 x period floor; RE-MEASURED the same day after the selector fix
-# and the new default floor max(3e-5 x period, 1.25e-5 x wavelength): every
-# reading below <= 6.2e-7 (Windows/MKL and WSL/OpenBLAS, 3 digits), the two signals
-# above >= 2.7e-5 (the unclamped ratio-0.10 layout no longer FAILS at theta
-# 0.3 -- that was the selector defect -- it reads 3.0e-5 of round-off).
-# Readings at the former floor:
+# discretisation or floor error".  Fixture replaced by a generic one and
+# RE-MEASURED 2026-11-15 (Windows/MKL) at the default floor
+# max(3e-5 x period, 1.25e-5 x wavelength):
 #   * below: every reading of the default geometric spec at 12 elements --
-#     fixtures A, B, C; theta 0 and 0.3; degrees 8 / 10 / 14 / 20; TE against
-#     a one-element degree-60 solve and TM against degree 20 x 12 -- is
-#     <= 2.1e-7 (largest: TM, fixture C, degree 14, theta 0);
+#     the 500 / 1488 / 230 nm periods; theta 0 and 0.3; degrees 8 / 10 / 14 /
+#     20; TE against a one-element degree-60 solve and TM against degree
+#     20 x 12 -- is <= 5.6e-7 (largest: TM, 1488 nm period, degree 10,
+#     theta 0);
 #   * above: the two signals the bar must see -- Chebyshev grading at the
-#     same nodal count (TM 2.7e-5) and an UNCLAMPED ratio-0.10 layout (TE
-#     3.9e-5 at theta 0, 0.92 at theta 0.3) -- are >= 2.7e-5.
-# 2e-6 sits ~10x above the first and ~13x below the second.
+#     same nodal count (TM 2.5e-5) and an UNCLAMPED ratio-0.10 layout (TE
+#     1.4e-5 at theta 0, 2.2e-5 at theta 0.3, round-off of its 0.9 pm wall
+#     element) -- are >= 1.4e-5.
+# 2e-6 sits ~3.6x above the first and ~7x below the second.
 _BAR = 2e-6
 
 
@@ -560,28 +560,28 @@ def ref_tm():
     return _tm("geometric", 20, 12)
 
 
-def _te_ref(theta=0.0, geom="A"):
+def _te_ref(theta=0.0, geom="P500"):
     """TE reference: ONE element at degree 60.  TE (E along the strips) has
     no wall singularity and converges spectrally, so a single high-degree
-    element is the cleanest reference (degree 80 agrees with it to 1.1e-11 or
-    better on A and B, both builds); a correct element layout cannot move TE,
-    so any TE deviation of a graded layout is round-off."""
+    element is the cleanest reference (degree 80 agrees with it to 2.4e-11 or
+    better on the 500 and 1488 nm periods, theta 0 and 0.3); a correct element
+    layout cannot move TE, so any TE deviation of a graded layout is
+    round-off."""
     return _te(True, 60, 1, theta, geom)
 
 
 def test_geometric_beats_chebyshev_at_equal_nodal_count(ref_tm):
-    # DOF = 2 * elements * degree = 160 for both: measured 2.6e-7 (geometric
-    # 8 x 10; 3.1e-8 at the new floor) against 2.7e-5 (Chebyshev 10 x 8).
+    # DOF = 2 * elements * degree = 160 for both: measured 1.8e-7 (geometric
+    # 8 x 10) against 2.5e-5 (Chebyshev 10 x 8).
     geo = abs(_tm("geometric", 8, 10) - ref_tm)
     cheb = abs(_tm(True, 10, 8) - ref_tm)
     assert geo < _BAR < cheb
-    # the recommended 12-element layout (measured 1.1e-7; 6.2e-7 at the new
-    # floor)
+    # the recommended 12-element layout (measured 6.5e-8)
     assert abs(_tm("geometric", 8, 12) - ref_tm) < _BAR
 
 
 def test_geometric_converges_at_oblique_incidence():
-    # theta 0.3: degree 8 vs 20 at 12 elements, measured 4.4e-8.
+    # theta 0.3: degree 8 vs 20 at 12 elements, measured 1.5e-7.
     d8 = _tm("geometric", 8, 12, theta=0.3)
     d20 = _tm("geometric", 20, 12, theta=0.3)
     assert abs(d8 - d20) < _BAR
@@ -589,7 +589,7 @@ def test_geometric_converges_at_oblique_incidence():
 
 @pytest.mark.parametrize("theta", [0.0, 0.3])
 def test_te_is_untouched_by_the_geometric_layout(theta):
-    # measured 4.1e-8 / 2.6e-8 (degree 8) and 2.5e-8 / 2.7e-8 (degree 20) at
+    # measured 6.1e-8 / 1.0e-7 (degree 8) and 1.9e-8 / 2.0e-8 (degree 20) at
     # theta 0 / 0.3.
     ref = _te_ref(theta)
     for degree in (8, 20):
@@ -599,11 +599,9 @@ def test_te_is_untouched_by_the_geometric_layout(theta):
 @pytest.mark.parametrize("theta", [0.0, 0.3])
 def test_the_floor_turns_a_bad_ratio_into_a_good_layout(theta):
     """Ratio 0.10 at 12 elements puts a 0.9 pm element at each wall.  The
-    default floor clamps it (measured TE 4.6e-8 / 1.7e-8 at theta 0 / 0.3;
-    5.0e-8 / 4.3e-7 at the new floor); the same ratio with the floor disabled
-    is the signal the bar must see (measured 3.9e-5 / 0.92 before the
-    selector fix -- at oblique incidence the solve failed outright -- and
-    4.5e-5 / 3.0e-5 of round-off after it)."""
+    default floor clamps it (measured TE 4.6e-8 / 4.6e-8 at theta 0 / 0.3);
+    the same ratio with the floor disabled is the signal the bar must see
+    (measured 1.4e-5 / 2.2e-5 of round-off)."""
     ref = _te_ref(theta)
     clamped = abs(_te(("geometric", 0.10), 8, 12, theta) - ref)
     unclamped = abs(_te(_nofloor(0.10), 8, 12, theta) - ref)
@@ -611,7 +609,7 @@ def test_the_floor_turns_a_bad_ratio_into_a_good_layout(theta):
 
 
 def test_floor_rescues_ratio_005_at_16_elements(ref_tm):
-    # measured TM 3.7e-8, TE 3.6e-8
+    # measured TM 1.3e-7, TE 1.6e-7
     spec = ("geometric", 0.05)
     assert abs(_tm(spec, 8, 16) - ref_tm) < _BAR
     assert abs(_te(spec, 8, 16) - _te_ref()) < _BAR
@@ -621,9 +619,9 @@ def test_floor_rescues_ratio_005_at_16_elements(ref_tm):
 # 7. Default unchanged
 # --------------------------------------------------------------------------- #
 def _solve_set():
-    g = GEOM["A"]
+    g = GEOM["P500"]
     f = g["W"] / g["P"]
-    seg = [(f, EPS_METAL), (1.0 - f, 1.0)]
+    seg = [(f, E_STRIP), (1.0 - f, 1.0)]
     out = []
     for kw in (dict(degree=6, elements_per_region=3, grade=True,
                     stabilize=False),
@@ -658,23 +656,26 @@ def test_default_results_are_bit_identical_to_the_previous_rule(monkeypatch):
             assert np.array_equal(np.asarray(x), np.asarray(y))
 
 
-# 5.50.2 readings of the same calls (J[0, 0], J[1, 1]) on Windows/MKL; the
-# WSL/OpenBLAS readings differ from these by <= 1.4e-14 (2026-11-14).
+# 5.50.2 readings of the same calls (J[0, 0], J[1, 1]) on Windows/MKL.  The
+# fixture was replaced by a generic one on 2026-11-15 and these were
+# re-recorded by running the calls on the 5.50.2 package itself (the current
+# code reproduces them to <= 9e-15 on the same build).
 _FROZEN_5_50_2 = [
-    ((-0.3161889061337836 + 0.18440753646341834j),
-     (-0.7773522618127532 - 0.46257775126129497j)),
-    ((-0.3159049284357385 + 0.1842139602771623j),
-     (-0.7773524665372177 - 0.4625775825794778j)),
-    ((-0.3003983112486748 + 0.18341215095824295j),
-     (-0.7916788603173045 - 0.44751455118343525j)),
-    ((-0.31649547897394037 + 0.18461486943499847j),
-     (-0.7773521774461041 - 0.46257782036582273j)),
+    ((-0.2521125375489535 + 0.11526573310966924j),
+     (-0.5806052442983239 - 0.4797216126784955j)),
+    ((-0.25193215952876585 + 0.11501407091278934j),
+     (-0.5806061561921603 - 0.47972151402164603j)),
+    ((-0.23831230878150023 + 0.11572032664174278j),
+     (-0.5994866037830147 - 0.470757725927181j)),
+    ((-0.25230840819701517 + 0.11553734353974077j),
+     (-0.5806048463606573 - 0.4797216547151939j)),
 ]
 
 
 def test_default_results_match_the_previous_release():
-    # 1e-12: ~70x the measured cross-build spread, and far below what any
-    # change of layout produces (Chebyshev vs uniform at 3 elements: 3.4e-4).
+    # 1e-12: ~100x the measured release-to-release round-off (<= 9e-15), and
+    # far below what any change of layout produces (Chebyshev vs uniform at
+    # 3 elements: 3.1e-4).
     for res, (jxx, jyy) in zip(_solve_set()[:4], _FROZEN_5_50_2):
         J = np.asarray(res[3])
         assert abs(J[0, 0] - jxx) < 1e-12
@@ -685,18 +686,17 @@ def test_default_results_match_the_previous_release():
 # 8. Floor vs degree and geometry
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("geom, theta, degrees", [
-    ("B", 0.0, (8, 20)),          # period ~ wavelength
-    ("C", 0.3, (8, 10, 20)),      # period ~ wavelength / 6.5, oblique
+    ("P1488", 0.0, (8, 20)),       # period ~ wavelength
+    ("P230", 0.3, (8, 10, 20)),    # period ~ wavelength / 6.5, oblique
 ])
 def test_default_floor_stays_clear_of_the_round_off_band(geom, theta, degrees):
-    """The round-off danger scale is set by the WAVELENGTH (the outright
-    failures once measured at 4.7 / 7.2 / 7.5 pm of wall element were the
-    selector defect, fixed 2026-11-14), and the default floor carries a
-    wavelength part since.  The decision measured here, on the geometries
-    the floor is most and least generous on: TE stays at round-off at every
-    degree (measured <= 2.6e-9 on B, <= 9.3e-8 on C, both builds, at the
-    former floor; <= 2.0e-8 on B and <= 2.3e-7 on C at the new one), so the
-    floor does not need to grow with degree."""
+    """The round-off danger scale is set by the WAVELENGTH (outright failures
+    on small wall elements were a mode-selector defect, fixed 2026-11-14),
+    and the default floor carries a wavelength part.  The decision measured
+    here, on the geometries the floor is most and least generous on: TE
+    stays at round-off at every degree (measured <= 2.1e-8 on the 1488 nm
+    period and <= 1.6e-7 on the 230 nm one, Windows/MKL), so the floor does
+    not need to grow with degree."""
     ref = _te_ref(theta, geom)
     for degree in degrees:
         assert abs(_te("geometric", degree, 12, theta, geom) - ref) < _BAR

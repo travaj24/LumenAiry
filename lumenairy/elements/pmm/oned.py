@@ -418,36 +418,35 @@ def pmm_efficiency_1d(
         only the element TOUCHING each wall resolves the corner field, and
         Chebyshev clustering shrinks it only like ``2.5 / n^2`` of the region.
         The GEOMETRIC layout (``grade='geometric'``) shrinks it like ``r^m``
-        and changes the picture.  Measured (TM, 1300 nm, ``stabilize=False``,
-        a 50 nm metal strip of eps ``-74 + 6i``, 175 nm wide in a 370 nm
+        and changes the picture.  Measured (TM, 1500 nm, ``stabilize=False``,
+        a 40 nm metal strip of eps ``-90 + 7i``, 180 nm wide in a 500 nm
         period, air above; error in the zeroth-order ``J[0, 0]``):
 
-            layout                       DOF   strip on     strip 21 nm over
-                                               n = 1.447    a metal mirror
-            one element, degree 16        32   --           1.4e-2
-            one element, degree 80       160   1.0e-5       4.2e-4
-            Chebyshev, 10 x 8 elements   160   2.7e-5       1.0e-3
-            geometric,  8 x 10           160   2.6e-7       1.0e-5
-            geometric,  8 x 12           192   1.1e-7       7.4e-7 (1.5e-6)
-            geometric, 10 x 12           240   1.2e-7       2.5e-6 (9.1e-7)
+            layout                       DOF   strip on     strip 19 nm over
+                                               n = 1.5      a metal mirror
+            one element, degree 16        32   --           1.7e-2
+            one element, degree 80       160   9.5e-6       4.4e-4
+            Chebyshev, 10 x 8 elements   160   2.5e-5       1.1e-3
+            geometric,  8 x 10           160   1.8e-7       1.1e-5
+            geometric,  8 x 12           192   6.5e-8       1.9e-6 (1.5e-6)
+            geometric, 10 x 12           240   5.2e-8       1.3e-6 (9.1e-7)
 
         (single layer: against geometric degree 20 x 12, which agrees with
-        degree 14 / 24 to ~1e-7, the round-off floor of this comparison; the
+        degree 14 / 24 to 3e-8, the round-off floor of this comparison; the
         right column is :class:`~lumenairy.elements.pmm.PMMStack` on a stack
-        with thin (1-7 nm) layers between strip and mirror, against the
-        converged geometric degree 20 x 12 value, which an independent
-        finite-element solve confirms to 1.3e-5; in brackets, the same layout
-        with an explicit 11 pm floor instead of the default one.  The 8 x 12
-        right-hand entry is at the current default floor, 16 pm here; the
-        others were measured at the former 37 pm one.)  The gain
+        with thin (2-6 nm) layers between strip and mirror, on its gap
+        resonance, against the converged geometric degree 24 x 12 value,
+        which an independent Fourier-modal solve confirms to 1.5e-7; in
+        brackets, the same layout with an explicit 3e-5 x period (15 pm)
+        floor instead of the default one, 18.75 pm here.)  The gain
         is largest where thin layers or a gap concentrate the field at the
         corner; on an isolated layer single-element ``degree`` still competes
         with Chebyshev grading.  Recommended for metal corners:
         ``grade='geometric'``, 8-12 elements per region, degree 8-10.  That
         recipe is for VERTICAL walls: on a slanted wall (the covariant path of
         :func:`pmm_jones_1d_slanted`) the same strip at a 0.2 rad slant needs
-        degree 16 with 12 geometric elements (degree 8 / 12 / 16 is 1.9e-4 /
-        3.6e-6 / 2.9e-8 off a degree-24 solve; Chebyshev 20 x 8 is 6.2e-6).
+        degree 16 with 12 geometric elements (degree 8 / 12 / 16 is 8.8e-5 /
+        1.7e-5 / 2.4e-8 off a degree-24 solve; Chebyshev 20 x 8 is 4.1e-6).
     grade : bool, str or tuple, optional
         Element layout inside each region (ridge / groove), used when
         ``elements_per_region > 1``:
@@ -469,12 +468,13 @@ def pmm_efficiency_1d(
 
         Why the floor: tiny elements cost accuracy through ROUND-OFF -- the
         modal eigensolve's error grows like ``1 / (k0 h)^2`` on an element of
-        width ``h``.  Measured (one metal strip layer, 1300 nm, oblique,
-        degrees 6-20, both BLAS builds): the spectrally converging TE channel,
-        which a correct layout cannot move, deviates by at most 4e-7 at
-        ``h = 1.25e-5 * wavelength`` (the wavelength part of the default
-        floor; in a multilayer ``PMMStack`` the same floor carries about
-        1e-6), 1.5e-6 at 8e-6, 3.8e-6 at 4e-6 and 2.7e-5 at 2e-6.  (Before
+        width ``h``.  Measured (one metal strip layer, 1500 nm, periods
+        250-1200 nm, theta 0-0.7, degrees 6-20, Windows/MKL): the spectrally
+        converging TE channel, which a correct layout cannot move, deviates
+        by at most 3.4e-7 at ``h = 1.25e-5 * wavelength`` (the wavelength
+        part of the default floor; in a multilayer ``PMMStack`` the same
+        floor carries about 5e-7), 5.9e-7 at 8e-6, 2.7e-6 at 4e-6 and 8.2e-6
+        at 2e-6.  (Before
         2026-11-14 a mode-selector defect also made such solves fail
         outright, with ``R + T > 1``; that is fixed.)  When the requested
         ratio would put an element below the floor the ratio is raised until

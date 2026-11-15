@@ -6,10 +6,11 @@ cascaded elementwise and starred in as one S-matrix.  The dense per-layer path
 is still reachable through the private switch ``stack._UNIFORM_FAST_PATH``,
 which is what every cross-path comparison below forces.
 
-Fixture A: period 370 nm, a 175 nm wide / 50 nm thick metal strip (eps -74+6i)
-in air over 1 / 7 / 5 / 7 / 1 nm dielectric and lossy-oxide films over a 70 nm
-metal mirror (eps -160+30i), air above, n = 1.447 below, 1300 nm.  Fixture A52
-replaces the 5 nm film by 52 graded sub-layers.
+The strip / spacer / mirror stack (a generic fixture): period 500 nm, a 180 nm
+wide / 40 nm thick metal strip (eps -90+7i) in air over 2 / 6 / 3 / 6 / 2 nm
+dielectric and lossy films (eps 2.8 / 4.2 / 2.2+0.6i / 4.2 / 2.8) over an
+80 nm metal mirror (eps -130+20i), air above, n = 1.5 below, 1500 nm.  The
+"graded" variant replaces the 3 nm lossy film by 52 graded sub-layers.
 """
 import time
 import warnings
@@ -27,14 +28,14 @@ from lumenairy.elements.pmm._uniform_cascade import (
     _uniform_medium_diag,
 )
 
-WL, P, W = 1300e-9, 370e-9, 175e-9
+WL, P, W = 1500e-9, 500e-9, 180e-9
 F = W / P
-E_AU, E_AL = -74.0 + 6.0j, -160.0 + 30.0j
-E_AO, E_HF, E_OX = 3.05 + 0j, 3.53 + 0j, 2.5 + 0.5j
-N_SUB = 1.447
+E_STRIP, E_MIRROR = -90.0 + 7.0j, -130.0 + 20.0j
+E_LOW, E_HIGH, E_LOSSY = 2.8 + 0j, 4.2 + 0j, 2.2 + 0.6j
+N_SUB = 1.5
 
 
-def _oxide_sublayers(n=52, t=5e-9):
+def _lossy_sublayers(n=52, t=3e-9):
     i = np.arange(n + 1)
     z = 0.5 * (1.0 - np.cos(np.pi * i / n)) * t
     zc = 0.5 * (z[:-1] + z[1:]) / t
@@ -43,10 +44,12 @@ def _oxide_sublayers(n=52, t=5e-9):
 
 
 def _layers(graded=0):
-    L = [(50e-9, E_AU, 1.0 + 0j), (1e-9, E_AO, E_AO), (7e-9, E_HF, E_HF)]
-    L += ([(t, e, e) for t, e in _oxide_sublayers(graded)] if graded
-          else [(5e-9, E_OX, E_OX)])
-    L += [(7e-9, E_HF, E_HF), (1e-9, E_AO, E_AO), (70e-9, E_AL, E_AL)]
+    L = [(40e-9, E_STRIP, 1.0 + 0j), (2e-9, E_LOW, E_LOW),
+         (6e-9, E_HIGH, E_HIGH)]
+    L += ([(t, e, e) for t, e in _lossy_sublayers(graded)] if graded
+          else [(3e-9, E_LOSSY, E_LOSSY)])
+    L += [(6e-9, E_HIGH, E_HIGH), (2e-9, E_LOW, E_LOW),
+          (80e-9, E_MIRROR, E_MIRROR)]
     return L
 
 
@@ -81,25 +84,25 @@ def _maxdiff(a, b):
 
 
 # --------------------------------------------------------------------------- #
-# 1. fast path == dense path (fixture A, A52; normal and oblique)
+# 1. fast path == dense path (strip stack and its graded variant; normal and
+#    oblique)
 # --------------------------------------------------------------------------- #
 #: Cross-path bar on J and on the per-order R / T.  The two paths solve the
 #: same modes in different eigenvector gauges (clean ``(w, 0)`` / ``(0, w)``
 #: columns against a raw ``2n`` eig's degenerate mixtures), so they agree to
-#: round-off, not bit for bit.  MEASURED 2026-11-14, max over J / R / T:
-#: fixture A degree 20 x 3 el 4.20e-12 (theta 0) / 4.64e-12 (theta 0.3),
-#: A52 degree 12 x 3 el 3.39e-13 / 1.14e-12 on Windows/MKL; 4.05e-12 /
-#: 4.66e-12 and 3.18e-13 / 8.75e-13 on WSL/OpenBLAS.  (An earlier Windows run
-#: of the same fixture A theta-0 comparison read 7.1e-13: the dense path's
-#: degenerate eig is not run-to-run reproducible under threaded MKL, which
-#: is why this is an envelope and not a reading.)  Bar = 100 x the cross-build
-#: envelope; the smallest physical signal it guards is |J| ~ 0.14 (fixture A
-#: TM), and a wrong diagonal (e.g. a dropped clamp or a sign) moves J by O(1).
+#: round-off, not bit for bit.  Fixture replaced by a generic one;
+#: RE-MEASURED 2026-11-15 (Windows/MKL), max over J / R / T: strip stack
+#: degree 20 x 3 el 3.7e-12 (theta 0) / 3.2e-12 (theta 0.3), graded variant
+#: degree 12 x 3 el 2.2e-13 / 1.9e-12.  (The dense path's degenerate eig is
+#: not run-to-run reproducible under threaded MKL, which is why the bar is
+#: an envelope and not a reading.)  Bar = 130 x the largest reading; the
+#: smallest physical signal it guards is |J| ~ 0.2 (strip stack TM), and a
+#: wrong diagonal (e.g. a dropped clamp or a sign) moves J by O(1).
 CROSS_PATH_BAR = 5e-10
 
 
 @pytest.mark.parametrize("theta", [0.0, 0.3])
-def test_fixture_a_fast_equals_dense(dense_switch, theta):
+def test_strip_stack_fast_equals_dense(dense_switch, theta):
     fast, dense = dense_switch(lambda: _fixture(20, 3, theta=theta).solve())
     assert np.array_equal(fast[0], dense[0])
     d = _maxdiff(fast[1:], dense[1:])
@@ -107,7 +110,7 @@ def test_fixture_a_fast_equals_dense(dense_switch, theta):
 
 
 @pytest.mark.parametrize("theta", [0.0, 0.3])
-def test_fixture_a52_fast_equals_dense(dense_switch, theta):
+def test_graded_stack_fast_equals_dense(dense_switch, theta):
     fast, dense = dense_switch(
         lambda: _fixture(12, 3, graded=52, theta=theta).solve())
     d = _maxdiff(fast[1:], dense[1:])
@@ -118,7 +121,7 @@ def test_stack_without_uniform_layers_is_bit_identical(dense_switch):
     """No uniform layer -> the fast path changes nothing (same arithmetic)."""
     def run():
         st = PMMStack(P, n_substrate=N_SUB, degree=10, elements_per_region=2)
-        st.add_layer(50e-9, segments=[(F, E_AU), (1 - F, 1.0)])
+        st.add_layer(40e-9, segments=[(F, E_STRIP), (1 - F, 1.0)])
         st.add_layer(30e-9, segments=[(0.3, 2.25), (0.7, 1.0)])
         st.set_source(WL, theta=0.2)
         return st.solve()
@@ -215,7 +218,10 @@ def test_diagonal_uses_the_dense_clamp_at_an_exact_anomaly():
     Vy = w * D[None, n:]
     assert np.allclose(V2[n:, :n], Vx, rtol=0, atol=1e-9 * np.max(np.abs(Vx)))
     assert np.allclose(V2[:n, n:], Vy, rtol=0, atol=1e-9 * np.max(np.abs(Vx)))
-    assert D[k] == -eps / 1e-12 and D[n + k] == 0
+    # the clamp is the COMPLEX 1e-12 + 0j: divide by that, as the dense
+    # path does (Python's complex / float division rounds the imaginary part
+    # of this eps one ulp differently)
+    assert D[k] == -eps / np.complex128(1e-12) and D[n + k] == 0
 
 
 def test_interface_refuses_non_finite_and_the_cascade_falls_back():
@@ -231,16 +237,16 @@ def test_interface_refuses_non_finite_and_the_cascade_falls_back():
 def _spacer_stack(degree, theta):
     """A uniform AIR spacer inside the stack with the -1 order at cut-off in
     that spacer: n_sup 1.2, sin(theta) = (wl / P - 1) / 1.2."""
-    st = PMMStack(1000e-9, n_substrate=1.447, n_superstrate=1.2,
+    st = PMMStack(1000e-9, n_substrate=N_SUB, n_superstrate=1.2,
                   degree=degree, elements_per_region=2)
-    st.add_layer(40e-9, segments=[(0.4, E_AU), (0.6, 1.0)])
+    st.add_layer(40e-9, segments=[(0.4, E_STRIP), (0.6, 1.0)])
     st.add_layer(120e-9, eps=1.0)
     st.add_layer(30e-9, eps=2.25)
-    st.set_source(1300e-9, theta=theta)
+    st.set_source(WL, theta=theta)
     return st
 
 
-_THETA_CUT = float(np.arcsin((1.3 - 1.0) / 1.2))
+_THETA_CUT = float(np.arcsin((WL / 1000e-9 - 1.0) / 1.2))
 
 
 def test_mode_at_cutoff_in_a_uniform_spacer(dense_switch, monkeypatch):
@@ -248,14 +254,17 @@ def test_mode_at_cutoff_in_a_uniform_spacer(dense_switch, monkeypatch):
     be finite, passive (the strip absorbs: R + T <= 1) and stationary in
     degree, and the dense elementwise-fallback route must reproduce it.
 
-    MEASURED 2026-11-14: the fast path reads J_yy = -0.301692 - 0.429093i at
-    degree 10 AND 14 (same 6 digits; R + T = 0.983202 in both rows), and
-    -0.30225 - 0.42908i a milliradian off the anomaly, where both paths agree
-    to round-off.  The DENSE per-layer eig is the path that fails here: TE
-    R + T = 1.257 (degree 10) / 1.156 (degree 14) with J_yy scattering
-    between degrees -- on this build.  Which build the dense path fails on is
-    not asserted (build-dependent near-degenerate eig); where it IS passive it
-    must agree with the fast path."""
+    Fixture replaced by a generic one; RE-MEASURED 2026-11-15 (Windows/MKL):
+    the fast path reads J_yy = -0.406801 - 0.427851i at degree 10 AND 14
+    (same 6 digits; max R + T = 0.982532 in both rows), and
+    -0.40731 - 0.42774i a milliradian off the anomaly, where both paths agree
+    to round-off.  The DENSE per-layer eig is the path that failed here
+    before its H_x partner was fixed (``_core._hx_partner_rows``): on the
+    code before that fix, TE R + T = 1.365 (degree 10) / 1.332 (degree 14),
+    0.10 / 0.14 off the fast path; with the fix the two paths agree to
+    2.5e-13.  Which build a dense path fails on is not asserted
+    (build-dependent near-degenerate eig); where it IS passive it must agree
+    with the fast path."""
     out = {}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -285,8 +294,9 @@ def test_mode_at_cutoff_in_a_uniform_spacer(dense_switch, monkeypatch):
 
 
 #: TE of the cut-off-spacer stack, degree 10 vs 14 on the fast path.
-#: MEASURED 2026-11-14: 6.54e-7 on both builds.  Bar 1e-4: 150x above the
-#: reading, 2400x below the dense path's measured scatter (0.24-0.42).
+#: RE-MEASURED 2026-11-15 on the generic fixture: 6.1e-7 (Windows/MKL).
+#: Bar 1e-4: 160x above the reading, 1000x below the pre-fix dense path's
+#: error (0.10-0.14).
 CUTOFF_DEGREE_BAR = 1e-4
 
 
@@ -322,7 +332,7 @@ def test_anisotropic_uniform_layer_takes_the_dense_eig(monkeypatch):
         return orig(mats, *a, **k)
     monkeypatch.setattr(S, "_sem_modes_tensor", spy)
     st = PMMStack(P, n_substrate=N_SUB, degree=8, elements_per_region=2)
-    st.add_layer(50e-9, segments=[(F, E_AU), (1 - F, 1.0)])
+    st.add_layer(40e-9, segments=[(F, E_STRIP), (1 - F, 1.0)])
     st.add_layer(20e-9, eps=np.diag([2.25, 2.0, 2.25]))        # uniaxial
     st.add_layer(20e-9, eps=3.0)                               # isotropic
     st.set_source(WL, theta=0.2)
@@ -337,10 +347,10 @@ def test_anisotropic_uniform_layer_takes_the_dense_eig(monkeypatch):
 # 5. retained internals (per-layer cascade, uniform modes shared)
 # --------------------------------------------------------------------------- #
 #: Internal field / absorption, fast vs dense, RELATIVE to the field's own
-#: peak.  MEASURED 2026-11-14 on fixture A degree 12 x 2 el: fields 3.5e-12
-#: (theta 0) / 7.3e-12 (theta 0.3), absorbed fractions 5.2e-14 / 1.1e-13 on
-#: Windows/MKL; 2.7e-12 / 7.0e-12 and 4.6e-14 / 1.1e-13 on WSL/OpenBLAS.
-#: Bar = 100 x the cross-build envelope.
+#: peak.  RE-MEASURED 2026-11-15 on the strip stack (generic fixture),
+#: degree 12 x 2 el: fields 3.6e-13 (theta 0) / 2.6e-13 (theta 0.3),
+#: absorbed fractions 3.8e-14 / 1.5e-13 on Windows/MKL.  Bar kept: 2700 x
+#: the largest reading, far below any physical change of the field.
 INTERNAL_BAR = 1e-9
 
 
@@ -378,10 +388,10 @@ def _blas2():
     return threadpool_limits(2)
 
 
-def test_a52_fast_path_skips_the_uniform_layer_eigs(monkeypatch):
+def test_graded_stack_fast_path_skips_the_uniform_layer_eigs(monkeypatch):
     """The deterministic half of the speed claim (no wall clock in the fast
-    suite): on fixture A52 the fast path runs the dense coupled eig only for
-    the patterned layer, the dense path for every layer."""
+    suite): on the graded variant the fast path runs the dense coupled eig
+    only for the patterned layer, the dense path for every layer."""
     st = _fixture(8, 3, graded=52)
     calls = {True: 0, False: 0}
     orig = S._sem_modes_tensor
@@ -396,17 +406,16 @@ def test_a52_fast_path_skips_the_uniform_layer_eigs(monkeypatch):
     monkeypatch.setattr(S, "_sem_modes_tensor", orig)
     assert calls[True] == 1, calls                 # the strip layer only
     # every byte-distinct layer (the dense path memoizes identical ones):
-    # measured 44 of the 53 layers
+    # measured 46 of the 58 layers (2026-11-15)
     assert calls[False] >= 40, calls
 
 
 @pytest.mark.slow
-def test_a52_fast_path_is_at_least_5x_faster(monkeypatch):
+def test_graded_stack_fast_path_is_at_least_5x_faster(monkeypatch):
     """Interleaved in one process, median of 3, BLAS pinned to 2 threads.
-    MEASURED 2026-11-14 (degree 12 x 3 el, loaded box): dense 1.25 s vs
-    fast 0.096 s, 13.0x (Windows/MKL); 1.12 s vs 0.089 s, 12.5x
-    (WSL/OpenBLAS).  At degree 20 the gap is wider (fixture A52: 9.2 s vs
-    0.36 s)."""
+    RE-MEASURED 2026-11-15 on the generic fixture (degree 12 x 3 el, loaded
+    box): dense 1.04 s vs fast 0.077 s, 13.6x (Windows/MKL).  At degree 20
+    the gap is wider (3.5 s vs 0.20 s, 17.6x)."""
     st = _fixture(12, 3, graded=52)
     st.solve()                                    # warm the geometric cache
     t = {True: [], False: []}

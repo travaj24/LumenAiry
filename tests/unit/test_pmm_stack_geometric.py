@@ -1,11 +1,13 @@
 """Geometric element grading through PMMStack, and the small-element guard.
 
-Fixture A: period 370 nm, a 175 nm wide / 50 nm thick metal strip (eps -74+6i)
-in air over 1 / 7 / 5 / 7 / 1 nm dielectric and lossy-oxide films over a 70 nm
-metal mirror (eps -160+30i), air above, n = 1.447 below, 1300 nm, TM = E_x.
-r_ref = 0.0571572 + 0.1312207i (external reference, uncertainty ~1e-5).
+The strip / spacer / mirror stack (a generic fixture): period 500 nm, a 180 nm
+wide / 40 nm thick metal strip (eps -90+7i) in air over 2 / 6 / 3 / 6 / 2 nm
+dielectric and lossy films (eps 2.8 / 4.2 / 2.2+0.6i / 4.2 / 2.8) over an
+80 nm metal mirror (eps -130+20i), air above, n = 1.5 below, 1500 nm,
+TM = E_x.  TM sits on the gap resonance (|r| = 0.20).  r_ref: the converged
+PMM value (see ``R_REF``).
 
-Every physics bar carries its measurement (date, both BLAS builds) in a comment;
+Every physics bar carries its measurement (date, BLAS build) in a comment;
 the layout-arithmetic tests are exact.
 """
 import ast
@@ -19,15 +21,21 @@ import lumenairy.elements.pmm._core as C
 import lumenairy.elements.pmm.stack as S
 from lumenairy.elements.pmm import PMMStack, pmm_jones_1d_conical
 
-WL, P, W = 1300e-9, 370e-9, 175e-9
+WL, P, W = 1500e-9, 500e-9, 180e-9
 F = W / P
-E_AU, E_AL = -74.0 + 6.0j, -160.0 + 30.0j
-E_AO, E_HF, E_OX = 3.05 + 0j, 3.53 + 0j, 2.5 + 0.5j
-N_SUB = 1.447
-R_REF = 0.0571572 + 0.1312207j
-LAYERS = [(50e-9, E_AU, 1.0 + 0j), (1e-9, E_AO, E_AO), (7e-9, E_HF, E_HF),
-          (5e-9, E_OX, E_OX), (7e-9, E_HF, E_HF), (1e-9, E_AO, E_AO),
-          (70e-9, E_AL, E_AL)]
+E_STRIP, E_MIRROR = -90.0 + 7.0j, -130.0 + 20.0j
+E_LOW, E_HIGH, E_LOSSY = 2.8 + 0j, 4.2 + 0j, 2.2 + 0.6j
+N_SUB = 1.5
+#: TM reference: PMMStack geometric degree 24 x 12 elements (fixture replaced
+#: by a generic one; converged 2026-11-15, Windows/MKL: degree 16 / 20 / 28
+#: x 12 and degree 20 / 24 x 16 agree with it to <= 3.7e-7, and the
+#: independent RCWAStack (Li rules, adaptive resolution, 200 orders) to
+#: 1.5e-7 -- an uncertainty of ~4e-7).
+R_REF = -0.10122424808 - 0.17630843363j
+LAYERS = [(40e-9, E_STRIP, 1.0 + 0j), (2e-9, E_LOW, E_LOW),
+          (6e-9, E_HIGH, E_HIGH), (3e-9, E_LOSSY, E_LOSSY),
+          (6e-9, E_HIGH, E_HIGH), (2e-9, E_LOW, E_LOW),
+          (80e-9, E_MIRROR, E_MIRROR)]
 
 
 def _fixture(degree, epr, grade, theta=0.0, phi=0.0, layers=LAYERS, **kw):
@@ -105,14 +113,13 @@ def test_chebyshev_alias_is_bit_identical_to_true():
 
 
 # --------------------------------------------------------------------------- #
-# physics on fixture A
+# physics on the strip / spacer / mirror stack
 # --------------------------------------------------------------------------- #
 #: Geometric (default floor: max(3e-5 x period, 1.25e-5 x wavelength) =
-#: 16.25 pm here) degree 8 x 12 el vs the same layout at degree 20.
-#: RE-MEASURED 2026-11-14 after the floor was lowered (it read 5.90e-6 at the
-#: former 52 pm floor): 5.7e-7 on Windows/MKL, 5.7e-7 on WSL/OpenBLAS (the
-#: degree-20 value is itself 5.2e-7 from r_ref).  Bar 2e-5 kept: 35x above
-#: the reading, 50x below the Chebyshev-at-equal-cost error (1.03e-3).
+#: 18.75 pm here) degree 8 x 12 el vs the same layout at degree 20.  Fixture
+#: replaced by a generic one; RE-MEASURED 2026-11-15: 1.9e-6 (Windows/MKL;
+#: the degree-20 value is itself 1.3e-7 from r_ref).  Bar 2e-5 kept: 10x
+#: above the reading, 55x below the Chebyshev-at-equal-cost error (1.1e-3).
 GEO_DEG_BAR = 2e-5
 
 
@@ -122,15 +129,15 @@ def test_geometric_beats_chebyshev_at_equal_cost():
     Jc = _J(_fixture(10, 8, True))                 # Chebyshev, DOF 160 vs 192
     e8 = abs(J8[0, 0] - J20[0, 0])
     assert e8 < GEO_DEG_BAR, e8
-    # against the external reference: geometric 7.4e-7 (16.25 pm floor; it
-    # was 6.6e-6 at the former 52 pm floor), Chebyshev 1.03e-3 (MEASURED
-    # 2026-11-14, both builds) -- a >= 50x decision with 28x to spare
+    # against the converged reference: geometric 1.9e-6, Chebyshev 1.1e-3
+    # (RE-MEASURED 2026-11-15, Windows/MKL) -- a >= 50x decision with 12x to
+    # spare
     assert abs(Jc[0, 0] - R_REF) > 50.0 * abs(J8[0, 0] - R_REF)
 
 
 #: theta = 0.3: degree 8 vs 20 at 12 geometric elements.  RE-MEASURED
-#: 2026-11-14 at the 16.25 pm floor: 2.0e-6 (Windows/MKL), 2.0e-6
-#: (WSL/OpenBLAS).  Bar as for normal incidence (10x above).
+#: 2026-11-15 at the 18.75 pm floor: 1.7e-6 (Windows/MKL).  Bar as for
+#: normal incidence (12x above).
 GEO_OBLIQUE_BAR = 2e-5
 
 
@@ -143,10 +150,9 @@ def test_geometric_oblique_converges():
 
 #: TE (E_y, spectrally converging -- a correct mesh change cannot move it) of
 #: geometric degree 8 x 12 el vs single-element degree 60.  RE-MEASURED
-#: 2026-11-14 at the 16.25 pm floor: 3.0e-7 (Windows/MKL), 3.0e-7
-#: (WSL/OpenBLAS) -- the eig round-off of a 1.25e-5-wavelength element (it
-#: read 1.7e-8 at the former 52 pm floor); the bar sits 30x below what an
-#: unclamped tiny wall does to TE (3e-5 .. 4.5e-5 at ratio 0.10,
+#: 2026-11-15 at the 18.75 pm floor: 5.8e-8 (Windows/MKL) -- the eig
+#: round-off of a 1.25e-5-wavelength element; the bar sits 14x below what an
+#: unclamped tiny wall does to TE (1.4e-5 .. 2.2e-5 at ratio 0.10,
 #: single-layer measurement).
 GEO_TE_BAR = 1e-6
 
@@ -160,15 +166,12 @@ def test_geometric_leaves_te_untouched():
 
 def test_the_floor_turns_a_bad_ratio_into_a_good_layout():
     """('geometric', 0.05) at 16 elements is clamped by the default floor
-    (16.25 pm) to a working layout.  Unclamped, ratio 0.05 at 16 elements puts
-    a 1e-17 m wall element on the grid.  RE-MEASURED 2026-11-14: 2.4e-6 from
-    r_ref (Windows/MKL and WSL/OpenBLAS) against 7.4e-7 for the 0.17 /
-    12-element layout.  At the former 52 pm floor both read 6.56e-6 and this
-    test asserted "within 3x"; at the lower floor the two layouts no longer
-    share an error budget dominated by the wall element (3.3x apart, both
-    inside r_ref's own 1e-5 uncertainty), so the decision is stated against
-    the geometric bar instead: 8x below it, and 400x below the Chebyshev
-    error it must separate from."""
+    (18.75 pm) to a working layout.  Unclamped, ratio 0.05 at 16 elements puts
+    a 7e-17 m wall element on the grid.  RE-MEASURED 2026-11-15 on the
+    generic fixture: 1.1e-6 from r_ref (Windows/MKL) against 1.9e-6 for the
+    0.17 / 12-element layout.  The decision is stated against the geometric
+    bar: 19x below it, and 1000x below the Chebyshev error it must separate
+    from."""
     e_bad = abs(_J(_fixture(8, 16, ("geometric", 0.05)))[0, 0] - R_REF)
     assert e_bad < GEO_DEG_BAR, e_bad
 
@@ -179,11 +182,10 @@ def test_the_floor_turns_a_bad_ratio_into_a_good_layout():
 #: NumPy (uniform layers from the shared geometric eig) vs the JAX twin (the
 #: same fast path since 2026-11-14; this bar was derived when the twin ran the
 #: full eig for every layer and stays as an upper bound).
-#: MEASURED 2026-11-14 on fixture A, geometric degree 6 x 4 el, theta 0.2,
-#: max over R / T / J: 2.96e-13 (Windows/MKL), 3.11e-13 (WSL/OpenBLAS);
-#: against the DENSE NumPy path the same twin reads 1.43e-13 / 1.33e-13, so
-#: the fast path's gauge adds ~2e-13.  Bar = 100 x the cross-build envelope,
-#: 11 decades below |J| ~ 0.3.
+#: RE-MEASURED 2026-11-15 on the strip / spacer / mirror stack, geometric
+#: degree 6 x 4 el, theta 0.2, max over R / T / J: 4.2e-13 (Windows/MKL),
+#: and the same against the DENSE NumPy path.  Bar 70x above the reading,
+#: 11 decades below |J_xx| ~ 0.2.
 JAX_PARITY_BAR = 3e-11
 
 
@@ -199,7 +201,7 @@ def test_jax_twin_forward_matches_numpy_with_geometric():
             if es == eg:
                 st.add_layer(t, eps=es)
             else:
-                e = jnp.asarray(es) if traced else es
+                e = jnp.asarray(es) if traced else es  # the strip, traced
                 st.add_layer(t, segments=[(F, e), (1 - F, eg)])
         st.set_source(WL, theta=0.2)
         return st
@@ -210,8 +212,9 @@ def test_jax_twin_forward_matches_numpy_with_geometric():
         assert d < JAX_PARITY_BAR, d
 
 
-_CONICAL_LAYERS = [(50e-9, E_AU, 1.0 + 0j), (21e-9, E_HF, E_HF),
-                   (70e-9, E_AL, E_AL)]
+#: strip / single-layer spacer (19 nm, eps 3.6) / mirror
+_CONICAL_LAYERS = [(40e-9, E_STRIP, 1.0 + 0j), (19e-9, 3.6 + 0j, 3.6 + 0j),
+                   (80e-9, E_MIRROR, E_MIRROR)]
 
 
 def test_conical_incidence_refuses_geometric(monkeypatch):
@@ -222,27 +225,27 @@ def test_conical_incidence_refuses_geometric(monkeypatch):
     structured solves (the default since 2026-11-14) it is accepted and
     validated in ``test_pmm_conical_structured.py``.
 
-    MEASURED 2026-11-14 (both builds) with the dense eig, on the strip /
-    21 nm spacer / mirror stack, theta 0.2, phi 0.3, 12 geometric elements at
-    the default floor (37 pm): the cross-polarized J_xy drifts 0.00596 +
-    0.00742i -> 0.00544 + 0.00833i over degree 8 .. 24 while the planar solve
-    of the same layout converges by ~1e-6 per step, and the ky0 = 0 conical
-    cascade reproduces the classical solve only to 5e-8 (Chebyshev 3 el:
-    4.5e-13)."""
+    RE-MEASURED 2026-11-15 (Windows/MKL) with the dense eig, on the strip /
+    19 nm spacer / mirror stack, theta 0.2, phi 0.3, 12 geometric elements at
+    the default floor (18.75 pm): the cross-polarized J_xy wanders from
+    0.00872 + 0.00596i (degree 8) to 0.0192 - 0.0108i (degree 24), 0.022 at
+    most, while the planar solve of the same layout converges by <= 3.4e-6
+    per step, and the ky0 = 0 conical cascade reproduces the classical solve
+    only to 4.0e-7 (Chebyshev 3 el: 2.7e-13)."""
     import lumenairy.elements.pmm.conical as CO
     monkeypatch.setattr(CO, "PMM_CONICAL_STRUCTURED", False)
     st = _fixture(8, 12, "geometric", theta=0.2, phi=0.3,
                   layers=_CONICAL_LAYERS)
     with pytest.raises(NotImplementedError, match="conical incidence"):
         st.solve()
-    args = (P, E_AU, 1.0, N_SUB, 1.0, 50e-9, F, WL)
+    args = (P, E_STRIP, 1.0, N_SUB, 1.0, 40e-9, F, WL)
     with pytest.raises(NotImplementedError, match="conical incidence"):
         pmm_jones_1d_conical(*args, theta=0.2, phi=0.3, degree=8,
                              elements_per_region=12, grade="geometric")
     from lumenairy.elements.pmm import pmm_jones_1d_conical_tensor
-    cell = np.array([E_AU * np.eye(3)] * 5 + [np.eye(3)] * 6)
+    cell = np.array([E_STRIP * np.eye(3)] * 4 + [np.eye(3)] * 7)
     with pytest.raises(NotImplementedError, match="conical incidence"):
-        pmm_jones_1d_conical_tensor(P, cell, N_SUB, 1.0, 50e-9, WL, theta=0.2,
+        pmm_jones_1d_conical_tensor(P, cell, N_SUB, 1.0, 40e-9, WL, theta=0.2,
                                     phi=0.3, degree=8, elements_per_region=12,
                                     grade="geometric")
     monkeypatch.setattr(CO, "PMM_CONICAL_STRUCTURED", True)
@@ -289,7 +292,7 @@ def test_guard_refuses_a_layout_made_tiny_element():
     assert "allow_small_elements=True" in msg and "explicit floor" in msg
     # the sweep and the prepared path read the same guard
     with pytest.raises(ValueError, match="below the measured safe size"):
-        st.solve_vs_wavelength([1250e-9, 1300e-9])
+        st.solve_vs_wavelength([1450e-9, 1500e-9])
     with pytest.raises(ValueError, match="below the measured safe size"):
         st.prepare().solve(wavelength=WL)
 
@@ -297,7 +300,7 @@ def test_guard_refuses_a_layout_made_tiny_element():
 def test_guard_threshold_follows_the_wavelength():
     """The same layout is refused at a long wavelength and accepted at a
     short one: the safe size is a fraction of the wavelength."""
-    h_wall = 0.5 * 0.17 ** 5 * W                       # 12.4 pm
+    h_wall = 0.5 * 0.17 ** 5 * W                       # 12.8 pm
     st = _fixture(6, 12, ("geometric", 0.17, 1e-15))
     long_wl = 2.0 * h_wall / S._SMALL_ELEMENT_FRAC     # h = frac / 2
     short_wl = 0.5 * h_wall / S._SMALL_ELEMENT_FRAC    # h = 2 x frac
@@ -344,7 +347,8 @@ def test_default_geometric_floor_follows_the_wavelength():
 
 def test_guard_does_not_fire_on_default_layouts():
     """The defaults (Chebyshev, 1-3 elements) and the default geometric floor
-    on fixture A must solve without tripping the guard or the backstop."""
+    on the strip / spacer / mirror stack must solve without tripping the
+    guard or the backstop."""
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         for grade, epr in ((True, 1), (True, 3), ("geometric", 12)):
@@ -361,7 +365,7 @@ def test_guard_ignores_geometry_made_thin_cells():
     arm the backstop."""
     s = 0.25 * S._SMALL_ELEMENT_FRAC * WL / P          # liner, period fraction
     st = PMMStack(P, n_substrate=N_SUB, degree=8)
-    st.add_layer(50e-9, segments=[(F, E_AU), (s, 2.25), (1 - F - s, 1.0)])
+    st.add_layer(40e-9, segments=[(F, E_STRIP), (s, 2.25), (1 - F - s, 1.0)])
     st.set_source(WL)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -394,13 +398,15 @@ def test_opt_out_solves_and_the_backstop_refuses_super_unity():
         S._warn_stack_energy(R, T, stack=st_ok)
 
 
-#: Configurations that returned O(1) wrong, super-unity answers on the
-#: Windows/MKL build before the selector fix, with the guard opted out and the
-#: backstop off (2026-11-14 sweep; which ones failed was build-dependent).
-#: (period, theta, degree, wall element / wavelength)
+#: Configurations (the strip layer of the generic fixture) that return O(1)
+#: wrong, super-unity answers with the pre-fix selector restored
+#: (the private switch ``_core._PMM_EIG_ROUNDOFF_BAR`` set False, in a
+#: measurement script -- this module imports JAX), the guard opted out and the
+#: backstop off (re-measured 2026-11-15, Windows/MKL; which rows fail is
+#: build-dependent).  (period, theta, degree, wall element / wavelength)
 _GARBAGE_PRONE = [
-    (370e-9, 0.3, 10, 3e-6), (370e-9, 0.5, 8, 5.5e-6),
-    (200e-9, 0.3, 6, 3e-6), (1300e-9, 0.3, 6, 8e-6),
+    (800e-9, 0.3, 8, 4e-6), (1200e-9, 0.7, 6, 8e-6),
+    (250e-9, 0.7, 8, 4e-6), (1200e-9, 0.15, 20, 8e-6),
 ]
 
 
@@ -409,21 +415,20 @@ def test_opted_out_solves_return_the_reference(Pq, theta, deg, hw):
     """These rows returned super-unity garbage before the selector fix
     (``_core._growth_mask``).  With the guard opted out they must now be
     passive (the strip absorbs: R + T <= 1) AND agree with the same degree at
-    a 1e-4-wavelength wall element.  MEASURED 2026-11-14: |dJ| <= 5.5e-6 on
-    Windows/MKL and on the three rows also measured on WSL/OpenBLAS (the
-    round-off floor of 3e-6 .. 8e-6 wavelength elements); bar 5e-5, against
-    pre-fix errors of 0.26 .. 3.9 in the sweep that found them.  WHICH rows
-    fail moved with every code change before the fix (a round-off sign
-    lottery): on this branch's pre-fix head two of these four read clean, so
-    ``test_pmm_eig_roundoff_selector.py`` carries rows re-checked to fail
-    there on both builds."""
+    a 1e-4-wavelength wall element.  Fixture replaced by a generic one;
+    RE-MEASURED 2026-11-15 (Windows/MKL): |dJ| <= 1.5e-6 (the round-off floor
+    of 4e-6 .. 8e-6 wavelength elements); bar 5e-5, against pre-fix errors
+    of 2.19 / 1.77 / 7.27 / 0.225 with R + T = 9.84 / 8.17 / 108 / 1.62
+    (pre-fix selector restored, backstop off).  WHICH rows fail is a
+    round-off sign lottery over code, degree and build;
+    ``test_pmm_eig_roundoff_selector.py`` carries more of them."""
     def run(h):
-        Wq = 0.47 * Pq
+        Wq = F * Pq
         r = (h * WL / (0.5 * Wq)) ** 0.2
         st = PMMStack(Pq, n_substrate=N_SUB, degree=deg,
                       elements_per_region=12,
                       grade=("geometric", r, 1e-15), allow_small_elements=True)
-        st.add_layer(50e-9, segments=[(0.47, E_AU), (0.53, 1.0)])
+        st.add_layer(40e-9, segments=[(F, E_STRIP), (1.0 - F, 1.0)])
         st.set_source(WL, theta=theta)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
