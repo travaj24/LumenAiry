@@ -3198,7 +3198,7 @@ def _redheffer_star_rt(SA, SB, cinc):
     are summed in a different order (mat-vec instead of mat-mat), which moves
     the last bits.  WHILE ``I - B11 A22`` IS WELL CONDITIONED that is the
     whole of the difference.  Measured against the assembled star over the
-    metallic convergence ladder (Ag and Au, ``n_orders`` 100..400, both
+    metallic convergence ladder (two metals, ``n_orders`` 100..400, both
     polarizations) the largest disagreement is 3.3e-16 absolute / 1.7e-15
     relative on a per-order efficiency, and over the whole 1-D + 2-D
     entry-point matrix (both polarizations, ``'laurent'`` / ``'li'`` /
@@ -3858,7 +3858,7 @@ def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
        for clean dielectric convergence and as a per-order error gauge.
 
     .. note::
-       LOSSY-METAL CORNERS (audit L-1, 2026-11-02 DynaMeta bridge audit).
+       LOSSY-METAL CORNERS.
        Even a monotone tail can be PRE-ASYMPTOTIC: the corner singularity
        makes every method algebraic, and the local exponent keeps drifting
        over the ``N`` range a user can afford, so the three-point
@@ -3880,12 +3880,12 @@ def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
 
     .. note::
        RESONANT METAL STRIPS: NO SMOOTH TAIL BELOW N ~ 100.  On a resonant
-       metal-strip stack (a 175 nm strip, eps -74+6i, on a 21 nm spacer over a
-       metal mirror; period 370 nm, 1300 nm, TM; ``RCWAStack`` ``'li'``)
-       consecutive truncations scatter by a factor 2-3 around the
+       metal-strip stack (a 180 nm strip, eps -90+7i, on a 19 nm spacer stack
+       over a metal mirror; period 500 nm, 1500 nm, TM; ``RCWAStack``
+       ``'li'``) consecutive truncations scatter by a factor 2-4 around the
        N^-1.1..1.2 trend for N = 40 ... 70 (zeroth-order reflection errors
-       1.85e-2 at N = 40, 4.54e-2 at 44, 1.71e-2 at 45, 3.92e-2 at 50,
-       1.22e-2 at 70).  Both estimators need a smooth tail, which this class
+       3.07e-2 at N = 40, 2.98e-2 at 44, 9.08e-2 at 45, 1.91e-2 at 50,
+       2.58e-2 at 70).  Both estimators need a smooth tail, which this class
        does not have there: sample N geometrically (x1.5 or x2) and only from
        N of about 100 up, check that consecutive windows agree, and prefer a
        ``PMMStack`` reference (``grade='geometric'``) for 1-D metal strips.

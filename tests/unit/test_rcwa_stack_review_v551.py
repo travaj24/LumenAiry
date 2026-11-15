@@ -1,24 +1,26 @@
-"""Review findings on the 5.51 staging branch, RCWA part (2026-11-14).
+"""``rcwa_convergence`` and ``formulation='auto'`` contracts of the RCWA stack.
 
-* A5 -- ``rcwa_convergence`` no longer drops a solver output it cannot read:
-  the read raises instead of being skipped by a broad ``except``.
-* A7 -- the LEGACY call form ``rcwa_convergence(..., bump=4, atol=1e-3)``
-  (an additive ``bump`` with ``rtol`` unset) keeps the verdict of releases up
-  to 5.50 exactly and emits no warning they did not emit; passing ``rtol``
-  opts into the error-estimate verdict.  Measured on a lossless Si lamellar
-  grating (period 900 nm, fill 0.55, 300 nm, 1550 nm, theta 0.3, Laurent),
-  N = 20: 5.50.2 and this tree both give ``converged=True``, ``delta``
-  4.29e-4, no warning; with ``rtol=1e-2`` the estimate is 7.1e-2 -> not
-  converged (true error at N = 60: 1.07e-2).
-* A9 -- a dispersive layer left at ``'auto'`` runs the rule its concrete twin
-  runs, at every wavelength: a y-varying cell of a 1-D stack (``'laurent'``,
-  was ``'li'`` for the callable) and, on a 2-D stack, a metal layer
-  (``'li'`` both ways; the staging branch ran ``'laurent'`` for the callable)
+* An unreadable solver output: ``rcwa_convergence`` raises on a solver output
+  it cannot read instead of skipping it with a broad ``except`` (a skipped
+  output would leave that quantity out of the verdict silently).
+* The LEGACY call form ``rcwa_convergence(..., bump=4, atol=1e-3)`` (an
+  additive ``bump`` with ``rtol`` unset) keeps the verdict of releases up to
+  5.50 exactly and emits no warning they did not emit; passing ``rtol`` opts
+  into the error-estimate verdict.  Measured on a lossless lamellar grating
+  of index 3.48 (period 900 nm, fill 0.55, 300 nm, 1550 nm, theta 0.3,
+  Laurent), N = 20: 5.50.2 and this release both give ``converged=True``,
+  ``delta`` 4.29e-4, no warning; with ``rtol=1e-2`` the estimate is 7.1e-2
+  -> not converged (true error at N = 60: 1.07e-2).
+* Dispersive layers: a layer left at ``'auto'`` runs the rule its concrete
+  twin runs, at every wavelength: a y-varying cell of a 1-D stack
+  (``'laurent'``; a rule that resolved the callable without evaluating it
+  would run ``'li'``) and, on a 2-D stack, a metal layer (``'li'`` both ways)
   and an exact-zero background (``'laurent'`` both ways).
-* B3 -- ``rcwa_convergence`` on an adaptive-resolution stack with
-  ``eta='auto'`` freezes the stretch at the base rung for every rung.
-* A13 -- ``RCWAStack.add_layer(segments=)`` validates through the library's
-  one segment validator (PMMStack's).
+* ``rcwa_convergence`` on an adaptive-resolution stack with ``eta='auto'``
+  freezes the stretch at the base rung for every rung, so the rungs differ
+  only in truncation.
+* ``RCWAStack.add_layer(segments=)`` validates through the library's one
+  segment validator (PMMStack's).
 """
 import warnings
 
@@ -30,14 +32,14 @@ from lumenairy.elements.rcwa import RCWAStack, rcwa_convergence, rcwa_jones_1d
 WL = 1550e-9
 
 
-def _si_stack(N):
+def _hi_stack(N):
     st = RCWAStack(900e-9, n_superstrate=1.0, n_substrate=1.45, n_orders=N)
     st.add_layer(300e-9, segments=[(0.55, 3.48 ** 2), (0.45, 1.0)],
                  formulation="laurent")
     return st.set_source(WL, theta=0.3)
 
 
-# ---------------------------------------------------------------- A5
+# ---------------------------------------------------------------- unreadable output
 class _Unreadable:
     def __array__(self, *a, **k):
         raise ValueError("this output cannot be read as an array")
@@ -55,32 +57,32 @@ def test_convergence_does_not_drop_an_unreadable_output():
                          angle=0.3, n_orders=6)
 
 
-# ---------------------------------------------------------------- A7
+# ---------------------------------------------------------------- legacy bump
 def test_legacy_bump_call_keeps_the_legacy_verdict_silently():
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        _r, rep = rcwa_convergence(_si_stack(20), bump=4, atol=1e-3)
+        _r, rep = rcwa_convergence(_hi_stack(20), bump=4, atol=1e-3)
     assert rep["converged"] is True
     assert rep["delta"] == pytest.approx(4.29e-4, rel=2e-2)
     assert rep["n_orders_high"] == {"n_orders": 24}
     # the estimate is still reported; asking for it judges by it
     assert rep["err_estimate"] == pytest.approx(7.12e-2, rel=2e-2)
     with pytest.warns(UserWarning, match="NOT converged"):
-        _r, rep2 = rcwa_convergence(_si_stack(20), bump=4, atol=1e-3,
+        _r, rep2 = rcwa_convergence(_hi_stack(20), bump=4, atol=1e-3,
                                     rtol=1e-2)
     assert rep2["converged"] is False
     # a legacy call whose atol fails warns, as releases up to 5.50 did
     with pytest.warns(UserWarning, match="atol"):
-        _r, rep3 = rcwa_convergence(_si_stack(20), bump=4, atol=1e-5)
+        _r, rep3 = rcwa_convergence(_hi_stack(20), bump=4, atol=1e-5)
     assert rep3["converged"] is False
     # legacy default atol is 1e-3
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        _r, rep4 = rcwa_convergence(_si_stack(20), bump=4)
+        _r, rep4 = rcwa_convergence(_hi_stack(20), bump=4)
     assert rep4["converged"] is True
 
 
-# ---------------------------------------------------------------- A9
+# ---------------------------------------------------------------- dispersive
 def _yvar_cell():
     cell = np.ones((64, 8), complex)
     cell[10:30, :4] = 3.5 ** 2
@@ -103,7 +105,8 @@ def test_dispersive_y_varying_cell_on_a_1d_stack_runs_laurent_like_its_twin():
 
     j_conc = jones(cell)
     j_disp = jones(lambda wl: cell)
-    j_li = jones(lambda wl: cell, formulation="li")   # what staging ran
+    # the rule a resolution that does not evaluate the callable would run
+    j_li = jones(lambda wl: cell, formulation="li")
     # the sweep and the point solve differ at round-off only (measured
     # 1e-16); the two rules differ at 1e-2
     assert np.max(np.abs(j_conc - j_disp)) < 1e-12
@@ -127,7 +130,7 @@ def test_2d_dispersive_layer_runs_the_rule_of_its_concrete_twin():
     j_disp = np.asarray(_metal_2d(lambda wl: -3 + 1j)
                         .solve_vs_wavelength([1.31e-6])[3][0])
     st_la = _metal_2d(-3 + 1j)
-    st_la._layers[0].formulation = "laurent"           # what staging ran
+    st_la._layers[0].formulation = "laurent"     # the other rule, forced
     j_la = np.asarray(st_la.solve().jones_reflection())
     assert np.max(np.abs(j_conc - j_disp)) < 1e-12
     assert np.max(np.abs(j_la - j_disp)) > 1e-4
@@ -150,15 +153,17 @@ def test_2d_dispersive_cell_with_an_exact_zero_runs_laurent():
         - np.asarray(st_d.solve_vs_wavelength([1.31e-6])[3][0]))) < 1e-12
 
 
-# ---------------------------------------------------------------- B3
+# ---------------------------------------------------------------- asr stretch
 def test_convergence_freezes_the_auto_stretch_across_rungs():
+    # a metal strip on a single-layer spacer (fixture replaced by a generic
+    # one; the assertions are fixture-independent bit-for-bit comparisons)
     def stack(asr, N):
-        st = RCWAStack(370e-9, n_superstrate=1.0, n_substrate=1.45,
+        st = RCWAStack(500e-9, n_superstrate=1.0, n_substrate=1.5,
                        n_orders=N, asr=asr)
-        st.add_layer(50e-9, segments=[(175 / 370, -74 + 6j),
-                                      (195 / 370, 1.0)])
-        st.add_layer(21e-9, eps=2.1)
-        return st.set_source(1300e-9, theta=0.2)
+        st.add_layer(40e-9, segments=[(180 / 500, -90 + 7j),
+                                      (320 / 500, 1.0)])
+        st.add_layer(19e-9, eps=3.6)
+        return st.set_source(1500e-9, theta=0.2)
 
     st = stack(True, 8)                       # eta='auto' -> 0.3 at N = 8
     top, rep = rcwa_convergence(st, warn=False)
@@ -170,7 +175,7 @@ def test_convergence_freezes_the_auto_stretch_across_rungs():
                           np.asarray(ref.jones_reflection()))
 
 
-# ---------------------------------------------------------------- A13
+# ---------------------------------------------------------------- segments
 def test_segments_validate_through_the_shared_validator(monkeypatch):
     import lumenairy.elements.pmm._core as pc
     calls = []

@@ -54,9 +54,9 @@ The formulation, and why each piece is the way it is
    its exponent, which is why the default reaches ``eta = 1`` (from
    ``n_orders`` 15 on: :data:`_ASR_AUTO_N0`).  Measured on the
    resonant metal-strip stack of ``tests/unit/test_rcwa_stack_asr.py``:
-   ``'sine'`` at ``eta = 1`` scatters between 1e-6 and 1e-4 over
-   ``n_orders`` 40 .. 100, ``'sine4'`` reaches 2e-6 at 40 and agrees with
-   itself to 1.3e-8 between 150 and 200 (``docs/rcwa_stack_asr.md``).
+   ``'sine'`` at ``eta = 1`` scatters between 5e-7 and 3e-4 over
+   ``n_orders`` 40 .. 100, ``'sine4'`` reaches 3e-6 at 40 and agrees with
+   itself to 2.4e-8 between 150 and 200 (``docs/rcwa_stack_asr.md``).
 
 4. HALF-SPACES: AN ACCURATE OUTGOING DIRICHLET-TO-NEUMANN MAP.  This is the
    cause of the accuracy floor of the single-layer ASR in
@@ -92,10 +92,13 @@ The formulation, and why each piece is the way it is
 
 5. BALANCED FIRST-ORDER EIGENSOLVE.  With ``f -> 0`` at the walls the local
    wavenumber ``k/f`` of the ``u`` basis is huge near a wall: the largest
-   modal eigenvalue reaches 5e7 at ``n_orders`` 100.  The usual squared
-   operator ``P Q`` then has norm ~1e12-1e15, and an eigensolver's absolute
-   error ``eps_mach ||P Q||`` swamps the ``O(1)`` eigenvalues that carry the
-   answer (measured: erratic 1e-5 .. 4e-4 spikes at isolated ``n_orders``).
+   modal eigenvalue reaches 3e8 at ``n_orders`` 100 (``'sine4'`` on the
+   metal-strip stack of the tests; 1e6 with ``'sine'``).  The usual squared
+   operator ``P Q`` then has norm ~1e12 (``'sine'``) to ~1e17
+   (``'sine4'``), and an eigensolver's absolute error ``eps_mach ||P Q||``
+   swamps the ``O(1)`` eigenvalues that carry the answer (measured with
+   ``'sine4'``: spikes of 2.5e-5 / 8.5e-5 at ``n_orders`` 70 / 80 where the
+   balanced solve reads 4e-7 / 3e-7).
    The layer is instead solved as the FIRST-order ``[[0, P'], [Q', 0]]``
    system in the frame of the uniform-medium eigenvectors, with a diagonal
    per-mode scaling that balances each ``2 x 2`` block (``d = (1+h^2)^(1/2)``
@@ -150,11 +153,11 @@ _ASR_DEFAULT_ETA = "auto"
 #: basis, which costs accuracy while ``n_orders`` is small.  Measured (TE and
 #: TM, ``n_orders`` 6..16) on a lossless lamellar grating (eps 4 / 1, period
 #: 1000 nm, 800 nm, depth 300 nm), on the resonant metal-strip stack and on
-#: the same stack at period 1200 nm: with this rule ASR beat or matched the
-#: plain basis at 62 of the 66 points; the four exceptions are the dielectric
-#: TE at 7 (8.2e-4 against 7.3e-4), the metal stack's TM at 7 and 8 (both
-#: more than 6 % off) and the wide-period TM at 11 (6.5e-3 against 5.0e-3, a
-#: dip of the plain basis's own scatter).  A fixed ``eta = 1`` would have lost
+#: the same stack at period 1600 nm: with this rule ASR beat the plain basis,
+#: or came within 5 % of it, at 63 of the 66 points; the three exceptions are
+#: the dielectric TE at 7 (8.2e-4 against 7.3e-4), the metal stack's TM at 12
+#: (1.2e-1 against 8.4e-2) and the wide-period TM at 10 (4.3e-2 against
+#: 2.8e-2), both at a dip of the plain basis's own scatter.  A fixed ``eta = 1`` would have lost
 #: to the plain basis below ``n_orders`` 13 on the dielectric grating (TE
 #: 2.1e-3 against 2.9e-4 at 10, where the rule gives 1.9e-5).  At
 #: ``n_orders <= N0`` the rule gives ``eta = 0`` and the solve is the
@@ -173,8 +176,9 @@ _ASR_MERGE_TOL = 1e-9
 
 #: Refuse when the Toeplitz matrix of the Jacobian is this ill-conditioned:
 #: its inverse square root builds every uniform-medium mode.  Measured cond
-#: on the 370 nm metal-strip stack with ``'sine4'`` at ``eta = 1``: 2.7e3 /
-#: 1.7e7 / 2.7e8 at ``n_orders`` 50 / 150 / 300 (it grows as ``N^4``).
+#: on the metal-strip stack's map (two walls, strip fraction 0.36) with
+#: ``'sine4'`` at ``eta = 1``: 2.3e5 / 1.6e7 / 2.5e8 at ``n_orders``
+#: 50 / 150 / 300 (it grows as ``N^4``).
 _ASR_COND_F_MAX = 1e13
 
 

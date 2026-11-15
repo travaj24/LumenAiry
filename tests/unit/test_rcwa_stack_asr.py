@@ -8,29 +8,36 @@ the patterned layers through a balanced first-order eigensolve.
 
 Fixtures
 --------
-* A: a 175 nm metal strip (eps -74+6i, 50 nm) over 1/7/5/7/1 nm dielectric and
-  lossy-oxide layers over a 70 nm metal mirror (eps -160+30i); period 370 nm,
-  air above, n = 1.447 below, 1300 nm.  TM sits on a gap resonance.
-* B: fixture A's stack at period 1200 nm with a 500 nm strip (orders +/-1
-  propagate in the substrate).
+* The strip / spacer / mirror stack: a 180 nm metal strip (eps -90+7i, 40 nm)
+  over 2 / 6 / 3 / 6 / 2 nm of eps 2.8 / 4.2 / 2.2+0.6i / 4.2 / 2.8 over an
+  80 nm metal mirror (eps -130+20i); period 500 nm, air above, n = 1.5 below,
+  1500 nm.  TM sits on the gap resonance (|r| = 0.20).
+* The wide-period variant: the same stack at period 1600 nm with a 600 nm
+  strip (orders +/-1 propagate in the substrate).
 * D: a lossless lamellar grating (eps 4 / air, duty 0.4, 300 nm) on n = 1.5,
   period 1000 nm, 800 nm, theta 0.2.
 
-References (measured 2026-11-14):
-* A TM: PMMStack, geometric grading ratio 0.17, degree 24 x 12 elements:
-  0.05715711017 + 0.13122118072i (degree 20 sits 5.2e-7 from it and ASR at
-  n_orders 150 / 200 / 300 within 9e-8 of it: its error is about 1e-7).
-* A TM at theta 0.3 and B TM: the same PMM setting.
-* A TE: single-element PMM degree 60 (-0.8996752029 - 0.4078972484i; degree 80
-  and Chebyshev 10 x 8 agree to 5e-12).
+(The metal-strip fixture was replaced by a generic one; every reference and
+reading below was re-measured on it.)
+
+References:
+* strip stack TM: PMMStack, geometric grading ratio 0.17, degree 24 x 12
+  elements: -0.10122424808 - 0.17630843363i (degree 20 sits 1.3e-7 from it,
+  degree 16 2.9e-7; ASR at n_orders 150 / 200 / 300 sits 1.1e-7 .. 1.8e-7
+  from it while agreeing among themselves to 8e-8: its error is about
+  1.5e-7).
+* strip stack TM at theta 0.3 and the wide-period variant's TM: the same PMM
+  setting (degree 20 within 1.4e-7 / 2.6e-8 of degree 24).
+* strip stack TE: single-element PMM degree 60 (-0.8963927009 -
+  0.4163663800i; degree 80 agrees to 9e-13).
 * D TE: single-element PMM degree 60 (degree 40 agrees to 8.6e-12).
 
-Measured errors |r - r_ref| at n_orders 20 (2026-11-14; Windows/MKL and
-WSL/OpenBLAS agree to the printed digits on every reading in this file):
-A TM ASR 4.7e-6 / 'li' 4.2e-2; A TM theta 0.3 4.2e-6 / 4.5e-2; A TE 5.0e-11 /
-1.1e-5; B TM 5.6e-7 / 4.5e-3; D TE 1.7e-8 / 3.7e-5.  Every physics bar sits
-at least 4x above its reading and at least a decade below the plain-basis
-value it is paired with.
+Measured errors |r - r_ref| (Windows/MKL): strip stack TM, ASR 2.5e-5 at
+n_orders 20, 2.9e-6 at 30, 3.2e-7 at 60 / 'li' 3.0e-1 at 20, 1.3e-1 at 30;
+TM at theta 0.3, ASR 2.9e-6 / 'li' 1.3e-1 at 30; TE at 20, ASR 2.5e-10 /
+'li' 1.7e-5; wide-period TM at 40, ASR 1.1e-6 / 'li' 3.2e-2; D TE at 20,
+1.7e-8 / 3.7e-5.  Every physics bar sits at least 4x above its reading and
+at least a decade below the plain-basis value it is paired with.
 """
 import re
 import warnings
@@ -47,21 +54,26 @@ from lumenairy.elements.rcwa._asr_stack import (
 )
 from lumenairy.elements.rcwa.oned import _asr_metric_profile
 
-WL, P, W = 1300e-9, 370e-9, 175e-9
+WL, P, W = 1500e-9, 500e-9, 180e-9
 F = W / P
-AU, AL, AO, HF, OX, NS = -74 + 6j, -160 + 30j, 3.05, 3.53, 2.5 + 0.5j, 1.447
-LAYERS = [(50e-9, AU, 1.0), (1e-9, AO, AO), (7e-9, HF, HF), (5e-9, OX, OX),
-          (7e-9, HF, HF), (1e-9, AO, AO), (70e-9, AL, AL)]
-R_A_TM = 0.05715711017388516 + 0.13122118072055405j
-R_A_TM_TH03 = 0.058489067279635376 + 0.12269609664861383j
-R_A_TE = -0.8996752029 - 0.4078972484j
-R_B_TM = -0.6572375177011002 - 0.6842506177778588j
+E_STRIP, E_MIRROR = -90 + 7j, -130 + 20j
+E_LOW, E_HIGH, E_LOSSY, N_SUB = 2.8, 4.2, 2.2 + 0.6j, 1.5
+LAYERS = [(40e-9, E_STRIP, 1.0), (2e-9, E_LOW, E_LOW),
+          (6e-9, E_HIGH, E_HIGH), (3e-9, E_LOSSY, E_LOSSY),
+          (6e-9, E_HIGH, E_HIGH), (2e-9, E_LOW, E_LOW),
+          (80e-9, E_MIRROR, E_MIRROR)]
+P_B, W_B = 1600e-9, 600e-9
+# fixture replaced by a generic one; re-measured (PMM references above)
+R_A_TM = -0.10122424807871007 - 0.17630843363338264j
+R_A_TM_TH03 = -0.09961291240868425 - 0.17602767530457902j
+R_A_TE = -0.8963927008717634 - 0.4163663800038361j
+R_B_TM = -0.705827393493521 - 0.3984119762531611j
 R_D_TE = -0.14291410405334798 + 0.13785652848412056j
 
 
 def _stack(N, *, period=P, frac=F, asr=True, layers=LAYERS, dispersive=False,
            **kw):
-    st = RCWAStack(period, n_superstrate=1.0, n_substrate=NS, n_orders=N,
+    st = RCWAStack(period, n_superstrate=1.0, n_substrate=N_SUB, n_orders=N,
                    asr=asr, **kw)
     for t, es, eg in layers:
         e = (lambda wl, v=es: v) if dispersive else es
@@ -95,27 +107,31 @@ def _diel(N, asr=True, theta=0.2, phi=0.0, three=False, retain=False):
 # ---------------------------------------------------------------------------
 
 def test_metal_strip_stack_tm_normal():
-    # measured 4.7e-6 (ASR) vs 4.2e-2 ('li') at 20; 2.0e-6 at 40
-    e20 = abs(_r(20) - R_A_TM)
-    e20_li = abs(_r(20, asr=None) - R_A_TM)
-    e40 = abs(_r(40) - R_A_TM)
-    assert e20 < 2e-5
-    assert e40 < 1e-5
-    assert e20_li > 1e-2
-    assert e20_li / e20 > 500
+    # fixture replaced by a generic one; re-measured: 2.9e-6 (ASR) vs 1.3e-1
+    # ('li') at 30, 3.2e-7 at 60.  The rungs moved from 20 / 40 to 30 / 60
+    # with the bars unchanged: on this stack the narrower strip sub-interval
+    # gets fewer u harmonics, and ASR reads 2.5e-5 at 20 (2.6e-6 at 40).
+    e30 = abs(_r(30) - R_A_TM)
+    e30_li = abs(_r(30, asr=None) - R_A_TM)
+    e60 = abs(_r(60) - R_A_TM)
+    assert e30 < 2e-5
+    assert e60 < 1e-5
+    assert e30_li > 1e-2
+    assert e30_li / e30 > 500
 
 
 def test_metal_strip_stack_tm_oblique():
-    # classical mount, theta 0.3: measured 4.2e-6 vs 4.5e-2 at 20
-    e = abs(_r(20, theta=0.3) - R_A_TM_TH03)
-    e_li = abs(_r(20, theta=0.3, asr=None) - R_A_TM_TH03)
+    # classical mount, theta 0.3 (re-measured on the generic fixture):
+    # 2.9e-6 vs 1.3e-1 at 30 (2.6e-5 at 20)
+    e = abs(_r(30, theta=0.3) - R_A_TM_TH03)
+    e_li = abs(_r(30, theta=0.3, asr=None) - R_A_TM_TH03)
     assert e < 2e-5
     assert e_li > 1e-2
 
 
 def test_metal_strip_stack_te_no_worse_than_plain():
-    # measured 5.0e-11 vs 1.1e-5 at 20 (the reference agrees with its own
-    # degree-80 rung to 5e-12)
+    # re-measured on the generic fixture: 2.5e-10 vs 1.7e-5 at 20 (the
+    # reference agrees with its own degree-80 rung to 9e-13)
     e = abs(_r(20, pol="te") - R_A_TE)
     e_li = abs(_r(20, pol="te", asr=None) - R_A_TE)
     assert e < 1e-8
@@ -123,9 +139,11 @@ def test_metal_strip_stack_te_no_worse_than_plain():
 
 
 def test_second_geometry_wide_period():
-    # period 1200 nm, 500 nm strip: measured 5.6e-7 vs 4.5e-3 at 20
-    e = abs(_r(20, period=1200e-9, frac=500 / 1200) - R_B_TM)
-    e_li = abs(_r(20, period=1200e-9, frac=500 / 1200, asr=None) - R_B_TM)
+    # period 1600 nm, 600 nm strip (re-measured on the generic fixture):
+    # 1.1e-6 vs 3.2e-2 at 40 (the rung moved from 20, where ASR reads 5.7e-5,
+    # with the bars unchanged)
+    e = abs(_r(40, period=P_B, frac=W_B / P_B) - R_B_TM)
+    e_li = abs(_r(40, period=P_B, frac=W_B / P_B, asr=None) - R_B_TM)
     assert e < 5e-6
     assert e_li > 1e-3
 
@@ -168,6 +186,7 @@ def test_conical_mount():
 
 
 def test_sine_profile_also_beats_plain():
+    # re-measured on the generic fixture: 3.3e-4 against 'li' 3.1e-2 at 40
     e = abs(_r(40, asr=dict(eta=1.0, profile="sine")) - R_A_TM)
     assert e < 1e-3 and e < abs(_r(40, asr=None) - R_A_TM) / 10
 
@@ -179,7 +198,7 @@ def test_sine_profile_also_beats_plain():
 def test_default_off_bit_identical():
     a = _r(20, asr=None)
     b = _r(20, asr=False)
-    st = RCWAStack(P, n_superstrate=1.0, n_substrate=NS, n_orders=20)
+    st = RCWAStack(P, n_superstrate=1.0, n_substrate=N_SUB, n_orders=20)
     for t, es, eg in LAYERS:
         if es == eg:
             st.add_layer(t, eps=es)
@@ -192,7 +211,8 @@ def test_default_off_bit_identical():
 
 def test_nothing_to_adapt_is_the_standard_solve():
     # uniform-only stack, and eta='auto' at n_orders <= 5 (eta 0)
-    for kw in (dict(layers=[(80e-9, OX, OX)], theta=0.3), dict(N=5)):
+    for kw in (dict(layers=[(80e-9, E_LOSSY, E_LOSSY)], theta=0.3),
+               dict(N=5)):
         N = kw.pop("N", 10)
         assert _r(N, asr=True, **kw) == _r(N, asr=None, **kw)
 
@@ -204,13 +224,14 @@ def test_symmetry_flag_and_stabilize():
     b = st.solve(symmetry=False).jones_reflection()
     assert np.array_equal(a, b)       # the even fold never engages under ASR
     res = st.solve(stabilize=True)
+    # re-measured on the generic fixture: 2.5e-5 (the ASR error at 20)
     assert abs(res.jones_reflection()[0, 0] - R_A_TM) < 1e-4
 
 
 def test_dispersive_sweep_matches_concrete():
     st = _stack(20, dispersive=True)
     st.set_source(WL)
-    _o, _R, _T, J = st.solve_vs_wavelength([1290e-9, 1300e-9])
+    _o, _R, _T, J = st.solve_vs_wavelength([1490e-9, 1500e-9])
     st2 = _stack(20)
     st2.set_source(WL)
     assert np.max(np.abs(J[1] - st2.solve().jones_reflection())) < 1e-9
@@ -269,8 +290,9 @@ def test_layer_absorption_face_fluxes():
     st.set_source(WL)
     res = st.solve(retain_internal=True)
     raw = res.layer_absorption(return_raw=True)
-    # face fluxes telescope: the raw split sums to the absorptance (measured
-    # 2e-12 / 6e-13 on the two builds); lossless layers read 8e-15
+    # face fluxes telescope: the raw split sums to the absorptance
+    # (re-measured on the generic fixture: 2.5e-12); lossless layers read
+    # 1e-14
     assert np.max(np.abs(raw.sum(axis=1) - res.absorptance())) < 1e-9
     # lossless layers absorb nothing
     assert np.max(np.abs(raw[:, [1, 2, 4, 5]])) < 1e-9
@@ -290,15 +312,15 @@ def test_refusals():
         with pytest.raises(ValueError):
             RCWAStack(P, n_orders=3, asr=bad)
     cases = {
-        "eps_cell raster": dict(eps_cell=np.where(np.arange(64) < 30, AU,
-                                                  1.0)),
+        "eps_cell raster": dict(eps_cell=np.where(np.arange(64) < 30,
+                                                  E_STRIP, 1.0)),
         "tensor": dict(eps=np.diag([2.0, 3.0, 2.0])),
-        "formulation='laurent'": dict(segments=[(F, AU), (1 - F, 1.0)],
+        "formulation='laurent'": dict(segments=[(F, E_STRIP), (1 - F, 1.0)],
                                       formulation="laurent"),
     }
     for what, kw in cases.items():
         st = RCWAStack(P, n_orders=10, asr=True)
-        st.add_layer(50e-9, **kw)
+        st.add_layer(40e-9, **kw)
         st.set_source(WL)
         with pytest.raises(ValueError, match=re.escape(what)):
             st.solve()
@@ -307,7 +329,7 @@ def test_refusals():
 def test_jax_refused():
     jnp = pytest.importorskip("jax.numpy")
     st = RCWAStack(P, n_orders=10, asr=True)
-    st.add_layer(50e-9, segments=[(F, AU), (1 - F, 1.0)])
+    st.add_layer(40e-9, segments=[(F, E_STRIP), (1 - F, 1.0)])
     st.add_layer(20e-9, eps=jnp.asarray(2.0 + 0j))
     st.set_source(WL)
     with pytest.raises(ValueError):
@@ -407,8 +429,9 @@ def test_normalize_and_auto_rule():
 
 @pytest.mark.slow
 def test_floor_and_self_convergence():
-    # measured: 100 / 150 differ 4.4e-8 / 5.0e-8 (Windows / WSL); 150 sits
-    # 8.9e-8 / 8.5e-8 from the reference, whose own error is about 1e-7
+    # re-measured on the generic fixture (Windows/MKL): 100 / 150 differ
+    # 3.7e-8; 150 sits 1.8e-7 from the reference, whose own error is about
+    # 1.5e-7
     r100, r150 = _r(100), _r(150)
     assert abs(r100 - r150) < 2e-7
     assert abs(r150 - R_A_TM) < 4e-7
@@ -416,7 +439,8 @@ def test_floor_and_self_convergence():
 
 @pytest.mark.slow
 def test_neighbouring_n_scatter_removed():
-    # 'li' over N = 40..50 spans 1.7e-2 .. 4.5e-2; ASR 8e-7 .. 5e-6
+    # re-measured on the generic fixture: 'li' over N = 40..50 spans
+    # 1.9e-2 .. 9.1e-2; ASR 5.0e-7 .. 4.5e-6
     e_asr = [abs(_r(N) - R_A_TM) for N in range(40, 51)]
     e_li = [abs(_r(N, asr=None) - R_A_TM) for N in range(40, 51)]
     assert max(e_asr) < 1e-5

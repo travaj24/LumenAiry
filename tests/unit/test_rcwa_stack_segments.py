@@ -8,9 +8,11 @@ other segment a rectangle spanning the full ``period_y``.  The rectangles share
 edges exactly, which the shapes validation accepts (its overlap test excludes
 tangency).
 
-Fixture A (see ``test_rcwa_stack_auto_formulation.py``): the strip layer via
-``segments`` is the analytic ``shapes`` strip, bit for bit, and under the
-default ``'li'`` errs 1.06e-2 at N = 100 against the converged reference.
+The strip / spacer / mirror stack (see
+``test_rcwa_stack_auto_formulation.py``): the strip layer via ``segments`` is
+the analytic ``shapes`` strip, bit for bit, and under the default ``'li'``
+errs 1.05e-2 at N = 120 against the converged reference (the fixture was
+replaced by a generic one and re-measured).
 The layout check is sign-sensitive: an asymmetric three-segment cell at
 oblique incidence diffracts very differently into +1 and -1, and RCWAStack and
 PMMStack must agree order by order.
@@ -22,21 +24,25 @@ from lumenairy.elements.pmm import PMMStack
 from lumenairy.elements.rcwa import RCWAStack
 from lumenairy.elements.rcwa._core import _validate_shapes
 
-WL, P, W = 1300e-9, 370e-9, 175e-9
-AU, AL, AO, HF, OX, NS = -74 + 6j, -160 + 30j, 3.05, 3.53, 2.5 + 0.5j, 1.447
-LAYERS = [(50e-9, AU, 1.0), (1e-9, AO, AO), (7e-9, HF, HF), (5e-9, OX, OX),
-          (7e-9, HF, HF), (1e-9, AO, AO), (70e-9, AL, AL)]
-R_REF = 0.0571572 + 0.1312207j
+WL, P, W = 1500e-9, 500e-9, 180e-9
+E_STRIP, E_MIRROR = -90 + 7j, -130 + 20j
+E_LOW, E_HIGH, E_LOSSY, N_SUB = 2.8, 4.2, 2.2 + 0.6j, 1.5
+LAYERS = [(40e-9, E_STRIP, 1.0), (2e-9, E_LOW, E_LOW),
+          (6e-9, E_HIGH, E_HIGH), (3e-9, E_LOSSY, E_LOSSY),
+          (6e-9, E_HIGH, E_HIGH), (2e-9, E_LOW, E_LOW),
+          (80e-9, E_MIRROR, E_MIRROR)]
+# fixture replaced by a generic one; re-measured (PMMStack, degree 20 x 12)
+R_REF = -0.1012241 - 0.1763084j
 F = W / P
 
 
-def _fix_a(N, how, **kw):
-    st = RCWAStack(P, n_superstrate=1.0, n_substrate=NS, n_orders=N)
+def _strip_stack(N, how, **kw):
+    st = RCWAStack(P, n_superstrate=1.0, n_substrate=N_SUB, n_orders=N)
     # the equivalent shapes, written with the SAME wall arithmetic segments
     # uses (walls = cumsum / total, centre = mid-wall, size = wall gap)
     xw = np.concatenate([[0.0], np.cumsum([F, 1.0 - F])])
     xw = xw / xw[-1]
-    strip = [dict(shape="rectangle", eps=AU,
+    strip = [dict(shape="rectangle", eps=E_STRIP,
                   center=(float(0.5 * (xw[0] + xw[1]) * P), 0.5 * P),
                   size=(float((xw[1] - xw[0]) * P), P))]
     for t, es, eg in LAYERS:
@@ -68,23 +74,25 @@ def test_touching_rectangles_pass_the_shapes_validation():
 
 
 def test_segments_strip_is_the_shapes_strip_bit_for_bit():
-    st = _fix_a(30, "segments")
+    st = _strip_stack(30, "segments")
     L = st.layers[0]
     assert L.kind == "shapes"
     assert (L.formulation, L.formulation_requested) == ("li", "auto")
     bg, shapes = L.data
     assert complex(bg) == 1.0 and len(shapes) == 1
-    assert _bits(st.solve()) == _bits(_fix_a(30, "shapes").solve())
+    assert _bits(st.solve()) == _bits(_strip_stack(30, "shapes").solve())
     for form in ("laurent", "li"):
-        a = _fix_a(30, "segments", formulation=form).solve()
-        b = _fix_a(30, "shapes", formulation=form).solve()
+        a = _strip_stack(30, "segments", formulation=form).solve()
+        b = _strip_stack(30, "shapes", formulation=form).solve()
         assert _bits(a) == _bits(b)
 
 
 def test_segments_strip_converges_like_the_shapes_strip():
-    r = complex(np.asarray(_fix_a(100, "segments").solve()
+    # re-measured on the generic fixture: 1.05e-2 at N = 120 (the rung of
+    # test_rcwa_stack_auto_formulation's decision pair; bar unchanged)
+    r = complex(np.asarray(_strip_stack(120, "segments").solve()
                            .jones_reflection())[0, 0])
-    assert abs(r - R_REF) < 1.2e-2           # measured 1.06e-2
+    assert abs(r - R_REF) < 1.2e-2
 
 
 # An asymmetric dielectric cell at oblique incidence: R(+1) and R(-1) differ
@@ -159,14 +167,14 @@ def test_one_segment_is_a_uniform_layer():
 
 
 def test_dispersive_segments_pass_through():
-    st = RCWAStack(P, n_superstrate=1.0, n_substrate=NS, n_orders=10)
-    st.add_layer(50e-9, segments=[(F, lambda wl: AU), (1 - F, 1.0)])
-    st.add_layer(70e-9, eps=AL)
+    st = RCWAStack(P, n_superstrate=1.0, n_substrate=N_SUB, n_orders=10)
+    st.add_layer(40e-9, segments=[(F, lambda wl: E_STRIP), (1 - F, 1.0)])
+    st.add_layer(80e-9, eps=E_MIRROR)
     st.set_source(WL, theta=0.0)
     _o, R, _T, J = st.solve_vs_wavelength([WL])
-    ref = RCWAStack(P, n_superstrate=1.0, n_substrate=NS, n_orders=10)
-    ref.add_layer(50e-9, segments=[(F, AU), (1 - F, 1.0)])
-    ref.add_layer(70e-9, eps=AL)
+    ref = RCWAStack(P, n_superstrate=1.0, n_substrate=N_SUB, n_orders=10)
+    ref.add_layer(40e-9, segments=[(F, E_STRIP), (1 - F, 1.0)])
+    ref.add_layer(80e-9, eps=E_MIRROR)
     res = ref.set_source(WL, theta=0.0).solve()
     assert np.max(np.abs(np.asarray(J)[0]
                          - np.asarray(res.jones_reflection()))) < 1e-12

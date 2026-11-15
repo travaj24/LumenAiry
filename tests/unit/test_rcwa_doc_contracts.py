@@ -14,16 +14,17 @@ docstrings, pinned.
 * at ``phi = 0``, ``J_r[0, 0] = -r_p`` (textbook Fresnel ``r_p``) and the TM
   transmission entry is ``t_p (kz_sub / n_sub) / (kz_sup / n_sup)``.
 
-Fixture: an 80 nm film (eps 2.5+0.5i) on n = 1.447, 1300 nm, air above, at
-theta 0 and 0.3 rad.  Measured 2026-11-14: every entry agrees with the closed
-form to <= 1e-12 at n_orders = 3 (a uniform stack has no truncation error).
+Fixture: an 80 nm film (eps 2.2+0.6i) on n = 1.5, 1500 nm, air above, at
+theta 0 and 0.3 rad (a generic film; re-measured): every entry agrees with the
+closed form to <= 3e-16 at n_orders = 3 (a uniform stack has no truncation
+error).
 """
 import numpy as np
 import pytest
 
 from lumenairy.elements.rcwa import RCWAStack
 
-WL, NSUB, EPS_F, D_F, D_ADD = 1300e-9, 1.447, 2.5 + 0.5j, 80e-9, 100e-9
+WL, NSUB, EPS_F, D_F, D_ADD = 1500e-9, 1.5, 2.2 + 0.6j, 80e-9, 100e-9
 K0 = 2 * np.pi / WL
 BAR = 1e-9
 

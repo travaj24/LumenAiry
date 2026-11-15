@@ -338,8 +338,7 @@ entries (exact piecewise-constant Fourier series), or a
 ``raster='area'`` is a THIRD, opt-in mitigation -- see
 :func:`_raster_cover_1d`.
 
-THE CALLER'S LATTICE DECIDES THE REALISED DUTY (audit L-6, 2026-11-02
-DynaMeta bridge audit).  The solver reads ``eps_cell[j]`` at the NODE
+THE CALLER'S LATTICE DECIDES THE REALISED DUTY.  The solver reads ``eps_cell[j]`` at the NODE
 ``x = j P/S`` (point 1); a caller that paints its own cell picks a lattice and
 a membership test, and the quantisation above depends on both.  Realised duty
 of a line of duty 0.5 centred at ``P/2`` (edges at ``P/4``, ``3P/4``):
@@ -498,8 +497,7 @@ def _raster_wants_companions(fn_name, raster, formulation):
 
 
 def _check_li_shapes(fn_name, shapes, period_y, eps_background):
-    """Preconditions of ``formulation='li'`` on a 1-D-stack ``shapes`` layer
-    (Phase C1, PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02 L-4).
+    """Preconditions of ``formulation='li'`` on a 1-D-stack ``shapes`` layer.
 
     * The shape list must be y-INVARIANT (every shape a rectangle spanning the
       full ``period_y``, the shared :func:`_shapes_y_varying` predicate).  A
@@ -531,12 +529,11 @@ def _check_li_shapes(fn_name, shapes, period_y, eps_background):
 
 
 def _check_li_shapes_2d(fn_name, shapes, eps_background):
-    """Preconditions of ``formulation='li'`` on a 2-D-stack ``shapes`` layer
-    (Phase D, PLAN_DYNAMETA_BRIDGE_FINDINGS_2026_11_02 L-4): every shape an
-    AXIS-ALIGNED RECTANGLE (the analytic per-band inverse rule of
-    :func:`~lumenairy.elements.rcwa.twod._internal_analytic_li_operators_2d`
-    is exact for those only -- disks, ellipses and rotated rectangles are
-    Phase F), and a non-zero ``eps_background`` (``None`` skips that check: a
+    """Preconditions of ``formulation='li'`` on a 2-D-stack ``shapes`` layer:
+    every shape an AXIS-ALIGNED RECTANGLE (the analytic per-band inverse rule
+    of :func:`~lumenairy.elements.rcwa.twod._internal_analytic_li_operators_2d`
+    is exact for those only -- disks, ellipses and rotated rectangles are not
+    supported by it), and a non-zero ``eps_background`` (``None`` skips that check: a
     dispersive background, checked per wavelength by the caller)."""
     problem = _li_rect_shapes_problem(shapes)
     if problem is not None:
@@ -652,11 +649,13 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
       factorizations and ignore the setting);
     * an ``eps_cell_normal`` companion pair -> ``'li'`` (the pair is read only
       by the inverse rule);
-    * a JAX ``eps_cell``, traced or not -> ``'laurent'``: the ``'li'`` branch
-      tests the cell for contrast on the host, which a tracer cannot answer,
-      and a concrete JAX cell resolves the same way so that a function
-      evaluated eagerly and under ``jax.grad`` / ``jax.jit`` solves one
-      factorization;
+    * a JAX ``eps_cell`` resolves exactly as the same values as a NumPy
+      array would: a concrete one is read like a NumPy cell, and a TRACED
+      one resolves to ``'li'`` (an AD gradient then differentiates the
+      function a NumPy finite difference evaluates).  The one case a tracer
+      cannot answer -- a cell with several y-samples on a 1-D stack, where
+      y-variation decides the rule -- raises ``ValueError`` asking for an
+      explicit formulation;
     * a cell or a background holding an exact zero permittivity -> ``'laurent'``
       (the inverse rule reads ``1/eps``);
     * 1-D stack: an ``eps_cell`` -> ``'li'``, except a y-VARYING cell, which a
@@ -675,8 +674,8 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
       2-D stack can afford on every rectangle cell and every rasterized cell
       measured, and much more accurate on high-index dielectrics and strong
       metals (``docs/audits/AUDIT_RCWA_2D_LI_FACTORIZATION_2026_11_14.md``).
-      The 5.51 staging rule ('li' for metallic layers only) left high-index
-      dielectric pillars on the direct rule, 15x-60x less accurate.
+      A per-material rule ('li' for metallic layers only) would leave
+      high-index dielectric pillars on the direct rule, 15x-60x less accurate.
 
     ``eps_values`` (builders) is the list of concrete permittivities of a
     rasterised layer, used instead of ``cell``.
@@ -703,14 +702,26 @@ def _resolve_formulation(fn_name, requested, *, kind, is_1d, cell=None,
             # not depend on the material, so no factorization switch can
             # happen inside a spectrum
             return "li"
-        elif is_jax_array(cell):
-            # A JAX cell -- traced or not -- keeps the direct rule, so a
-            # function evaluated eagerly and under jax.grad / jax.jit solves
-            # the SAME factorization (a concrete jnp cell resolved to 'li'
-            # would differentiate a different function than it evaluates).
-            return "laurent"
         else:
             vals = _concrete_eps_values([cell])
+            if vals is None and is_jax_array(cell):
+                # A TRACED cell resolves exactly as its NumPy twin would, so
+                # that an AD gradient differentiates the function a NumPy
+                # finite difference evaluates.  The rule reads the values
+                # only for an exact zero (refused by 'li' anyway: it reads
+                # 1/eps) and, on a 1-D stack, for whether a cell with several
+                # y-samples varies along y -- which a tracer cannot answer.
+                if (is_1d and getattr(cell, "ndim", 1) >= 2
+                        and int(cell.shape[1]) > 1):
+                    raise ValueError(
+                        f"{fn_name}: formulation='auto' cannot resolve a "
+                        f"TRACED (JAX) eps_cell with {int(cell.shape[1])} "
+                        f"y-samples on a 1-D stack: a y-varying cell takes "
+                        f"'laurent' and a y-invariant one 'li', and a "
+                        f"tracer's values cannot be read.  Pass "
+                        f"formulation='li' or 'laurent' explicitly, or a "
+                        f"cell of shape (n_x, 1).")
+                return "li"
             if vals is None:                  # not inspectable
                 return "laurent"
         if vals is None:                      # builders: a dispersive value
@@ -882,15 +893,22 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), factor=None,
     ``N`` to the next.  An additive step of 4 orders at ``N`` ~ 60 is a 6 %
     change of ``N``, so it changes the answer by a small fraction of its error,
     and an ABSOLUTE efficiency tolerance says nothing about a low-reflectance
-    state.  Measured on a resonant metal-strip stack (a 175 nm strip,
-    eps -74+6i, on a 21 nm spacer over a metal mirror; period 370 nm, 1300 nm,
-    TM, ``'li'``; reference reflectance 0.02049): the additive check
-    (``bump=4``, ``atol=1e-3``) called ``N = 61`` converged (change 3.8e-4)
-    with the reflectance 23.5 % wrong, and ``N = 100`` converged with it
-    11.7 % wrong.  The default here steps ``61 -> 92`` (reflectance 0.016051 ->
-    0.017301, a 7.2 % change), estimates a 14 % error (true error at 92:
-    15.5 %) and reports NOT converged; over N = 40 ... 207 on that stack the
-    one-step estimate tracks the true error within 0.6x - 1.6x.
+    state.  Measured on a resonant metal-strip stack (a 180 nm strip,
+    eps -90+7i, on a 19 nm spacer stack over a metal mirror; period 500 nm,
+    1500 nm, TM, ``'li'``; reference reflectance 0.04133): the additive check
+    (``bump=4``, ``atol=1e-3``) called ``N = 40`` converged (change 2.7e-4)
+    with the reflectance 19.9 % wrong, and ``N = 102`` converged with it
+    13.9 % wrong.  The default here steps ``40 -> 60`` (reflectance 0.049306
+    -> 0.051507), estimates a 21.5 % error (true error at 60: 24.6 %) and
+    reports NOT converged.  The one-step estimate is a heuristic on such an
+    erratic sequence: over N = 30 ... 150 on that stack it lands within
+    0.5x - 2x of the true error at 84 of 121 starting truncations (41 of 51
+    from N = 100 on), but it ranges from 0.1x to 11x, and at ``N = 88`` it
+    reported converged (0.9 %) with the reflectance 9 % wrong
+    (``estimate=True`` flags ``N = 88`` erratic, but itself reported
+    ``N = 91`` and ``93`` converged with the reflectance 6 % wrong) -- on a
+    resonant metal stack sample several starting truncations, and prefer
+    ``asr=True`` or a ``PMMStack`` reference.
 
     ``estimate=True`` adds a THIRD solve one more step up (``N, fN, f^2 N``)
     and replaces the p = 1 bound by a Richardson estimate with each quantity's
@@ -1207,9 +1225,9 @@ class RCWAResult:
         normal incidence, i.e. ``-r_p`` of the textbook Fresnel ``r_p``; the
         ``y`` column is the s (TE) channel, ``J[1, 1] = r_s``
         (``CONVENTIONS.md`` section 7.1).  Measured on an 80 nm film
-        (eps 2.5+0.5i) on n = 1.447 at 1300 nm, theta 0 and 0.3 rad: both
+        (eps 2.2+0.6i) on n = 1.5 at 1500 nm, theta 0 and 0.3 rad: both
         diagonal entries equal the closed-form tangential-field reflection to
-        1e-9 (``tests/unit/test_rcwa_doc_contracts.py``)."""
+        3e-16 (``tests/unit/test_rcwa_doc_contracts.py``)."""
         return self._Jr
 
     def jones_transmission(self):
@@ -2109,12 +2127,18 @@ class RCWAStack:
         ``stabilize`` and :func:`rcwa_convergence` all run with it.
 
         What it buys (TM on metal strips, where the uniform basis converges
-        only as ``N^-1.1``): on a 175 nm metal strip (eps -74+6i, 50 nm) over
-        a 21 nm spacer stack and a metal mirror, period 370 nm, 1300 nm, the
-        zeroth-order reflection errs 4.7e-6 / 2.0e-6 / 1.3e-7 at
-        ``n_orders`` 20 / 40 / 100 against 4.2e-2 / 1.9e-2 / 1.1e-2 for
-        ``'li'`` (the last ASR value is the reference's own accuracy), and
-        ``n_orders`` 150 and 200 agree to 1.3e-8.  TE and
+        only as about ``N^-1.2``): on a 180 nm metal strip (eps -90+7i,
+        40 nm) over a 19 nm spacer stack and a metal mirror, period 500 nm,
+        1500 nm, the zeroth-order reflection errs 2.5e-5 / 2.9e-6 / 2.6e-6 /
+        2.1e-7 at ``n_orders`` 20 / 30 / 40 / 100 against 3.0e-1 / 1.3e-1 /
+        3.1e-2 / 1.5e-2 for ``'li'`` (the last ASR value is about the
+        reference's own accuracy), and ``n_orders`` 150 and 200 agree to
+        2.4e-8.  That holds when every segment is wide on the scale of the
+        period: the stretched axis is shared among the segments in
+        proportion to their widths, so a NARROW segment is not widened and
+        converges much more slowly (with a 1 nm wide metal segment added to
+        the same strip: 2.4e-5 / 1.7e-5 / 1.2e-5 at ``n_orders``
+        40 / 80 / 150; ``docs/rcwa_stack_asr.md``).  TE and
         lossless dielectric gratings converge faster too.  The full stretch
         clusters so hard that the middle of each segment is resolved 2.7
         times more coarsely than by the plain basis, which is why ``'auto'``
@@ -2122,8 +2146,9 @@ class RCWAStack:
         LESS accurate than the plain basis on a dielectric lamellar grating
         (TE 2.1e-3 against 2.9e-4), where ``'auto'`` (``eta`` 0.5 there)
         gives 1.9e-5.  ``eta < 1`` keeps a linear zone at the walls in which
-        the corner singularity survives (plateau 2e-6 .. 1e-5 on the strip
-        stack at ``eta`` 0.999), so a fixed ``eta`` below 1 is for studies
+        the corner singularity survives (3.9e-6 / 2.8e-6 at ``n_orders``
+        150 / 200 on the strip stack at ``eta`` 0.999, against 1.8e-7 /
+        1.5e-7 at ``eta`` 1), so a fixed ``eta`` below 1 is for studies
         only.  A lossless stack closes ``sum R + T = 1`` to the truncation
         error, not to round-off as the plain basis does (measured 4e-6 /
         4e-8 / 2.5e-10 at ``n_orders`` 15 / 20 / 40 on a three-layer
@@ -2360,7 +2385,7 @@ class RCWAStack:
         2-D stack, ``eps_cell`` (any material)          ``'li'``
         2-D stack, rectangle ``shapes`` (any material)  ``'li'``
         2-D stack, ``shapes`` with a disk / ellipse     ``'laurent'``
-        a JAX ``eps_cell`` (traced or not)              ``'laurent'``
+        a JAX ``eps_cell``                              as its NumPy twin
         an exact zero permittivity in the cell or the   ``'laurent'``
         background
         ==============================================  ==============
@@ -2371,25 +2396,25 @@ class RCWAStack:
         ``layers[i].formulation_requested``.  Pass ``formulation='laurent'``
         to reproduce results computed with earlier releases, whose default it
         was.  Why the default is not ``'laurent'``: on a resonant metal-strip
-        stack (a 175 nm strip, eps -74+6i, 50 nm thick, on a 21 nm dielectric
-        spacer over a metal mirror, eps -160+30i; period 370 nm, 1300 nm, TM)
-        the zeroth-order reflection errs, against a converged
+        stack (a 180 nm strip, eps -90+7i, 40 nm thick, on a 19 nm dielectric
+        spacer stack over a metal mirror, eps -130+20i; period 500 nm,
+        1500 nm, TM) the zeroth-order reflection errs, against a converged
         ``PMMStack`` reference,
 
         ============  ===========  ===========
         ``n_orders``  'laurent'    'li'
         ============  ===========  ===========
-        25            3.36e-1      3.28e-2
-        50            2.57e-1      3.92e-2
-        100           1.67e-1      1.06e-2
-        200           4.58e-2      4.88e-3
-        400           5.67e-2      2.30e-3
-        800           1.11e-2      1.00e-3
+        25            3.01e-1      6.26e-2
+        50            1.43e-1      1.91e-2
+        100           2.81e-2      1.53e-2
+        200           6.96e-2      7.80e-3
+        400           7.22e-2      3.01e-3
+        800           4.17e-2      1.36e-3
         ============  ===========  ===========
 
-        (at ``n_orders`` 50 the direct rule returns the wrong sign of
-        ``Re(r)``), while TE (``E_y``, tangential to every wall of a 1-D
-        grating) is the same under both rules to round-off (measured 4.5e-13).
+        (the direct rule's error does not even fall monotonically), while TE
+        (``E_y``, tangential to every wall of a 1-D grating) is the same
+        under both rules to round-off (measured 6.1e-13 at ``n_orders`` 50).
         On a 2-D stack the rule is per SHAPE class, not per material,
         because that is what was measured (zeroth-order Jones error against
         the pure 2-D polynomial modal solver ``PMM2DStackPure``, a 300 nm
@@ -2425,11 +2450,13 @@ class RCWAStack:
         strong metal below ``n_orders`` 20 (``'li'`` 3x-50x closer on every
         rung there).  The 2-D single-layer
         functions (``rcwa_efficiency_2d`` ...) keep their ``'laurent'``
-        default.  ``'li'`` does not trace a JAX
-        ``eps_cell`` (its contrast test reads the cell on the host), so a JAX
-        cell resolves to ``'laurent'`` -- a concrete one too, so that a
-        function evaluated eagerly and under ``jax.grad`` / ``jax.jit`` sees
-        the same factorization.  A NumPy cell resolved to ``'li'``
+        default.  A JAX ``eps_cell`` resolves as its NumPy twin: a concrete
+        one is read like a NumPy array, a traced one runs ``'li'`` (the
+        inverse-rule Toeplitz builds and inverses trace; a traced cell is
+        taken to carry contrast), and a traced cell with several y-samples on
+        a 1-D stack raises, since whether it varies along y decides the rule.
+        So ``jax.grad`` of a stack differentiates the function a NumPy finite
+        difference evaluates.  A NumPy cell resolved to ``'li'``
         differentiates and jits like any other layer when the trace starts
         elsewhere (a traced wavelength, angle, thickness or uniform eps): its
         contrast test is taken when the layer is added.
@@ -2483,8 +2510,7 @@ class RCWAStack:
         module for what it buys (measured: 8x-1115x on the ``'li'`` wall-normal
         polarization).
 
-        CONVERGENCE ON LOSSY-METAL CORNERS (audit L-1, 2026-11-02 DynaMeta
-        bridge audit).  A right-angle corner of a lossy metal carries a field
+        CONVERGENCE ON LOSSY-METAL CORNERS.  A right-angle corner of a lossy metal carries a field
         singularity, so EVERY method converges only ALGEBRAICALLY there --
         ``'li'`` included; no factorization removes it.  Measured on a 1-D
         lamellar grating (lambda 1.31 um, period 600 nm, eps -20+2i, duty 0.5,
@@ -2885,7 +2911,7 @@ class RCWAStack:
         """Resolve a tapered builder's ``formulation`` ONCE per call, from the
         concrete permittivities it rasterises (``'auto'`` -> the
         :meth:`add_layer` rule for an isotropic cell: ``'li'`` on a 1-D stack and
-        on a 2-D stack, ``'laurent'`` for an exact zero or a JAX value).  Returns
+        on a 2-D stack, ``'laurent'`` for an exact zero).  Returns
         ``(requested, resolved)``."""
         f_req = _normalize_formulation(fn_name, formulation)
         return f_req, _resolve_formulation(
@@ -3755,11 +3781,18 @@ class RCWAStack:
         """The ``'li'`` contrast verdict of an iso layer: the one taken when
         the layer was added (:attr:`_RCWALayer.li_contrast`), or -- for a
         dispersive or traced cell, which has none -- the same test
-        (:func:`_li_cell_contrast`) on the internal cell now.  A traced cell
-        still cannot answer it, and raises."""
+        (:func:`_li_cell_contrast`) on the internal cell now.  A TRACED cell
+        cannot answer it and is taken to carry contrast: the test only picks
+        the scalar shortcut for a uniform cell, on which the inverse-rule
+        blocks reduce to the same ``eps I`` operator (``[[1/eps]]^-1``), so
+        both branches solve one problem and the traced one stays
+        differentiable (the Toeplitz builds and inverses of
+        :func:`_li_convolutions_2d` are ``xp``-generic)."""
         c = getattr(layer, "li_contrast", None)
         if c is None:
-            c = _li_cell_contrast(cell_c, traced_ok=False)
+            c = _li_cell_contrast(cell_c, traced_ok=True)
+            if c is None:                       # traced: assume contrast
+                c = True
         return c
 
     def _li_blocks(self, layer, cell_c, orders, xp):

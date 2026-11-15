@@ -385,26 +385,26 @@ and `rcwa_convergence` judges a relative error estimate.  The polynomial modal
 `PMMStack` with `grade='geometric'` is the independent check:
 
 ```python
-strip = [(175 / 370, -74 + 6j), (195 / 370, 1.0)]    # (width fraction, eps)
+strip = [(180 / 500, -90 + 7j), (320 / 500, 1.0)]    # (width fraction, eps)
 
 def rcwa_stack(n_orders, **kw):
-    return (la.RCWAStack(370e-9, n_substrate=1.447, n_orders=n_orders, **kw)
-            .add_layer(50e-9, segments=strip)          # 'auto' -> 'li' here
-            .add_layer(21e-9, eps=3.3)
-            .add_layer(70e-9, eps=-160 + 30j)
-            .set_source(1300e-9, theta=0.0))
+    return (la.RCWAStack(500e-9, n_substrate=1.5, n_orders=n_orders, **kw)
+            .add_layer(40e-9, segments=strip)          # 'auto' -> 'li' here
+            .add_layer(19e-9, eps=3.6)                 # spacer
+            .add_layer(80e-9, eps=-130 + 20j)          # metal mirror
+            .set_source(1500e-9, theta=0.0))
 
 r_li = rcwa_stack(40).solve().jones_reflection()[0, 0]
 r_asr = rcwa_stack(40, asr=True).solve().jones_reflection()[0, 0]
 res, rep = la.rcwa_convergence(rcwa_stack(40, asr=True))  # relative estimate
 print(rep["converged"], rep["err_estimate"])
 
-pmm = la.PMMStack(370e-9, n_substrate=1.447, degree=8, elements_per_region=12,
+pmm = la.PMMStack(500e-9, n_substrate=1.5, degree=8, elements_per_region=12,
                   grade='geometric')                    # corner-refined layout
-pmm.add_layer(50e-9, segments=strip)
-pmm.add_layer(21e-9, eps=3.3)
-pmm.add_layer(70e-9, eps=-160 + 30j)
-r_pmm = pmm.set_source(1300e-9, theta=0.0).solve()[3][0, 0]
+pmm.add_layer(40e-9, segments=strip)
+pmm.add_layer(19e-9, eps=3.6)
+pmm.add_layer(80e-9, eps=-130 + 20j)
+r_pmm = pmm.set_source(1500e-9, theta=0.0).solve()[3][0, 0]
 print(abs(r_asr - r_pmm), abs(r_li - r_pmm))
 ```
 
