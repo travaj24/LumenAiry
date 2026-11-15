@@ -320,10 +320,18 @@ def test_g4_the_prepared_path_returned_orders_missing_before_the_fix():
             with warnings.catch_warnings(record=True) as rec:
                 warnings.simplefilter("always")
                 o, R, T, _J = build(degree).solve(wavelength=0.5e-6, angle=0.0)
+            # 3 um / 0.5 um puts the +/-6 orders EXACTLY at cut-off in the
+            # air superstrate, so since 5.51.0 every PMMStack solve path
+            # announces that Rayleigh anomaly (WoodNudgeWarning, wavelength
+            # nudged ~1e-7 relative).  That warning is about the anomaly,
+            # not about the dropped orders; the premise here is that NOTHING
+            # warned about the missing orders, so it is not counted.
+            n_other = sum(1 for w in rec
+                          if not issubclass(w.category, WoodNudgeWarning))
             dropped[degree] = (len(np.asarray(o)),
                                float(np.max(np.real(R).sum(-1)
                                             + np.real(T).sum(-1))),
-                               len(rec))
+                               n_other)
     finally:
         PS._farfield_order_set = pre_change
 
