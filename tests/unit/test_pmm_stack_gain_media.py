@@ -129,12 +129,38 @@ def test_uniform_tensor_gain_layer_matches_transfer_matrix(phi):
     assert abs(J[1, 1] - ry) < 1e-8
 
 
+#: How many times the fixed path's own RCWA error the bare-rule answer must
+#: miss the RCWA answer by.  The bare rule puts ``exp(+b k0 d)`` of every
+#: evanescent gain mode into the layer propagator, so its answer is round-off
+#: amplified by that growth: its SIZE is not a property of the device.
+#: Measured on the gain ridge at normal incidence, 200 draws per build with
+#: the ridge permittivity scaled by ``1 + k * 1e-14`` (k = 0..199): the
+#: bare-rule ``max |J - J_RCWA|`` reads min / median 0.40 .. 0.58 / 2.2 .. 2.5
+#: (max 12 .. 112) on five builds (WSL OpenBLAS numpy 2.2.6 / 2.4.6 / 2.5.4,
+#: Windows MKL numpy 2.4.4, Windows OpenBLAS AVX-512 numpy 2.4.6), against
+#: 1.79e-4 for the fixed path on every build and draw: a ratio of at least
+#: 2235.  ``R + T`` is NOT a usable reading of the defect: on the same draws
+#: its maximum over the two polarizations falls below 1.5 in 15 .. 27 % of
+#: them and below 1 (0.10 .. 0.22) in some.
+_BARE_RULE_ERROR_FACTOR = 100.0
+
+
 def test_fail_before_switch_reproduces_the_defect(monkeypatch):
     """``_PMM_GAIN_SECTOR = False`` restores the bare flux rule, and with it
-    the growing-evanescent forward set (R + T ~ 10 on the gain ridge)."""
+    the growing-evanescent forward set: on the gain ridge the answer then
+    misses the RCWA reference by far more than the fixed path does (see
+    ``_BARE_RULE_ERROR_FACTOR`` for the measured margin; the bare answer's
+    magnitude is round-off amplified, so it is bounded from below relative
+    to the fixed path's error, never pinned)."""
+    Jr, _sr = _rcwa("ridge", 0.0, 0.0)
+    J_fixed, _s = _pmm("ridge", 0.0, 0.0)
+    err_fixed = float(np.abs(J_fixed - Jr).max())
     monkeypatch.setattr(_core, "_PMM_GAIN_SECTOR", False)
-    _J, s = _pmm("ridge", 0.0, 0.0)
-    assert float(np.max(s)) > 1.5
+    J_bare, _s = _pmm("ridge", 0.0, 0.0)
+    err_bare = float(np.abs(J_bare - Jr).max())
+    assert err_fixed < 1e-3, err_fixed
+    assert err_bare > _BARE_RULE_ERROR_FACTOR * err_fixed, (err_bare,
+                                                            err_fixed)
 
 
 def test_passive_stack_bit_identical_with_the_rule_on_and_off(monkeypatch):

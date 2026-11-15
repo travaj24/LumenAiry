@@ -1159,12 +1159,44 @@ _CONICAL_WIDEN = (16, 18)
 _CONICAL_SCAN = {}
 
 
+def _cut_dependent_modes(flux, q, thr, flip, passive):
+    """How many modes' SHIPPED direction changes when the classification cut
+    moves anywhere in ``[thr / W, W * thr]``, ``W = _MODE_CUT_MARGIN_WARN``
+    (the decade channel B's ``n_risk`` scores proximity in).
+
+    This is what an "at-risk" mode means physically: one whose forward /
+    backward assignment -- and so the answer -- depends on where the cut
+    sits.  Evaluated exactly, through the library's own selector: the
+    selector sees the cut only through ``|flux| > t`` and
+    ``|flux| < W t``, so one probe at every breakpoint and one inside every
+    interval between breakpoints covers the whole band."""
+    W = PC._MODE_CUT_MARGIN_WARN
+    t0 = float(thr)
+    if not (t0 > 0.0 and np.isfinite(t0)):
+        return 0
+    af = np.abs(np.asarray(flux, dtype=float))
+    lo, hi = t0 / W, t0 * W
+    bps = np.concatenate([af, af / W])
+    bps = np.unique(bps[(bps > lo) & (bps < hi)])
+    edges = np.concatenate([[lo], bps, [hi]])
+    probes = np.concatenate([edges, np.sqrt(edges[:-1] * edges[1:])])
+    ref = np.asarray(flip, dtype=bool)
+    moved = np.zeros(af.shape, dtype=bool)
+    for t in probes:
+        moved |= np.asarray(PC._forward_growth_flip(
+            flux, q, t, af > t, np, passive), dtype=bool) != ref
+    return int(np.count_nonzero(moved))
+
+
 def _conical_cell(degree):
     """One rung of the conical false-positive family, ARMED, cached.
 
-    ``dict(degree, r0, close, fired, n_grow, spread, n_risky, margin)`` -- both
-    verdict channels read straight off ``_MODE_CUT_CENSUS`` so the adjudication
-    below is a measurement and not an inference."""
+    ``dict(degree, r0, close, fired, n_grow, spread, n_risky, margin,
+    n_cut_dep)`` -- both verdict channels read straight off
+    ``_MODE_CUT_CENSUS`` so the adjudication below is a measurement and not
+    an inference.  ``n_cut_dep`` (:func:`_cut_dependent_modes`, summed over
+    the patterned rows) is read off the arrays the census call site is handed,
+    through a pass-through wrapper of ``_record_mode_cut``."""
     # both selector switches in the key -- see ``_t34_cell`` -- and the
     # structured-conical-solve switch (2026-11-14), which changes the modes
     import lumenairy.elements.pmm.conical as _CO
@@ -1178,8 +1210,24 @@ def _conical_cell(degree):
                   layer_grids="per-layer", min_feature=3.0 * NM)
     for t, segs in _taper(4):
         st.add_layer(t, segments=segs)
+    cut_dep = []
+    real_record = PC._record_mode_cut
+
+    def _record(flux, q, thr, prop, mats, site, patterned=None, flip=None,
+                passive=None):
+        out = real_record(flux, q, thr, prop, mats, site, patterned,
+                          flip=flip, passive=passive)
+        pat = PC._grid_is_patterned(mats) if patterned is None else patterned
+        if pat:
+            pas = PC._grid_is_passive(mats) if passive is None else passive
+            shipped = (PC._forward_growth_flip(flux, q, thr, prop, np, pas)
+                       if flip is None else flip)
+            cut_dep.append(_cut_dependent_modes(flux, q, thr, shipped, pas))
+        return out
+
     old_guard, PC.PMM_MODE_CUT_GUARD = PC.PMM_MODE_CUT_GUARD, True
     old_census, PC._MODE_CUT_CENSUS = PC._MODE_CUT_CENSUS, []
+    PC._record_mode_cut = _record
     try:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
@@ -1188,6 +1236,7 @@ def _conical_cell(degree):
                                         phi=np.deg2rad(20.0)).solve()
         rows = list(PC._MODE_CUT_CENSUS)
     finally:
+        PC._record_mode_cut = real_record
         PC._MODE_CUT_CENSUS = old_census
         PC.PMM_MODE_CUT_GUARD = old_guard
     m0 = int(np.where(np.asarray(o) == 0)[0][0])
@@ -1205,7 +1254,8 @@ def _conical_cell(degree):
         n_grow=sum(int(c["n_grow"]) for c in rows),          # channel A
         spread=(max(counts) - min(counts)) if len(counts) >= 2 else 0,
         n_risky=len(risky),                                  # channel B
-        margin=min([c["margin"] for c in risky], default=float("inf")))
+        margin=min([c["margin"] for c in risky], default=float("inf")),
+        n_cut_dep=sum(cut_dep))
     _CONICAL_SCAN[key] = cell
     return cell
 
@@ -1213,10 +1263,10 @@ def _conical_cell(degree):
 def _conical_table(degrees):
     return "\n    ".join(
         "deg %2d  r0=%.6f rel=%+.2e close=%.1e  A:n_grow=%d  "
-        "B:spread=%d n_risky=%d margin=%.3g  -> %s"
+        "B:spread=%d n_risky=%d margin=%.3g  cut-dependent=%d  -> %s"
         % (c["degree"], c["r0"], c["r0"] / _CONICAL_PLATEAU - 1.0, c["close"],
            c["n_grow"], c["spread"], c["n_risky"], c["margin"],
-           "FIRES" if c["fired"] else "quiet")
+           c["n_cut_dep"], "FIRES" if c["fired"] else "quiet")
         for c in (_conical_cell(d) for d in degrees))
 
 
@@ -1310,18 +1360,47 @@ def test_t34_bar_is_REFUTED_on_the_conical_family(degree, t34_armed,
 @pytest.mark.parametrize("degree", [10, 12, 14, 16])
 def test_t34_conical_family_is_clean_with_structured_solves(degree, t34_armed):
     """With the structured conical modal solves (the default since
-    2026-11-14) the family that refuted the T3-4 bar is clean: no growing
-    forward mode, no count spread, no at-risk mode, no verdict, and the
-    answer on the plateau.  MEASURED 2026-11-14 (Windows/MKL): degrees
-    10 / 12 / 14 / 16 all read n_grow 0, spread 0, n_risky 0, quiet, r0
-    within 4e-4 of the plateau (degree 18 reads 4 at-risk modes at margin
-    7.5, quiet)."""
+    2026-11-14) the family that refuted the T3-4 bar is clean: no evanescent
+    mode classified propagating (``n_grow`` 0: the raw selector puts no
+    growing mode forward), no count spread, no verdict, no mode whose
+    direction depends on where the cut sits, and the answer on the plateau.
+
+    WHY NOT ``n_risky == 0``.  Channel B's ``n_risk`` counts modes whose two
+    direction criteria disagree within a decade of the cut.  The at-risk
+    modes it reports here (measured: degree 14, numpy 2.5.4, one per layer
+    of the third slice and its conical twin) are EVANESCENT -- ``q``
+    imaginary to 4e-10 relative, below the eig's own round-off bound on
+    ``q`` -- so each carries exactly zero z-power: its flux, the sign of
+    that flux and its distance from the cut are all eig round-off.  It sits
+    BELOW the cut (classified by ``Im q``, correctly), and above the cut the
+    passive repair would send it to the same decaying root.  Measured over
+    degrees 10..18 on five builds (WSL OpenBLAS numpy 2.2.6 / 2.4.6 / 2.5.4,
+    Windows MKL numpy 2.4.4, Windows OpenBLAS AVX-512 numpy 2.4.6): the
+    largest flux of an evanescent mode (``|Re q| <= 1e-6 |q|``) is 0.024 ..
+    0.25 of the cut, so whether one lands inside the decade (``n_risky`` 2
+    at degree 14 on numpy 2.5.4, at degrees 16 and 18 on the AVX-512 build,
+    at degree 18 on three others, 0 elsewhere) is a coin on the eig's
+    round-off and not a property of the solve -- while the number of modes
+    whose shipped direction changes anywhere in that decade (``n_cut_dep``,
+    :func:`_cut_dependent_modes`) reads 0 on every rung and build.  That is
+    what "no at-risk mode" means, so it is what is asserted.
+
+    FAIL-BEFORE.  With the dense conical eig (``PMM_CONICAL_STRUCTURED =
+    False``) the evanescent round-off flux reaches 0.46 .. 41 x the cut and
+    crosses it: rungs 12 / 14 / 16 fail here (verdict, ``n_grow`` or
+    ``spread``) on all five builds, rung 10 on three of them (on numpy
+    2.2.6 / 2.5.4 the dense rung 10 is clean on every classification
+    outcome; the family-level false positive is pinned on every build by
+    ``test_t34_bar_is_REFUTED_on_the_conical_family``).  ``n_cut_dep`` is 0
+    on the dense eig as well -- the passive repair makes the forward set
+    cut-invariant on both -- so it guards the structured solve's forward set,
+    it does not distinguish the two."""
     cell = _conical_cell(degree)
     assert abs(cell["r0"] / _CONICAL_PLATEAU - 1.0) < 0.01, cell["r0"]
     assert not cell["fired"], _conical_table([degree])
     assert cell["n_grow"] == 0 and cell["spread"] == 0, _conical_table(
         [degree])
-    assert cell["n_risky"] == 0, _conical_table([degree])
+    assert cell["n_cut_dep"] == 0, _conical_table([degree])
 
 
 def test_t34_guard_warnings_come_out_in_WAVELENGTH_ORDER_on_the_sweep(
