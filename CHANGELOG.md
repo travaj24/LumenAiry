@@ -32,16 +32,22 @@ exists.
   defaulted to `'auto'`.  On a 1-D stack, `'auto'` resolves an `eps_cell`, a
   y-invariant `shapes` list and a `segments` list to `'li'`.  A y-varying layer
   keeps `'laurent'` (bit-identical to pre-averaging, with
-  `RCWAYAverageWarning`).  Uniform and tensor layers are not affected.  A JAX
-  `eps_cell` and a layer with an exact zero permittivity resolve to
-  `'laurent'`.  `layers[i].formulation` is the rule that ran; the new
+  `RCWAYAverageWarning`).  Uniform and tensor layers are not affected.  A
+  layer with an exact zero permittivity resolves to `'laurent'`.  A JAX
+  `eps_cell` resolves exactly as the same values as a NumPy array: a concrete
+  one is read like a NumPy cell, a traced one runs `'li'`, and a traced cell
+  with several y-samples on a 1-D stack (where y-variation decides the rule)
+  raises `ValueError` asking for an explicit `formulation=`.  So `jax.grad`
+  of a stack differentiates the function a NumPy finite difference
+  evaluates.  `layers[i].formulation` is the rule that ran; the new
   `layers[i].formulation_requested` is what was asked for.  The tapered
   builders resolve once per call from their concrete permittivities (the
   `raster` default stays `'hard'`); `add_graded_layer` resolves slice by
-  slice.  Measured on a resonant metal-strip stack (175 nm strip, eps
-  -74+6i, 370 nm period, 21 nm spacer over a metal mirror, 1300 nm, TM): the
-  direct rule's zeroth-order reflection was 0.257 off at `n_orders` 50 (wrong
-  sign of Re r) and 0.167 off at 100; `'li'` is 0.039 / 0.0106 off.
+  slice.  Measured on a resonant metal-strip stack (a 180 nm strip of eps
+  -90+7i in a 500 nm period, 19 nm multi-layer spacer over a metal mirror,
+  1500 nm, TM): the direct rule's zeroth-order reflection is 0.143 / 0.070 /
+  0.072 off at `n_orders` 50 / 200 / 400; `'li'` is 0.019 / 0.0078 / 0.0030
+  off.
   *Way back:* `formulation='laurent'`, which reproduces 5.50.2 bit for bit.
 - **2-D `RCWAStack`: `'auto'` resolves by shape class.**  It resolves to `'li'`
   for every `eps_cell` (dispersive included) and every list of axis-aligned
@@ -73,8 +79,12 @@ exists.
 - **`rcwa_convergence` steps geometrically and judges a relative error
   estimate.**  It compared the solve at `N` with `N + 4` and passed when the
   largest per-order efficiency change was below an absolute 1e-3.  On a
-  resonant stack under `'li'` that certified a reflectance 23.5 % wrong at
-  `N = 61`.  The call forms now behave as follows.
+  resonant metal-strip stack under `'li'` that certified a reflectance 19.9 %
+  wrong at `N = 40`.  The relative estimate is a heuristic where convergence
+  is erratic: on that stack it is within 0.5x-2x of the true error at 84 of
+  121 starting truncations, and the default check still reports `N = 88`
+  converged with the reflectance 9 % wrong (the `rcwa_convergence` docstring
+  carries the measurement).  The call forms now behave as follows.
   * Default (no `bump=`): `N_hi = max(N + 1, ceil(f N))`, with `f = 1.5` for
     one axis and 1.25 per axis for two.  Per-order efficiencies are compared
     relative to `max(R_m, 1e-3 sum R)` (T likewise), and the zeroth-order Jones
@@ -83,10 +93,13 @@ exists.
     the absolute test when `atol` is given.  At `n_orders` 4 the higher rung is
     6 (it was 8).
   * Legacy (`bump=` given, `rtol` not given, no `estimate`): the verdict of
-    releases up to 5.50, exactly (`delta <= atol`, `atol` default 1e-3), with
-    the same warnings.  Lossless Si lamellar grating, `bump=4`, `atol=1e-3`,
-    N = 20 / 40 / 60: converged, delta 4.29e-4 / 1.08e-4 / 4.74e-5, no
-    warning, as in 5.50.2.
+    releases up to 5.50 (`delta <= atol`, `atol` default 1e-3), with the same
+    warnings -- with one exception: a stack whose pixel or tensor cell is
+    sampled too coarsely for the HIGHER truncation (for example `4 N + 1`
+    samples with `bump=4`) now raises the sampling refusal below, where 5.50
+    returned a verdict computed from an aliased solve.  Lossless lamellar
+    grating of index 3.48, `bump=4`, `atol=1e-3`, N = 20 / 40 / 60:
+    converged, delta 4.29e-4 / 1.08e-4 / 4.74e-5, no warning, as in 5.50.2.
   * `bump=` with `rtol=`: judged by the estimate (on that grating 7.1e-2 /
     4.0e-2 / 2.8e-2: not converged).
   * `estimate=True`: a third solve and a per-quantity local exponent
@@ -103,34 +116,60 @@ exists.
   *Way back:* `bump=4` and no `rtol`.
 - **`PMMStack` small-element guard (new refusal).**  A solve whose element
   LAYOUT (the split of a cell into several elements) makes an element smaller
-  than 1e-5 of the wavelength under geometric grading, or 3e-6 of the
+  than 1e-5 of the wavelength under geometric grading, or 1e-6 of the
   wavelength under Chebyshev or uniform grading, raises `ValueError` before
-  solving.  Below those sizes the eigensolve's round-off can exceed 1e-6
-  (geometric) / 1e-5 (Chebyshev, uniform) of the answer (measured: the
-  Chebyshev ladder of 4..20 elements converges monotonically to a geometric
-  reference down to 4.8e-6 wavelengths, and its round-off passes 1e-5 below
-  3e-6).  A cell the GEOMETRY makes thin (a liner, a near-coincident wall
-  pair) is not subject to this guard.  A 1.2 nm liner at 1550 nm with 16
-  Chebyshev elements per region, which 5.50.2 solved, still solves.  Below
-  1e-4 of the wavelength a layout-made element also arms an energy check: a
-  provably passive stack reading `R + T > 1 + 1e-3` is refused.
+  solving; a Chebyshev or uniform element between 1e-6 and 2e-6 of the
+  wavelength solves with a `UserWarning`.  The bars come from the measured
+  round-off of the modal eigensolve, which grows like `1 / (k0 h)^2` on an
+  element of width `h` whatever made the element small: up to 8.2e-6 of the
+  answer at 2e-6 wavelengths on wide geometric cells; on thin cells split by
+  a Chebyshev layout (two layers whose walls are 0.6 nm / 2 nm apart, a 1 nm
+  wall layer) within 4.5e-6 down to 2e-6 wavelengths, and 2.4e-6 .. 1.5e-5
+  between 1e-6 and 2e-6, depending on the cell.  So a cell the GEOMETRY makes
+  thin is subject to the guard once the layout splits it (on the same
+  `h / wavelength` scale); only a cell thinner than the bar itself, or left
+  as one element, is never refused.  The near-coincident wall pairs that
+  5.50.2 solved accurately with 16 / 20 Chebyshev elements per region solve
+  (wall elements 2.5e-6 .. 3.8e-6 wavelengths); a thin wall layer split into
+  40 elements (1.3e-6 wavelengths, round-off measured at 1.5e-5 there) warns.
+  An element exactly on a bar is not below it.  Below 1e-4 of the wavelength
+  a layout-made element also arms an energy check: a provably passive stack
+  reading `R + T > 1 + 1e-3` is refused.
   *Way back:* `PMMStack(..., allow_small_elements=True)` solves (with a
   `UserWarning`); the energy check still applies.
 - **`PMMStack.prepare().solve()` refuses a changed layout.**  If `period`,
   `degree`, `elements_per_region`, `grade`, `min_feature`, `layer_grids` or
   `window_halfwidth` changed after `prepare()`, the prepared solve raises
-  `ValueError`.  The prepared caches were keyed without the layout, so a
-  changed layout returned an O(1) wrong answer: 5.50.2 was 0.51 off after
-  flipping `grade` between `True` and `False`.  *Way back:* call `prepare()`
-  again.
+  `ValueError`, and so does a solve after a layer was added or a layer's
+  segments changed.  The prepared caches were keyed without the layout, so a
+  changed layout returned an O(1) wrong answer (or, for an added layer, an
+  `IndexError`).  A changed `n_substrate` / `n_superstrate` is not refused:
+  the half-space indices are now part of the half-space cache key and the
+  Bloch wavenumber part of the layer cache key, so the prepared solve
+  recomputes what depends on them (5.50.2 returned the old half-space modes
+  with the new far field: 0.315 off after `st.n_sub` changed).  *Way back:*
+  call `prepare()` again.
+- **`PMMStack` refuses a gain substrate (new refusal).**  A substrate with
+  `Im(n_substrate) < 0` raises `ValueError` in `solve()`,
+  `solve_vs_wavelength()` and the prepared solve.  The far field took every
+  transmitted order's `kz` on the `Im(kz) >= 0` root, which for a gain
+  medium has `Re(kz) < 0`, and the propagating-order mask then dropped the
+  whole transmitted power silently (measured `T = 0` against the analytic
+  0.965, `R` correct).  The superstrate already had this refusal.  *Way
+  back:* none; put the gain medium in a finite layer (gain LAYERS are
+  supported, see *Fixed*).
 - **`PMMStack` announces and nudges an exact Rayleigh anomaly.**  At a
   diffraction order exactly at cut-off in some medium (for example a period
   equal to the wavelength at normal incidence) the answer is ill-conditioned;
-  measured solves there scatter by 1e-5 .. 5e-4 at every element size and
-  degree.  `solve()`, `solve_vs_wavelength()` and the prepared solve now run
-  such a point at a wavelength nudged by about 1e-7 relative and say so with
+  measured solves there scatter with element size and degree far above the
+  discretization error.  `solve()` (both its NumPy branch and its JAX twin),
+  `solve_vs_wavelength()` and the prepared solve now run such a point at a
+  wavelength nudged by about 1e-7 relative and say so with
   `lumenairy.elements.rcwa.WoodNudgeWarning`, as the single-layer 1-D entry
-  points and the conical path already did.  Off an anomaly nothing changes.
+  points and the conical path already did.  The JAX twin nudges for the
+  anomalies of its CONCRETE media (a traced permittivity's cannot be located);
+  the two twins agree there to < 1e-10 (they were 8.6e-4 apart at period =
+  wavelength).  Off an anomaly nothing changes.
   *Way back:* none (the nudged answer is the well-posed one); move the
   wavelength off the anomaly yourself, or filter the warning class.
 - **Geometric grading with the default floor needs a concrete wavelength.**
@@ -151,19 +190,23 @@ exists.
   `PMM2DStackHybrid.grade` are validated properties; a default geometric floor
   is stored as `('geometric', ratio, None)`, so the stored value can be passed
   back unchanged.  *Way back:* pass `True` or `False`.
-- **Conical PMM: structured modal solves; Chebyshev results move by at most
-  1.1e-9.**  The nodal conical cascade solved every medium with the dense
-  eigensolve of `M = -(P @ Q)`, whose round-off grows on small elements and
-  which splits the exactly degenerate TE/TM pairs of a uniform medium into
-  arbitrary mixtures.  Uniform isotropic media now take exactly structured
-  modes, and other layers are solved in the classical modal basis.  Chebyshev
-  layouts move by at most 1.1e-9 (their discretization errors are 1e-6 ..
-  2e-2), and their round-off falls: the scatter under a perturbation of `phi`
-  goes from 1.7e-8 to 6.8e-11 at 12 elements and degree 12.  Geometric
-  grading is now accepted at conical incidence.  On a metal strip / 21 nm
-  spacer / mirror stack at theta 0.2, phi 0.3, geometric 8 x 12 is within
-  2.8e-8 of `RCWAStack(asr=True)` in the cross-polarized `J_xy`, and at
-  `phi = 1e-9` within 1.2e-10 of the classical solve.  *Way back:* none
+- **Conical PMM: structured modal solves; Chebyshev results move at
+  round-off level.**  The nodal conical cascade solved every medium with the
+  dense eigensolve of `M = -(P @ Q)`, whose round-off grows on small elements
+  and which splits the exactly degenerate TE/TM pairs of a uniform medium
+  into arbitrary mixtures.  Uniform isotropic media now take exactly
+  structured modes, and other layers are solved in the classical modal basis.
+  Chebyshev results move by the old path's round-off; the largest moves
+  measured are 8.0e-10 on a single rotated in-plane tensor layer and 4.3e-9 /
+  2.2e-8 on a stack of two patterned layers over a metal film (theta 0.3 /
+  0.5, phi 0.4 / 1.2, degree 14 x 3 elements), where the discretization
+  errors are 3e-4 .. 2e-2.  The round-off falls: the scatter under a
+  perturbation of `phi` goes from 3.0e-9 to 4.2e-11 (Chebyshev, the strip
+  stack below).  Geometric grading is now accepted at conical incidence.  On
+  a metal strip / spacer / mirror stack at theta 0.2, phi 0.3, geometric
+  8 x 12 is within 6.8e-8 of `RCWAStack(asr=True)` in the cross-polarized
+  `J_xy`, and at `phi = 1e-9` within 3.7e-11 of the classical solve (the
+  dense eigensolve: 1.6e-6).  *Way back:* none
   supported (the module switch
   `lumenairy.elements.pmm.conical.PMM_CONICAL_STRUCTURED` exists so tests can
   reproduce the dense eigensolve).
@@ -173,23 +216,24 @@ exists.
   eigensolve returns `q^2` with an absolute round-off of order
   `eps * max|q^2|`, which grows on small elements.  On such elements the
   round-off part of a propagating half-space order crossed the bar, and its
-  sign sent the order to the backward branch.  Measured: the -1 substrate
-  order of a 700 nm strip at theta 0.5 came back as `q = -0.442384 + 9.2e-7i`
-  and the solve read `R + T = 2.55`.  The failures depend on the BLAS build and
-  thread count and never occur at normal incidence.  The growth test now
+  sign sent the order to the backward branch.  Measured: the -1 order in air
+  of a metal-strip grating (1200 nm period, theta 0.3, degree 8) came back as
+  `q = -0.298275 + 6.3e-7i` and the solve read `R + T = 20.6`.  The failures
+  depend on the BLAS build and thread count and never occur at normal
+  incidence.  The growth test now
   uses `max(1e-6 |q|, d / max(|q|, sqrt d))` with `d = eps * max|q^2|`; where
   `d` is small it is the previous test bit for bit.  The classical magnetic
   partner's `H_x` rows are now formed by the exact relation `W_bot q^2 / lam`
   (NumPy and JAX twins).  The dense per-layer path at a mode cut-off inside a
-  uniform spacer read TE `R + T` 1.257 / 1.156 (degree 10 / 14) and now reads
-  0.983202 at both.  Results on the default layouts stay within 1e-12 of
+  uniform spacer read TE `R + T` 1.365 / 1.332 (degree 10 / 14) and now reads
+  0.98253 at both.  Results on the default layouts stay within 1e-12 of
   5.50.2 (`tests/unit/test_pmm_geometric_grading.py`).  *Way back:* none (the
   previous selector returned wrong branches).
 - **`PMMStack` uniform-layer fast path (round-off moves).**  See *Added*.
-  Against the dense path, measured differences are at most 4.7e-12 in J / R /
-  T on the metal-strip stack (normal and oblique), 1.2e-12 with 52 graded
-  sub-layers, and 4.4e-13 against an analytic TMM on an all-uniform Bragg
-  stack.  At the default geometric floor the two paths differ by up to 1.1e-6,
+  Against the dense path, measured differences are at most 3.7e-12 in J / R /
+  T on the metal-strip stack (normal and oblique), 1.9e-12 with 52 graded
+  sub-layers, and 2.2e-13 against an analytic TMM on an all-uniform Bragg
+  stack.  At the default geometric floor the two paths differ by up to 4.6e-7,
   the round-off the dense path itself carries there.  *Way back:* none
   public.
 
@@ -207,18 +251,20 @@ exists.
   `GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC`).  A sweep uses the floor of its
   longest wavelength.  Geometric grading needs `elements_per_region >= 3`; it
   is refused on the 2-D hybrid family.
-  * On the metal-strip / spacer / mirror stack (TM, 1300 nm), zeroth-order
-    reflection error against an external reference: default (degree 16, 1
-    element) 1.4e-2; degree 80, 1 element 4.2e-4; Chebyshev degree 10 x 8
-    elements 1.0e-3; geometric degree 8 x 12 elements 7.4e-7.
-  * On a single 50 nm metal strip (TM, 1300 nm): geometric 8 x 10 elements is
-    2.6e-7 off, where Chebyshev 10 x 8 (the same nodal count) is 2.7e-5 off.
+  * On a resonant metal-strip / spacer / mirror stack (TM, 1500 nm, 500 nm
+    period), zeroth-order reflection error against a converged reference:
+    default (degree 16, 1 element) 1.7e-2; degree 80, 1 element 4.4e-4;
+    Chebyshev degree 10 x 8 elements 1.1e-3; geometric degree 8 x 12
+    elements 1.9e-6.
+  * On the strip layer alone (40 nm, TM, 1500 nm): geometric 8 x 10 elements
+    is 1.8e-7 off, where Chebyshev 10 x 8 (the same nodal count) is 2.5e-5
+    off.
   * On the slanted (covariant) path, a 0.2 rad slant with 12 geometric
-    elements is 1.9e-4 / 3.6e-6 / 2.9e-8 off a degree-24 solve at degree 8 /
+    elements is 8.8e-5 / 1.7e-5 / 2.4e-8 off a degree-24 solve at degree 8 /
     12 / 16, so the "degree 8-10" recipe is stated for vertical walls.
-  * Accuracy at the default floor is limited by round-off at about 1e-6:
-    reference errors scatter between 1.4e-7 and 2.4e-6 across degree 8-14,
-    so convergence in degree is not monotone below about 2e-6.
+  * Accuracy at the default floor is limited by round-off: on the stack
+    above the reference errors range from 3.9e-7 to 1.9e-6 across degree
+    8-14, so do not read degree convergence below about 2e-6.
 - **`PMMStack` fast path for laterally uniform layers.**  An isotropic uniform
   layer takes its modes from the one geometric eigensolve every uniform medium
   on the grid shares.  Every run of consecutive uniform media, the
@@ -226,13 +272,13 @@ exists.
   as one S-matrix; a run whose elementwise cascade is not finite falls back to
   the dense kernels.  It serves `solve()`, both wavelength sweeps, the
   per-layer cascades and the prepared solve.  Speed on a stack with 52 graded
-  sub-layers: 13x at degree 12, about 25x at degree 20.  At a mode cut-off
+  sub-layers: 13.6x at degree 12, about 18x at degree 20.  At a mode cut-off
   inside a uniform layer the fast path is passive and stationary in degree.
   Implementation: `lumenairy/elements/pmm/_uniform_cascade.py`.
 - **The JAX twin of `PMMStack` takes the same fast path**, with the same
-  kernels run on `jax.numpy`.  Twin vs NumPy forward: 9.4e-14
-  (Windows/MKL) / 6.8e-14 (WSL/OpenBLAS).  Forward plus gradient on 44 layers:
-  68.5 s on the dense path, 1.05 s on the fast path.
+  kernels run on `jax.numpy`.  Twin vs NumPy forward: 4.7e-13
+  (Windows/MKL).  Forward plus gradient on 44 layers: 38.2 s on the dense
+  path, 1.12 s on the fast path.
 - **`RCWAStack(asr=...)`: adaptive spatial resolution for 1-D stacks.**  One
   stretched lateral coordinate for the whole stack puts the walls of every
   patterned layer on coordinate lines and clusters the harmonics there.  It
@@ -242,10 +288,16 @@ exists.
   `None` (default, bit-for-bit unchanged), `True`, a stretch `eta` in `(0, 1]`,
   `'auto'`, or `dict(eta=, profile=)`.  It reaches `solve`,
   `solve(stabilize=True)`, `solve_vs_wavelength`, `rcwa_convergence`,
-  `internal_field` and `layer_absorption` (face fluxes).  On TM metal-strip
-  stacks it reaches 5e-6 at `n_orders` 20 and 1e-7 (the accuracy of the
-  reference) from about 70.  With `eta='auto'` it beats or matches the plain
-  basis at 62 of 66 measured points (`n_orders` 6..16).  2-D stacks,
+  `internal_field` and `layer_absorption` (face fluxes).  On a TM metal-strip
+  / spacer / mirror stack it reaches 3e-6 at `n_orders` 25 (2.5e-5 at 20) and
+  2e-7 (the accuracy of the reference) from about 60.  That holds for stacks
+  whose patterned segments are all wide on the scale of the period: the
+  stretch is shared among the segments in proportion to their widths, so a
+  narrow segment is not widened and converges much more slowly (the same
+  stack with a 1 nm metal segment added at the strip's edge still errs
+  1.7e-5 at `n_orders` 80 and 1.2e-5 at 150).  With `eta='auto'` it beats or
+  matches the plain basis within 5 % at 63 of 66 measured points
+  (`n_orders` 6..16).  2-D stacks,
   `eps_cell` rasters, tensor and `'laurent'` patterned layers, JAX and GPU are
   refused with `ValueError`.  Design note: `docs/rcwa_stack_asr.md`; engine:
   `lumenairy/elements/rcwa/_asr_stack.py`.  The single-layer
@@ -254,8 +306,11 @@ exists.
 - **`RCWAStack.add_layer(segments=[(width_fraction, eps), ...])`**: exact
   lamellar layers, laid out left to right from x = 0 in the public frame
   (`segments[0]` on `[0, w0 P)`), the layout of `PMMStack.add_layer(segments=)`
-  and `rcwa_jones_1d_segments`.  Validated by the same validator as
-  `PMMStack` (fractions finite and > 0, summing to 1 within 1e-6).  The layer
+  and `rcwa_jones_1d_segments`.  Validated by the segment validator the 1-D
+  PMM segment solvers share (`_segment_walls`: fractions finite and > 0,
+  summing to 1 within 1e-6); `PMMStack.add_layer(segments=)` keeps its own
+  validator, which accepts and refuses the same inputs with different
+  messages.  The layer
   is stored as the equivalent `shapes` layer; one segment is a uniform layer;
   dispersive callables pass through; allowed on 2-D stacks (lines along y).
   The metal strip given by `segments=` is the `shapes` strip bit for bit; an
@@ -269,7 +324,7 @@ exists.
   `tests/unit/test_rcwa_doc_contracts.py` and
   `tests/unit/test_pmm_stack_doc_contracts.py`.  The `PMMStack` docstring also
   states that `far_field_orders` / `n_orders` is not an accuracy knob
-  (`n_orders` 3 / 21 / 61 give the same zeroth-order Jones to 4.3e-15
+  (`n_orders` 3 / 21 / 61 give the same zeroth-order Jones to 9.5e-15
   relative).
 
 ### Fixed
@@ -280,7 +335,39 @@ exists.
   the cell back during the solve.  The test is now taken once, when the layer
   is added.  Explicit `'li'` results are bit-identical.
 - **`PMMStack.prepare()` after a layout change** returned an O(1) wrong
-  answer; it is now refused (see above).
+  answer; it is now refused, and a changed half-space index is recomputed
+  (see above).
+- **`PMMStack` with GAIN layers (`Im(eps) < 0`) returned silent garbage**
+  on the dense and conical paths (also in 5.50.2): `R + T` of 10.7 on a
+  patterned gain ridge at degree 14, up to 3.9e4 on a diagonal-tensor gain
+  layer and 7e5 at conical incidence, with no warning.  On a layer that is
+  not provably passive an EVANESCENT mode carries real z-power, so the flux
+  test handed its GROWING root to the forward set.  The forward root of a
+  non-passive mode now follows the analytic continuation from the lossy
+  side: the flux rule decides a mode only when its root is nearer the real
+  axis than the imaginary one (`|Re q| > |Im q|`), the `Im(q)` rule every
+  other mode.  Provably passive layers are bit-identical.  Against
+  RCWAStack: 1.8e-4 .. 1.9e-4 at degree 14 and 7e-5 at 20 on a patterned
+  gain ridge, a diagonal-tensor gain layer and an isotropic gain layer under
+  a grating, at normal, oblique and conical incidence; an all-uniform
+  diagonal-tensor gain stack matches the analytic transfer matrix to 1e-8.
+  The JAX twin shares the selector.  A gain substrate is refused (see
+  above).
+- **`RCWAStack` `'auto'` and JAX cells** (see the first item above): one
+  physical layer had two answers (0.162 apart on a smooth-edged metal strip)
+  and `jax.grad` disagreed in sign with a NumPy finite difference (-75.5
+  against +149.6; now 149.656 against 149.642).  The gradient tests that had
+  been pinned to `'laurent'` for this reason run the default again.
+- **`PMMStack` JAX twin at a Rayleigh anomaly**: it did not nudge, and
+  differed from the NumPy solve by 8.6e-4 at period = wavelength (see
+  above).
+- **A uniform medium exactly at a cut-off of the element grid** (its
+  `eps` equal to a geometric eigenvalue, so one mode has `q = 0`): the
+  mode-match into it was exactly singular, the NumPy solve raised
+  `LinAlgError` and the JAX twin returned NaN under `jax.jit` /
+  `jax.grad`.  `q^2` now takes the value the small-eigenvalue clamp implies,
+  and both twins return the limit of nearby permittivities (2.6e-10 from
+  `eps (1 + 1e-9)`; gradient vs finite difference 1.5e-10).
 - **The shared segment validator refuses a NaN or infinite width fraction.**
   Both of its comparisons are False for a NaN, so the walls came out NaN; the
   1-D PMM segment solvers and `RCWAStack.add_layer(segments=)` now refuse it
@@ -302,8 +389,16 @@ exists.
   interface formula `_interface_from_ab` already was.  The dense kernels and
   the elementwise ones of the uniform-layer fast path call them.  Byte-identical
   on 46 solver outputs before and after.
+- The JAX twin of `PMMStack` builds its interface and Redheffer-star blocks
+  with the shared formulas (`_interface_from_ab`, `_star_from_blocks`);
+  bit-identical.  Its propagation step keeps the full star against the
+  propagation S-matrix (the shared `_propagation_scale` is the closed form,
+  equal only to the last bit, so it was not substituted).
 - One small-eigenvalue clamp (`_LAM_CLAMP` / `_safe_lam`) for the 1-D modal
-  solves, the JAX twin and the fast path.  One host-read tracer guard in
+  solves, the JAX twins, the fast path and the 2-D PMM engines and their JAX
+  twins (the five inline `1e-12` clamps of `pmm/twod.py`,
+  `pmm/twod_staggered.py`, `pmm/_jax_twod.py`, `pmm/_jax_twod_jones.py` and
+  `pmm/_jax_stack2d.py` call it; bit-identical).  One host-read tracer guard in
   `lumenairy/elements/rcwa/stack.py` (`_host_array_or_none`, catching
   `(TypeError, ValueError)`), so that module carries no broad `except`.
 - The wall-clock speed-up assertion of the fast path moved behind the `slow`
@@ -320,6 +415,14 @@ exists.
 - The `[5.47.0]` block's source-line citations into the PMM files and
   `lumenairy/elements/rcwa/_core.py` were re-anchored by content (with
   scripts/reanchor_citations.py against the 5.50.1 base).
+- Tests, docstrings, `docs/rcwa_stack_asr.md` and `docs/cookbook.md` use a
+  generic metal-strip / multi-layer spacer / metal mirror stack (1500 nm,
+  500 nm period, 180 nm strip); every number quoted for the measurement
+  fixture they used before was re-measured on it.
+- The metal-strip grating solver audit and its implementation plan are in
+  `docs/audits/` (`AUDIT_METAL_STRIP_GRATING_SOLVERS_2026_11_14.md`,
+  `PLAN_METAL_STRIP_GRATING_SOLVERS_2026_11_14.md`), with the parameters of
+  their measurement fixture not recorded.
 
 ## [5.50.2] — 2026-11-13
 
@@ -8672,13 +8775,13 @@ The RCWA, EME, PMM and BOR engines each resolve a square root's sign with a band
 relative to their own spectrum, and the comparison itself was written out four
 times.  It is now one function, `band_mask(r, *, scale, band, xp=None)`
 (`lumenairy/_branchcut.py:63`), called from `rcwa/_core.py:1406`,
-`eme/_branch.py:164`, `pmm/_core.py:1197` and `bor/_orient.py:251`.  Each engine
+`eme/_branch.py:164`, `pmm/_core.py:1202` and `bor/_orient.py:251`.  Each engine
 keeps its own derived SCALE, because the four are different quantities: the
 Cartesian engines floor the spectrum's top at a dimensionless 1.0 while the EME
 and BOR engines carry a wavenumber and floor at `|k0|`, where a dimensionless
 literal would make the branch decision depend on the caller's unit system.
 
-The PMM band gains a name, `pmm/_core.py:1164::_PMM_CUT_BAND_REL`, so the 1e-8 it
+The PMM band gains a name, `pmm/_core.py:1169::_PMM_CUT_BAND_REL`, so the 1e-8 it
 shares with `rcwa/_core._CUT_BAND_REL` is visible rather than inlined.
 
 ### Added -- two forward selectors, and the measurement that says they are not one

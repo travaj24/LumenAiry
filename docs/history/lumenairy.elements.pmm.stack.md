@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: 33081927dab7c0eee9c1e726e549f158a5bd587290015b615959292ddaae6385
-token_sha256: 7ae678cddc6edab802fc89e05b614e9b65911d70f52f0ed4bced3c776f047d30
+ast_sha256: 9f3ff018086f15243389a376a18f9d8417457995ae276804db8e89d798bd8470
+token_sha256: 2ae341d94685b1d175a8e654693eb3317d12a8e40a81ece608f05850831432ba
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -12,11 +12,12 @@ re_recorded: 2026-11-14 -- G-2: laterally uniform isotropic layers solved from t
 re_recorded: 2026-11-14 -- G-1 wiring (grade through _normalize_grade, validated property, geometric refused at conical incidence), small-element guard + energy backstop, wavelength-completed default geometric floor
 re_recorded: 2026-11-14 -- prepare().solve cascades with the same uniform-run collapse as solve(), restoring prepared == rebuilt bit identity
 re_recorded: 2026-11-14 -- small-element guard re-derived after the selector root-cause fix: refusal 3e-5 -> 1e-5 x wavelength (measured round-off can exceed 1e-6 below it), opted-out solves below it warn, default geometric floor from _core._geometric_default_floor; pre-fix guard block moved to this document
-re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: no per-solve grade state (_grade_scope removed; resolved spec passed down), fixed-point grade, prepared caches keyed by and refusing a changed layout, Chebyshev/uniform small-element bar 3e-6 x wavelength, backstop note derived from geometry
+re_recorded: 2026-11-14 -- 2026-11-14 -- follow-up fixes: no per-solve grade state (_grade_scope removed; resolved spec passed down), fixed-point grade, prepared caches keyed by and refusing a changed layout, Chebyshev/uniform small-element bar 3e-6 x wavelength, backstop note derived from geometry
 re_recorded: 2026-11-14 -- 2026-11-14 -- add_layer records traced scalar eps (_iso_scalar) for the JAX twin's uniform-layer fast path
 re_recorded: 2026-11-14 -- 2026-11-14 -- classical solve applies the shared Wood nudge at an exact Rayleigh anomaly (_wood_safe_wl_1d, WoodNudgeWarning); _wood_order_reach
 re_recorded: 2026-11-14 -- 2026-11-14 -- import order (ruff isort) after adding _wood_safe_wl_1d; no behaviour change
 re_recorded: 2026-11-14 -- 2026-11-14 -- one Rayleigh-anomaly nudge helper (_wood_nudged) for solve, solve_vs_wavelength and the prepared solve
+re_recorded: 2026-11-15 -- 2026-11-15 -- gain substrate refused (_refuse_gain_substrate); prepared-solve keys carry the half-space indices and kx0, layout signature carries the layers' lateral content; JAX dispatch applies the Rayleigh-anomaly nudge on concrete media (_wood_nudged concrete_only); Chebyshev/uniform small-element bar re-derived (refuse < 1e-6, warn < 2e-6 x wavelength; _refused_element)
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
@@ -504,10 +505,10 @@ before the cause was found:
 ```text
 # THE DEFECT.  At fixed polynomial degree, a solve whose element grid carries a
 # very small element can return an O(1) wrong answer with no warning.  Measured
-# 2026-11-14 on one metal-strip layer (eps -74+6i, 50 nm, duty 0.47, air above,
-# n = 1.447 below, 1300 nm) with a geometric layout of 12 elements per region
-# whose wall element ``h`` was scanned: periods 200 / 370 / 700 / 1000 / 1300 /
-# 2000 / 2600 nm, theta 0 / 0.15 / 0.3 / 0.5 / 0.7, degrees 6-20, both
+# 2026-11-14 on one metal-strip layer (the parameters of that measurement
+# fixture are not recorded here) with a geometric layout of 12 elements per region
+# whose wall element ``h`` was scanned: seven periods from about 0.15 to 2
+# wavelengths, theta 0 / 0.15 / 0.3 / 0.5 / 0.7, degrees 6-20, both
 # incident polarizations (each solve returns both rows), 1,398 solves on
 # Windows/MKL (86 wrong) and 720 on WSL/OpenBLAS (62 wrong):
 #
@@ -519,17 +520,17 @@ before the cause was found:
 #     returns the SAME wrong number at several ``h`` -- a discrete alternative
 #     branch, not a gradual loss of digits;
 #   * the largest failing ``h`` was 1.6e-5 x wavelength on BOTH builds
-#     (period 700 nm, theta 0.5, degrees 6-20 return one and the same wrong
-#     answer; period 1300 nm, theta 0.15, degree 6); the 716 rows at
+#     (one period, theta 0.5, degrees 6-20 return one and the same wrong
+#     answer; another period, theta 0.15, degree 6); the 716 rows at
 #     ``h >= 2e-5 x wavelength`` were all correct.  In units of the PERIOD the
-#     edge wanders from 1.6e-5 (1300 nm) to 4e-5 (200 nm), so the danger
+#     edge wanders from 1.6e-5 (the longest period) to 4e-5 (the shortest), so the danger
 #     scale is the wavelength, as the mechanism (the spurious modal
 #     wavenumbers of an element of width ``h`` grow like ``1 / (k0 h)``)
 #     says.
 #
 # A cell the GEOMETRY makes thin (an owned liner, one element per region) fails
 # the same way and further up (garbage at 2e-5 .. 5e-5 x wavelength next to a
-# metal strip at a 1300 nm period, and some sub-unity wrong answers at normal
+# metal strip at one of those periods, and some sub-unity wrong answers at normal
 # incidence below 4e-6), but it is the caller's geometry, which no layout
 # choice can lift; it stays the territory of the sliver refusal (manufactured
 # cells) and the within-layer warning (owned cells), and this guard does not
@@ -557,7 +558,7 @@ _SMALL_ELEMENT_WATCH_FRAC = 1.0e-4
 _SMALL_ELEMENT_SUGGEST_FRAC = 4.0e-5
 ```
 
-### 2026-11-14 -- layout state: no per-solve state on the stack; fixed-point `grade`; prepared caches keyed by the layout; guard scope (review A1-A4, A8, A10, A12, B2)
+### 2026-11-14 -- layout state: no per-solve state on the stack; fixed-point `grade`; prepared caches keyed by the layout; guard scope
 
 * `_grade_scope` (a decorator that wrote each solve's wavelength-resolved
   grading spec onto the stack as `_grade_solve` and restored it on exit) is
@@ -570,15 +571,15 @@ _SMALL_ELEMENT_SUGGEST_FRAC = 4.0e-5
   `('geometric', ratio, None)`.  The former stored tuple carried the period
   part of the default floor as an explicit floor, so `PMMStack(...,
   grade=st.grade)` / `st.grade = st.grade` dropped the wavelength part and
-  raised the small-element error at 370 nm / 1300 nm.  A traced or missing
+  raised the small-element error at the fixture's period and wavelength.  A traced or missing
   wavelength with a default floor now raises (it silently used the period part,
   a layout the NumPy solve at the same wavelength does not build).
 * Prepared caches carry `(degree, n_el, resolved grade)` in both keys, and a
   prepared solve after any layout attribute changed is refused (`st.grade =
   True` after `prepare()` returned an answer 1.055 off both references).
 * The small-element refusal for Chebyshev / uniform layouts moved from
-  1e-5 to 3e-6 of the wavelength (`_SMALL_ELEMENT_FRAC_PLAIN`): a 1.2 nm
-  liner at 1550 nm with 16 Chebyshev elements per region (a 5.50.2-working
+  1e-5 to 3e-6 of the wavelength (`_SMALL_ELEMENT_FRAC_PLAIN`): a thin
+  lossy wall layer with 16 Chebyshev elements per region (a 5.50.2-working
   geometry) was refused with geometric-grading advice although its answer
   converged monotonically; the message now gives the advice for the layout in
   use.

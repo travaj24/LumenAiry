@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 6996528651e34bdb88ad63705c517abca54b7208811e4440ea16770b027cf330
-token_sha256: fe98c11f51b6c066f6716a2e6bf93286f8d58e0d518137b3816fd3c3581cc410
+ast_sha256: 7da6e5d5b4bafcbc5a04a03f789180d8dce1125595c12b32759e72fc874a5601
+token_sha256: 14450af483f7f06abcd88daddb0c5f16370fe2341e9e784e87e2fe1f4a3be19c
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -19,9 +19,10 @@ re_recorded: 2026-11-14 -- small-element wrong-branch root cause: _growth_mask (
 re_recorded: 2026-11-14 -- geometric default floor max(3e-5 x period, 1.25e-5 x wavelength) via _geometric_default_floor; _normalize_grade(wavelength=) completes it; superseded floor rationale moved to this document
 re_recorded: 2026-11-14 -- PMM_EIG_ROUNDOFF_BAR: fail-before switch of the _growth_mask round-off term (False restores the historical growth test bit for bit); the sliver-guard tests use it to reproduce the population they guard
 re_recorded: 2026-11-14 -- 2026-11-14 -- structured conical modal solves (_sem_modes_uniform_conical, _sem_modes_conical, _conical_khat, _conical_dpq) and the shared forward selector _select_forward_modes (_sem_modes_uniform unchanged bit for bit)
-re_recorded: 2026-11-14 -- 2026-11-14 -- review fixes: deferred default floor in _normalize_grade (defer_floor), narrowed wavelength handling in _geometric_default_floor, private _PMM_EIG_ROUNDOFF_BAR, shared _LAM_CLAMP/_safe_lam and _interface_from_ab
+re_recorded: 2026-11-14 -- 2026-11-14 -- follow-up fixes: deferred default floor in _normalize_grade (defer_floor), narrowed wavelength handling in _geometric_default_floor, private _PMM_EIG_ROUNDOFF_BAR, shared _LAM_CLAMP/_safe_lam and _interface_from_ab
 re_recorded: 2026-11-14 -- 2026-11-14 -- _sem_modes_uniform and _select_forward_modes parametrized over the array namespace (xp): the JAX twin of PMMStack runs the same kernels
 re_recorded: 2026-11-14 -- 2026-11-14 -- 5.51.0 integration: _segment_walls refuses a NaN / infinite width fraction itself (both of its comparisons are False for a NaN), so RCWAStack.add_layer(segments=) drops its duplicate finiteness pre-check
+re_recorded: 2026-11-15 -- 2026-11-15 -- gain-medium sector rule in _forward_growth_flip (_PMM_GAIN_SECTOR: a non-passive mode takes the flux rule only when |Re q| > |Im q|); _safe_q2 (q^2 consistent with the lam clamp at an exact grid cut-off) in _sem_modes_uniform
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`
@@ -487,11 +488,10 @@ above 8e-6).  The paragraph as it stood:
 # Why a floor.  Tiny elements cost accuracy through ROUND-OFF, not
 # discretisation: the spectrally converging TE channel, which a correct mesh
 # refinement cannot move, drifts by ~1e-6 at a 4.7 pm wall element and ~4e-5
-# at 0.9 pm (strip alone, 370 nm period, 1300 nm, both BLAS builds), and below
+# at 0.9 pm (strip alone, fixture parameters not recorded, both BLAS builds), and below
 # about 6e-6 of a WAVELENGTH a solve can fail outright and silently -- an
-# O(1) error with R + T > 1 on an absorbing grating -- measured at 4.7 pm
-# (370 nm period), 7.2 pm (200 nm period) and 7.5 pm (1300 nm period), all at
-# 1300 nm, mostly at oblique incidence.  The danger scale is therefore set by
+# O(1) error with R + T > 1 on an absorbing grating -- measured at 4.7 pm,
+# 7.2 pm and 7.5 pm on three periods, mostly at oblique incidence.  The danger scale is therefore set by
 # the wavelength, while the layout is built before the wavelength is known,
 # so the default floor is a fraction of the PERIOD chosen to stay clear of
 # that band for periods down to about a sixth of the wavelength:
@@ -503,7 +503,7 @@ above 8e-6).  The paragraph as it stood:
 ```
 
 The constant it sized was ``GEOMETRIC_DEFAULT_MIN_ELEMENT_FRAC = 1e-4`` (x
-period, 37 pm on the 370 nm fixture); it is now ``3e-5`` with the wavelength
+period); it is now ``3e-5`` with the wavelength
 part ``GEOMETRIC_DEFAULT_MIN_ELEMENT_WL_FRAC = 1.25e-5``.
 
 ### 2026-11-14 -- `_MODE_GROWTH_REL` -- "the two populations are six decades apart"
@@ -537,9 +537,9 @@ half-spaces included -- with the dense eig of the conical operator
 elements of a geometric layout that product carries an absolute round-off of
 the elements' scale, ``~(degree^2 / (k0 h))^3`` per entry, which the resolved
 modes inherit; the uniform media additionally have exactly degenerate pairs
-the dense eig split into arbitrary mixtures.  Measured on the strip / 21 nm
-spacer / mirror stack (370 nm period, 1300 nm, theta 0.2, phi 0.3, geometric
-12 elements): ``J_xy`` 7.5e-4 from `RCWAStack(asr=True)` at degree 8, a
+the dense eig split into arbitrary mixtures.  Measured on a metal strip / thin
+spacer / mirror stack (theta 0.2, phi 0.3, geometric 12 elements; the
+fixture's parameters are not recorded): ``J_xy`` 7.5e-4 from `RCWAStack(asr=True)` at degree 8, a
 3e-2 drift over degree 8 .. 24, and a 1e-4 move under a 1e-10 relative change
 of phi.  Two ideas were measured and rejected on the way:
 
@@ -556,7 +556,7 @@ What shipped is in the block comment above `_conical_khat`.  `_sem_modes_uniform
 now ends in the shared `_select_forward_modes` (the same operations, so its
 output is unchanged bit for bit).
 
-### 2026-11-14 -- review follow-ups in the grading and selector code (A5, A8, A11, A13, B1)
+### 2026-11-14 -- follow-ups in the grading and selector code
 
 * `_geometric_default_floor` caught `Exception` around the wavelength
   conversion and silently dropped the wavelength part of the floor for a bad

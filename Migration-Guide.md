@@ -3164,10 +3164,13 @@ this section is the recipe.
 `'auto'`.  On a 1-D stack an `eps_cell`, a y-invariant `shapes` list and the new
 `segments=` resolve to Li's inverse rule (`'li'`); on a 2-D stack every
 `eps_cell` and every list of axis-aligned rectangles resolves to `'li'`, and a
-list holding a disk or an ellipse stays on the direct rule.  TM results of
-metallic gratings move the most (on a resonant metal-strip stack the direct
-rule was 0.257 off at `n_orders` 50; `'li'` is 0.039 off).  `layer_absorption`
-of an `'li'` layer is now its face-flux difference.
+list holding a disk or an ellipse stays on the direct rule.  A JAX `eps_cell`
+resolves as the same values as a NumPy array (a traced cell runs `'li'`; a
+traced cell with several y-samples on a 1-D stack raises and asks for an
+explicit `formulation=`).  TM results of metallic gratings move the most (on a
+resonant metal-strip stack the direct rule is 0.143 off at `n_orders` 50;
+`'li'` is 0.019 off).  `layer_absorption` of an `'li'` layer is now its
+face-flux difference.
 
 ```python
 # 5.50: the direct rule ran on every patterned layer, implicitly
@@ -3183,7 +3186,9 @@ st.layers[-1].formulation, st.layers[-1].formulation_requested
 Without `bump=` the check now steps the truncation geometrically and compares a
 relative error bound against `rtol` (default 1e-2), so a verdict can flip from
 converged to not converged.  A call that passes `bump=` and no `rtol` keeps the
-5.50 verdict and warnings exactly.
+5.50 verdict and warnings, except that a stack whose pixel or tensor cell is
+sampled too coarsely for the higher truncation now raises instead of returning
+a verdict computed from an aliased solve (sample the cell more finely).
 
 ```python
 # the 5.50 verdict
@@ -3196,12 +3201,18 @@ rep["converged"], rep["err_estimate"]
 ### `PMMStack` refuses what it used to return silently
 
 * An element smaller than 1e-5 of the wavelength made by a geometric layout,
-  or 3e-6 of the wavelength made by a Chebyshev / uniform layout, raises
-  `ValueError` before solving.  `allow_small_elements=True` solves anyway (with
-  a `UserWarning`).
+  or 1e-6 of the wavelength made by a Chebyshev / uniform layout, raises
+  `ValueError` before solving (a Chebyshev / uniform element between 1e-6 and
+  2e-6 of the wavelength solves with a `UserWarning`).
+  `allow_small_elements=True` solves anyway (with a `UserWarning`).
 * `prepare().solve()` raises when the stack's layout (`period`, `degree`,
   `elements_per_region`, `grade`, `min_feature`, `layer_grids`,
-  `window_halfwidth`) changed after `prepare()`; call `prepare()` again.
+  `window_halfwidth`, or the layers and their segments) changed after
+  `prepare()`; call `prepare()` again.  A changed `n_substrate` /
+  `n_superstrate` is recomputed, not refused.
+* A gain substrate (`Im(n_substrate) < 0`) raises `ValueError` (its
+  transmitted power was dropped silently); put the gain medium in a finite
+  layer.  Gain LAYERS now give correct answers on every path.
 * `grade=` accepts `False` / `True` (and `None`, `0`, `1`), `'chebyshev'`,
   `'geometric'` and `('geometric', ratio[, min_element_m])`; any other value
   raises `ValueError` (it ran Chebyshev grading).  The 2-D hybrid family
@@ -3215,9 +3226,13 @@ rep["converged"], rep["err_estimate"]
 
 ### PMM results that move
 
-Conical PMM results with Chebyshev layouts move by at most 1.1e-9 (structured
-modal solves), `PMMStack` results with uniform layers move at round-off (the
-uniform-layer fast path), and PMM solves that the forward-mode selector used to
-send to a wrong branch (very small elements at oblique incidence, typically
-reading `R + T > 1` on an absorbing structure) now return the right answer.
-None of these has a switch back.
+Conical PMM results with Chebyshev layouts move at the old path's round-off
+(structured modal solves; largest measured 2.2e-8, on two patterned layers over
+a metal film, against discretization errors of 3e-4 .. 2e-2), `PMMStack`
+results with uniform layers move at round-off (the uniform-layer fast path),
+PMM solves that the forward-mode selector used to send to a wrong branch (very
+small elements at oblique incidence, typically reading `R + T > 1` on an
+absorbing structure) now return the right answer, and `PMMStack` solves with
+gain layers (`Im(eps) < 0`) on the dense and conical paths, which returned
+`R + T` of 1e1 .. 1e4, now agree with `RCWAStack`.  None of these has a switch
+back.

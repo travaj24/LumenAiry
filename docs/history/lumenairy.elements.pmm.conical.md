@@ -85,11 +85,13 @@ exactly structured modes for laterally uniform isotropic media
 ``ky0 = 0``) and the classical-basis solve for every other layer
 (`_core._sem_modes_conical`).  The refusal `_refuse_geometric_conical` added
 the same day now fires only with the fail-before switch
-`PMM_CONICAL_STRUCTURED = False`; its original docstring is kept in the source
-below a HISTORY paragraph.  The 1-D conical entry points pass their wavelength
+`PMM_CONICAL_STRUCTURED = False`; its docstring states why the dense solve
+cannot take a geometric layout (the measurement narrative it first carried was
+removed from the source).  The 1-D conical entry points pass their wavelength
 to the grade normalizer (the default geometric floor then includes the
 wavelength part, as on every other 1-D entry point).  On Chebyshev layouts the
-results move by <= 1.1e-9 (discretization errors 1e-6 .. 2e-2), with the
-round-off scatter under a 1e-10 change of phi down from 1.7e-8 to 7e-11 and
-the phi -> 0 limit down from 3.2e-10 to the 3.4e-11 of the physical
-cross-polarized term.
+results move at the old path's round-off (largest measured: 8.0e-10 on one
+rotated tensor layer, 2.2e-8 on two patterned layers over a metal film, where
+the discretization errors are 3e-4 .. 2e-2), with the round-off scatter under
+a 1e-10 change of phi down from 3.0e-9 to 4.2e-11 on the strip / spacer /
+mirror stack of the tests.
