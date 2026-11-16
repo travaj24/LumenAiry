@@ -34,6 +34,14 @@ Author: Andrew Traverso
 from typing import Any as _Any
 from typing import List as _List
 
+# The declared NumPy floor, checked BEFORE the heavy imports so the warning is
+# seen even when an import below fails on an old NumPy.  Imports that bypass
+# the installer (a source checkout on PYTHONPATH) do not get the floor
+# enforced by pip; see ``_numpy_floor`` for why the floor is 2.1.
+from ._numpy_floor import check_numpy_floor as _check_numpy_floor
+
+_check_numpy_floor()
+
 # â”€â”€ Propagation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis import (
     M2,
@@ -1113,7 +1121,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='6.0',
 )
 
-__version__ = "5.51.0"
+__version__ = "5.51.1"
 
 #
 # __all__ is grouped by user-journey tier:
