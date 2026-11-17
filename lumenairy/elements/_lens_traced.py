@@ -2788,13 +2788,33 @@ _LSTSQ_GRAM_RCOND_MIN = 1e-8
 #: every solve the normal equations already got right returns its historical
 #: bits.
 #:
-#: The margin is a build-independence device.  ``||b - A x||`` is itself
-#: computed to ~1e-13 relative on these matrices, and two builds' copies of the
-#: SAME candidate differ by about that much, so any margin far above 1e-13
-#: makes the winner build-independent; any margin far below the smallest real
-#: gap keeps the fix.  The smallest real gap measured anywhere in this campaign
-#: is 4.8e-02 (design-121-sized OPL fit, Windows build), so 1e-6 sits ~7 orders
-#: above the noise and ~5 below the signal.
+#: The margin is a build-independence device, and it is one ONLY where the
+#: float64 residual is itself resolved far below it.  ``||b - A x||`` evaluated
+#: in float64 carries an error of order ``eps * || |b| + |A| |x| ||`` -- a
+#: property of the OPERANDS, not of the residual -- so its relative accuracy
+#: is that scale divided by ``||b - A x||``.  Where a fit leaves a residual a
+#: few orders below ``||b||`` (the weighted decentred fits this was built for)
+#: that is ~1e-13, and any margin far above it makes the winner
+#: build-independent.  Where a fit reproduces its data to round-off it is
+#: NOT: on the 120-term traced fits ``r* / ||b||`` ~ 1e-15, the evaluation
+#: error is 30-65 % of the residual, the float64 value of a candidate reads
+#: 3-6 % high, and the SAME candidate's value moves by up to ~1e-2 between
+#: BLAS kernels.  A 1e-6 margin cannot arbitrate between two answers there.
+#:
+#: It does not have to on the traced path, and that is MEASURED (72 BLAS
+#: kernel / thread count / NumPy configurations, 2026-11-17).  With
+#: ``DETERMINISTIC_TRACED_FIT`` on, every screened fit is refined
+#: (:func:`_det_refine`) and this comparison is never reached.  With it off,
+#: the normal-equations answer on the 120-term fits reads 3e3-2e5x the QR's
+#: residual -- four orders past the evaluation error -- and on the 28-term
+#: fits the two differ by 1e-9 .. 6.3e-7 relative against an evaluation
+#: error of at most 1.3e-9, a tie by the margin everywhere: the choice was
+#: the same on all 72.  The nearest to the edge is that last tie, at 0.63 of
+#: the margin -- a REAL gap, set by how far the (build-dependent)
+#: normal-equations draw lands from the optimum, not by evaluation noise.
+#: The smallest real gap measured anywhere in this campaign is 4.8e-02 (a
+#: full-size OPL fit, Windows build), so 1e-6 sits ~5 orders below the
+#: signal.
 _LSTSQ_RESID_MARGIN = 1e-6
 
 #: niche D14 (2026-08-22): form the normal equations by a reduction whose
@@ -2926,11 +2946,17 @@ _DET_EINSUM_BLOCK_ROWS = 64
 #: ``cond(A)^2`` loss and it is valid here by a wide margin: ``1/rcond`` =
 #: 1e10 and ``cond(A)^2 eps`` ~ 2e-6, far inside the convergence condition.
 #:
-#: MEASURED ON THE FITS' OWN MATRICES, against the QR answer it replaces
-#: (``||b - A x||``, lower is better; audit S6): refinement is at least as
-#: good on all five and strictly better on three -- 8.445e-16 against QR's
-#: 9.941e-16 and 1.0230e-13 against 1.0242e-13 on the two 120-term fits, and
-#: it lifts a 28-term fit that the shipped screen left on the raw normal
+#: MEASURED ON THE FITS' OWN MATRICES, against the QR answer it replaces, as
+#: the distance from the least-squares optimum ``||A (x - x*)||`` with the
+#: residual evaluated in compensated (doubled) precision.  The float64
+#: ``||b - A x||`` the first measurement ranked by (audit S6) cannot rank two
+#: answers on the 120-term fits, whose residual sits at the round-off floor
+#: (see ``_LSTSQ_RESID_MARGIN``).  Over 72 BLAS kernel / thread count / NumPy
+#: configurations the refined answer sits at 0.04-0.21 of the float64
+#: representation floor ``eps || |b| + |A||x| ||`` on both 120-term fits,
+#: where QR sits at 0.04-0.80 (one right-hand side) and 2.1-3.1 (three) of
+#: it, and 11-500x closer to the optimum than QR on the 28-term fits.  It
+#: also lifts a 28-term fit that the shipped screen left on the raw normal
 #: equations from 9.2195670e-10 to QR's own 9.2195625e-10.  Unrefined, the
 #: same fit's coefficients sit 3.2e-08 from QR's; refined, 5.3e-14.
 #:
@@ -3236,7 +3262,10 @@ def _det_refine(A, b, x, small):
     is therefore taken unconditionally, and the claim it has to earn is a
     MEASURED one, pinned by
     ``test_the_refined_step_down_fits_at_least_as_well_as_the_qr_it_replaces``:
-    on every traced fit its residual is at or below the QR's.
+    on every traced fit it is no farther from the least-squares optimum than
+    the QR answer, except where both are inside the float64 representation
+    floor -- scored on a compensated residual, because on the 120-term fits
+    the float64 one cannot rank them.
 
     Returns ``None`` -- so the caller falls back to the QR and warns rather
     than passing off an unconverged answer as a refined one -- if the
@@ -3500,8 +3529,9 @@ def _solve_lstsq_thread_safe(A, b, deterministic=False, score_domain=None):
     non-carrier fit there screens singular.  So a deterministic caller that
     reaches the screen now gets ONE STEP OF ITERATIVE REFINEMENT on the
     deterministic normal equations instead of the QR, which is at least as
-    good on ``||b - A x||`` at every fit measured and strictly better on
-    three of five (:data:`_DET_REFINE_STEPS`).  What is left of the hole is
+    close to the least-squares optimum at every fit measured, up to the
+    float64 representation floor (:data:`_DET_REFINE_STEPS`).  What is left
+    of the hole is
     the OTHER exit -- a ``G`` so rank-deficient that Cholesky and LU both
     refuse, where there is nothing to refine -- and that one still reroutes
     to the threaded QR and still warns.

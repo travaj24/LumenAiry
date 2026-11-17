@@ -320,6 +320,22 @@ margin a candidate must BEAT to displace an incumbent.  That is the bar
 `test_the_refined_step_down_fits_at_least_as_well_as_the_qr_it_replaces`
 asserts, and it is C13's own, not one invented here.
 
+**Correction (5.51.2, 2026-11-17).**  The 120-term rows of this table are not
+a ranking, and the bar above was not a stable claim.  Those fits reproduce
+their data to round-off (`r* / ||b||` ~ 1e-15), where the float64 evaluation
+of `||b - A x||` carries an error of order `eps || |b| + |A||x| ||` -- 30-65 %
+of the residual -- so it reads 3-6 % high and moves by up to ~1e-2 between
+BLAS kernels for the SAME candidate.  Across 72 BLAS kernel / thread count /
+NumPy configurations the float64 bar failed on 16 (worst `r_det / r_qr - 1` =
++5.6e-03), including once in a release lane.  Scored on a compensated
+residual, as the distance from the least-squares optimum `||A (x - x*)||`,
+the refined answer sits at 0.04-0.21 of that representation floor on both
+120-term fits in every configuration, and the test now asserts
+`e_det <= max(e_qr, floor)` -- it holds on all 72 with a 7x margin, and a
+companion test shows it fails an unrefined or perturbed answer.  The
+conclusion of this section (refinement is at least as good as the QR) stands;
+the 1.0e-9 / 15 % / "better" figures for the 120-term fits do not.
+
 A second refinement step moves the coefficients by ~2e-13 and the residual not
 at all -- refinement has already converged, so `_DET_REFINE_STEPS = 1`.
 

@@ -667,6 +667,181 @@ def _traced_fit_matrices():
     return [(A, b) for A, b in cap if A.shape[1] >= LT._DET_EINSUM_MIN_TERMS]
 
 
+#: Veltkamp splitting constant ``2**27 + 1`` for float64 (53-bit significand).
+_VELTKAMP = 134217729.0
+
+
+def _split_f64(a):
+    """Veltkamp split: ``a == hi + lo`` exactly, each half 26 bits wide, so a
+    product of two halves is exact in float64."""
+    c = _VELTKAMP * a
+    hi = c - (c - a)
+    return hi, a - hi
+
+
+def _residual_dot2(A, B, X):
+    """``B - A X`` element by element, as accurate as if it had been computed
+    in TWICE the working precision and then rounded once.
+
+    This is Ogita-Rump-Oishi's compensated dot product (TwoProduct by
+    Veltkamp/Dekker splitting, TwoSum for the running sum), vectorised over
+    the rows and looped over the ``M`` terms.  Every step is a separate NumPy
+    ufunc call, so no fused multiply-add can contract it, and it uses no BLAS
+    at all -- the value does not depend on the kernel, the thread count or
+    the CPU.  Error bound per row: ``eps |r_i| + gamma_M^2 (|b_i| + |A_i||x|)``.
+    """
+    A = np.ascontiguousarray(A, dtype=np.float64)
+    B2 = np.asarray(B, dtype=np.float64).reshape(A.shape[0], -1)
+    X2 = np.asarray(X, dtype=np.float64).reshape(A.shape[1], -1)
+    out = np.empty_like(B2)
+    cols = [_split_f64(np.ascontiguousarray(A[:, j]))
+            for j in range(A.shape[1])]
+    for k in range(B2.shape[1]):
+        s = B2[:, k].copy()
+        c = np.zeros_like(s)
+        for j in range(A.shape[1]):
+            xj = -float(X2[j, k])
+            p = A[:, j] * xj
+            ah, al = cols[j]
+            xh, xl = _split_f64(np.float64(xj))
+            e = ((ah * xh - p) + ah * xl + al * xh) + al * xl
+            t = s + p
+            z = t - s
+            c += ((s - (t - z)) + (p - z)) + e
+            s = t
+        out[:, k] = s + c
+    return out
+
+
+def _optimum_gap(A, B, X, Q):
+    """``(r, e, r_perp)`` for a candidate ``X``: its residual
+    ``r = ||B - A X||``, its distance from the least-squares OPTIMUM in data
+    space ``e = ||A (X - X*)|| = ||Q^T (B - A X)||``, and the part of its
+    residual orthogonal to the range of ``A``, ``r_perp`` -- which is the
+    optimal residual ``r*`` itself, whatever ``X`` is.
+
+    ``r^2 = r*^2 + e^2`` exactly (the optimal residual is orthogonal to the
+    range of ``A``), so ranking two fits by ``r`` IS ranking them by ``e`` --
+    but ``e`` is the excess alone, where ``r`` buries it under ``r*``.
+    The residual comes from :func:`_residual_dot2`, so ``e`` is good to about
+    ``eps * r`` (plus ``eps * cond(A) * r*`` for the span of the float64
+    ``Q``), orders of magnitude below every ``e`` measured here."""
+    R = _residual_dot2(A, B, X)
+    P = Q.T @ R
+    return (float(np.linalg.norm(R)), float(np.linalg.norm(P)),
+            float(np.linalg.norm(R - Q @ P)))
+
+
+def _representation_floor(A, B, X):
+    """``eps * || |B| + |A| |X| ||_F`` -- the scale of BOTH limits a float64
+    answer runs into here.
+
+    * It bounds the float64 EVALUATION error of ``B - A X`` (each row is a
+      sum of ``M + 1`` terms of that size), i.e. how wrong a plain
+      ``np.linalg.norm(B - A @ X)`` can read.
+    * It bounds the excess ``e`` caused by ROUNDING the exact optimum ``X*``
+      to float64 (a half-ulp per coefficient moves ``A X`` by at most
+      ``eps/2 * |A| |X|``), i.e. how close to the optimum ANY float64 answer
+      is guaranteed to be able to get.  Below it, two answers differ by
+      rounding, not by method, and their order is not a property of either.
+    """
+    B2 = np.asarray(B, dtype=np.float64).reshape(np.shape(A)[0], -1)
+    X2 = np.asarray(X, dtype=np.float64).reshape(np.shape(A)[1], -1)
+    return float(np.finfo(np.float64).eps) * float(
+        np.linalg.norm(np.abs(B2) + np.abs(A) @ np.abs(X2)))
+
+
+def _gap_verdict(A, b, x_det, x_qr):
+    """Score ``x_det`` against ``x_qr`` on the optimum gap.  Returns
+    ``(e_det, bar, detail)`` where the claim is ``e_det <= bar`` and
+    ``bar = max(e_qr, floor)``: no farther from the least-squares optimum
+    than the QR it replaces, except where both are inside the float64
+    representation floor."""
+    import scipy.linalg as sla
+    Q = sla.qr(np.ascontiguousarray(A, dtype=np.float64), mode='economic',
+               check_finite=False)[0]
+    r_qr, e_qr, rs_qr = _optimum_gap(A, b, x_qr, Q)
+    r_det, e_det, rs_det = _optimum_gap(A, b, x_det, Q)
+    floor = _representation_floor(A, b, x_qr)
+    # THE INSTRUMENT PROVES ITSELF: both candidates must expose the SAME
+    # optimal residual r* (the component orthogonal to range(A)), because r*
+    # is a property of (A, b) alone.  A residual that is not accurate beyond
+    # the excess -- a plain float64 one is off by ~0.6 r* on the 120-term
+    # fits -- or a wrong projector breaks this long before it could flip the
+    # verdict.  The second term is the projection's own rounding when a
+    # candidate's residual is far above r* (the mutants below).
+    eps = float(np.finfo(np.float64).eps)
+    tol = 1e-9 * max(rs_qr, rs_det) + 64.0 * eps * max(r_qr, r_det)
+    assert abs(rs_qr - rs_det) <= tol, (
+        f'{np.shape(A)}: the two candidates imply different least-squares '
+        f'minima ({rs_qr:.12e} vs {rs_det:.12e}); the optimum-gap '
+        f'instrument is not measuring what it claims')
+    r_star = rs_qr if r_qr <= r_det else rs_det
+    detail = (f'{np.shape(A)} x {np.shape(b)}: e_det {e_det:.3e}, e_qr '
+              f'{e_qr:.3e}, floor {floor:.3e}, r* {r_star:.6e} '
+              f'(r_det {r_det:.6e}, r_qr {r_qr:.6e}, compensated)')
+    return e_det, max(e_qr, floor), detail
+
+
+def _screened_pairs():
+    """The traced fits that take the C13 step-down -- the only ones whose
+    deterministic answer differs in METHOD from the shipped one."""
+    out = []
+    for A, b in _traced_fit_matrices():
+        G, _ = LT._det_normal_equations(A, b)
+        if LT._gram_rcond(G) < LT._LSTSQ_GRAM_RCOND_MIN:
+            out.append((A, b))
+    assert out, (
+        'no traced fit screened singular on this build, so the replacement '
+        'was never exercised; the S4 measurement needs re-deriving here')
+    return out
+
+
+def _qr_and_det(A, b):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        x_qr = LT._solve_lstsq_qr(A, b)
+        x_det = LT._solve_lstsq_thread_safe(A, b, deterministic=True)
+    return x_qr, x_det
+
+
+def test_the_compensated_residual_is_exact_to_its_bound():
+    """THE INSTRUMENT, CHECKED AGAINST AN INDEPENDENT ONE.
+
+    :func:`_residual_dot2` is what the step-down claim below is scored with,
+    so it is checked row by row against a CORRECTLY ROUNDED residual (exact
+    Dekker products summed by ``math.fsum``) on a deliberately cancelling
+    design: ``b`` is ``A x`` plus a perturbation twelve orders smaller, which
+    is the regime of the 120-term traced fits (``r* / ||b||`` ~ 1e-15) and
+    the one a plain float64 residual gets wrong.
+    """
+    rng = np.random.default_rng(1215)
+    n, M = 400, 120
+    A = rng.uniform(-1.0, 1.0, size=(n, M))
+    x = rng.normal(size=M)
+    b = A @ x + 1e-12 * rng.normal(size=n)
+    got = _residual_dot2(A, b, x)[:, 0]
+    plain = b - A @ x
+    eps = float(np.finfo(np.float64).eps)
+    gamma = M * eps / (1.0 - M * eps)
+    # exact products: p + e == A_ij * (-x_j) with no rounding at all
+    P = A * -x[None, :]
+    ah, al = _split_f64(A)
+    xh, xl = _split_f64(-x)
+    E = ((ah * xh - P) + ah * xl + al * xh) + al * xl
+    worst_plain = 0.0
+    for i in range(n):
+        exact = math.fsum([float(b[i])] + P[i].tolist() + E[i].tolist())
+        scale = abs(b[i]) + float(np.abs(A[i]) @ np.abs(x))
+        assert abs(got[i] - exact) <= (eps * abs(exact)
+                                       + 2.0 * gamma ** 2 * scale), (
+            i, got[i], exact)
+        worst_plain = max(worst_plain, abs(plain[i] - exact) / abs(exact))
+    # and the regime is the one that matters: the plain residual is NOT
+    # good to working precision here, so the instrument is not decoration
+    assert worst_plain > 1e-6, worst_plain
+
+
 @pytest.mark.slow
 def test_the_refined_step_down_fits_at_least_as_well_as_the_qr_it_replaces():
     """THE CLAIM THE REPLACEMENT HAS TO EARN, ON THE FITS' OWN MATRICES.
@@ -676,36 +851,89 @@ def test_the_refined_step_down_fits_at_least_as_well_as_the_qr_it_replaces():
     cannot keep that comparison: ``r_qr`` moves with the thread count, so a
     route that BRANCHES on it is not deterministic -- the nondeterminism just
     moves from the value into the choice.  The refinement is therefore taken
-    unconditionally, and what it owes in exchange is this measurement.
+    unconditionally, and what it owes in exchange is this measurement: the
+    refined answer is NO FARTHER FROM THE LEAST-SQUARES OPTIMUM than the QR
+    answer it replaces, ``e_det <= max(e_qr, floor)`` (see
+    :func:`_optimum_gap` and :func:`_representation_floor`).
 
-    The bar is C13's OWN margin: a candidate has to BEAT the incumbent by
-    ``_LSTSQ_RESID_MARGIN`` to displace it, so a replacement is acceptable
-    while it is no worse than the QR by that much.  Measured 2026-08-23 it is
-    far inside: at worst 1.0e-9 relative worse (a 28-term fit) and strictly
-    BETTER on the two 120-term ones (8.445e-16 against QR's 9.941e-16,
-    1.0230e-13 against 1.0242e-13).
+    WHY NOT ``r_det <= (1 + 1e-6) r_qr`` IN FLOAT64, which is what this test
+    asserted until 5.51.1 and what failed once in a release lane
+    (1.049979e-13 against 1.048554e-13 on a 120-term fit).  On the 120-term
+    fits the data are reproduced to round-off -- ``r* / ||b||`` ~ 1e-15 --
+    and two things that the old bar treated as signal are noise there:
+
+    * the float64 EVALUATION of ``||b - A x||``.  Its error scale,
+      ``eps || |b| + |A||x| ||``, is 64 % of ``r*`` on the 1-RHS fit; the
+      float64 value reads 3-6 % HIGH, and the SAME two vectors read in
+      opposite orders under two GEMV kernels (scored in the process that
+      made them, det/QR - 1 = +5.6e-03; re-scored under another kernel,
+      -3.1e-03).  A 1e-6 margin on a ratio known to 1e-2 is a coin toss.
+    * the ORDER of two answers that are both inside the representation
+      floor.  Scored exactly, the refined answer sits at 0.04-0.14 of the
+      floor on that fit in every configuration measured, the QR answer
+      anywhere from 0.04 to 0.80 of it -- so in 12 configurations of 72 QR
+      lands closer by luck of rounding and the EXACT ratio reads up to
+      +1.7e-03.  That is not a defect of either solver: both are an order of
+      magnitude inside what float64 coefficients can resolve.
+
+    MEASURED (2026-11-17), 72 configurations: Windows numpy 2.4.4 and Linux
+    numpy 2.2.6 / 2.4.6 / 2.5.4, OpenBLAS core types Haswell / Zen /
+    SandyBridge / Nehalem / Prescott / Atom at 1, 2 and 4 threads, each
+    capturing its OWN matrices.  The old float64 bar failed on 16 of them
+    (worst +5.6e-03; one reproduces the release lane's 1.049979e-13 to all
+    seven digits); this bar holds on all 72 with ``e_det / bar`` at most
+    0.137 -- a 7x margin.  The QR term binds on the 3-RHS 120-term fit (QR
+    sits 2-3x above the floor there) and the floor on the 1-RHS one.
+    ``test_the_optimum_gap_bar_has_teeth`` shows it still fails a genuinely
+    worse solver, including ones the old bar passed.
     """
-    mats = _traced_fit_matrices()
-    assert mats, 'the traced chain ran no wide fit on this fixture'
-    seen_screen = 0
-    for A, b in mats:
-        G, _ = LT._det_normal_equations(A, b)
-        if LT._gram_rcond(G) >= LT._LSTSQ_GRAM_RCOND_MIN:
-            continue
-        seen_screen += 1
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            x_qr = LT._solve_lstsq_qr(A, b)
-            x_det = LT._solve_lstsq_thread_safe(A, b, deterministic=True)
-        r_qr = LT._lstsq_residual(A, b, x_qr)
-        r_det = LT._lstsq_residual(A, b, x_det)
-        assert r_det <= (1.0 + LT._LSTSQ_RESID_MARGIN) * r_qr, (
-            f'{A.shape}: the deterministic refined answer fits WORSE than the '
-            f'QR it replaces by more than C13\'s own margin '
-            f'({r_det:.6e} vs {r_qr:.6e})')
-    assert seen_screen, (
-        'no traced fit screened singular on this build, so the replacement '
-        'was never exercised; the S4 measurement needs re-deriving here')
+    for A, b in _screened_pairs():
+        x_qr, x_det = _qr_and_det(A, b)
+        e_det, bar, detail = _gap_verdict(A, b, x_det, x_qr)
+        assert e_det <= bar, (
+            'the deterministic refined answer sits FARTHER from the '
+            'least-squares optimum than the QR it replaces, and outside the '
+            'float64 representation floor: ' + detail)
+
+
+@pytest.mark.slow
+def test_the_optimum_gap_bar_has_teeth():
+    """THE BAR ABOVE MUST STILL FAIL A GENUINELY WORSE SOLVER -- three
+    mutants of the refined answer, each required to fail on EVERY screened
+    fit:
+
+    * no refinement at all (``_DET_REFINE_STEPS = 0``: the raw deterministic
+      normal equations; measured 23-15 000x over the bar);
+    * the refined answer perturbed by 1e-6 relative (1e8-1e9x over);
+    * the refined answer perturbed by 1e-12 relative (100-2 000x over).
+
+    The first and the last are mutants the OLD float64 ratio bar PASSED on
+    the three 28-term fits: their residual sits eight orders above the
+    floor, so an excess ``e`` of ~1e-13 moves ``r`` by ~1e-10 relative (and
+    the unrefined answer by at most 5e-7), inside a 1e-6 margin.  Measured,
+    the bar here catches a sign-random perturbation of x down to ~1e-14
+    relative on every screened fit.
+    """
+    pairs = _screened_pairs()
+    old = LT._DET_REFINE_STEPS
+    try:
+        LT._DET_REFINE_STEPS = 0
+        raw = [_qr_and_det(A, b)[1] for A, b in pairs]
+    finally:
+        LT._DET_REFINE_STEPS = old
+    rng = np.random.default_rng(20261117)
+    for (A, b), x_raw in zip(pairs, raw):
+        x_qr, x_det = _qr_and_det(A, b)
+        assert not np.array_equal(x_raw, x_det), (
+            'the no-refinement mutant did not change the answer')
+        sign = rng.choice([-1.0, 1.0], size=np.shape(x_det))
+        for tag, x_mut in (('unrefined', x_raw),
+                           ('1e-6 perturbed', x_det * (1.0 + 1e-6 * sign)),
+                           ('1e-12 perturbed', x_det * (1.0 + 1e-12 * sign))):
+            e_mut, bar, detail = _gap_verdict(A, b, x_mut, x_qr)
+            assert e_mut > bar, (
+                f'the {tag} mutant PASSES the optimum-gap bar, so the bar '
+                f'cannot tell a worse solver from the refined one: {detail}')
 
 
 # ===========================================================================
