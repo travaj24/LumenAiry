@@ -6,10 +6,96 @@ All notable changes to the core library are documented here.
 
 ## [5.51.2] — 2026-11-17
 
-A test-correctness release.  No solver code changes and no results change:
-every returned array is bit-identical to 5.51.1.  One slow test asserted a
-comparison that floating point cannot decide, and failed once in the release
-lane for 5.51.1.
+One solver fix and three test-correctness fixes.  The covariant (uniform-
+slant) 1-D PMM far field picked its incident field by a rule that depended
+on the eigenvector basis LAPACK returns, so a lossless slanted grating closed
+R+T only to ~1e-3 and moved by that much between machines; it now closes to
+the discretization residual on every build.  Only covariant slanted results
+change (below); every other returned array is bit-identical to 5.51.1.  One
+slow test asserted a comparison that floating point cannot decide, and
+failed once in the release lane for 5.51.1.
+
+### Fixed -- the covariant slanted far field chose its incident field by the mode basis
+
+`PMMStack.solve` on a uniform-slant in-plane stack (the covariant route that
+`factorization='auto'` takes) and `pmm_jones_1d_slanted` /
+`pmm_jones_1d_slanted_segments` with `factorization='covariant'` (or `'auto'`
+in-plane) decompose the incident plane wave on the superstrate's forward
+modes by solving `Hsup c = e0`, where `Hsup` projects the modes onto the
+Rayleigh orders.  `Hsup` has fewer rows (2 x orders) than forward modes
+(2 x nodes), so the system has a null space and `lstsq` returned its
+minimum-`||c||` member.
+
+- **Cause.** `||c||` is a norm on eigenvector coefficients, so the choice
+  depended on how each eigenvector was scaled and, inside a degenerate
+  eigenspace, on which basis LAPACK returned.  The covariant half-space
+  generator is built from the Galerkin first derivative `S0^-1 C`, which on
+  a periodic GLL grid has a two-dimensional null space: the constant and a
+  spurious mode with content at orders 0, +-4, +-6 and +-8.  The order-0
+  plane wave therefore shares one eigenvalue (gap 1e-15) with that spurious
+  mode, and rounding decided the mixture.  The selected "incident" field
+  carried 0.23 rms of content beyond the projected orders (mostly +-6),
+  which scattered off the grating.
+  The vertical and convection routes build their half-spaces from the
+  stiffness operator (no spurious null mode, one clean basis per
+  polarization) and were unaffected: rescaling their eigenvectors moves
+  nothing above 1e-13.
+- **Measured** on the slanted grating of
+  `test_w7_fc_slanted_grating_on_an_absorbing_substrate_is_sane` (lossless
+  substrate, degree 8), over 54 configurations (Windows NumPy 2.4.4 and
+  Linux NumPy 2.2.6 / 2.4.6 / 2.5.4, six OpenBLAS core types, 1 to 4
+  threads): the Ex-channel `R+T-1` ranged from -7.6e-4 to +1.0e-3, the Ey
+  channel from -2.3e-5 to +5.2e-6.  A CI runner read +1.18e-3 and failed
+  the test's 1e-3 bar.  Rescaling the eigenvector columns by random factors,
+  a change of basis that cannot change a correct answer, spread the Ex
+  `R+T-1` over -1.3e-3 .. +1.7e-4 on one machine, and a 1e-15 relative
+  perturbation of the generator over -4.9e-4 .. +1.6e-3.  The
+  documented "~1e-4 slant closure floor" of this route was this draw, not
+  the discretization.
+- **Fix.** The incident field is now the transverse field of least L2 norm
+  (nodal mass `S0`) whose Rayleigh projection is the unit order-0 wave,
+  decomposed on the forward modes (`_incident_field_decomposer` in
+  `elements/pmm/_core.py`, passed by both covariant callers through the new
+  `incident_fields` argument of `_assemble_jones_farfield`).  That depends
+  only on the forward span, so it is basis-free; the selected field has
+  1e-12 content outside the projected orders.  The Rayleigh solve keeps the
+  rank-and-residual guard.
+- **After the fix**, on 48 configurations: Ex `R+T-1` = -1.2803e-6 and Ey
+  -4.15e-11 on every one (spread 6e-14).  The closure now converges with
+  degree: Ex -7.4e-6, -1.3e-6, -3.4e-7, -1.2e-7, -2.2e-8, -2.0e-9, -3.8e-10
+  at degree 6 / 8 / 10 / 12 / 16 / 24 / 32, where the old rule read between
+  -2.8e-4 and +8.9e-5 with no trend.  The Ex transmission converges to
+  0.96170744 (degree 32); at degree 8 the old rule returned 0.9613881 on
+  this machine (-3.2e-4 from the converged value) and the new one 0.9617196
+  (+1.2e-5).  **Values move** for every covariant slanted solve, by the size
+  of the old draw: here 5e-5 in R and 3.3e-4 in T for Ex, 7e-6 in R for Ey.
+  No pinned value in the test suite moved outside its tolerance.
+- **On an absorbing substrate** the Ex total stays short of 1 by -6.13e-4 at
+  degree 8 (machine-independent now; it was -1.44e-3 .. +5.9e-4).  That is
+  physical bookkeeping, not a solver residual: every evanescent order
+  carries flux into an absorbing medium, and the orders beyond the projected
+  set are not counted.  The deficit falls to -1.8e-4 and -5.8e-5 at 15 and 31
+  orders and does not change with degree.
+- **Docs.** The `R+T - 1` column of the `PMMStack.add_sheared_grating`
+  budget table and the closure sentence below it are re-measured: 8.3e-6 /
+  1.9e-8 / 3.1e-9 / 2.5e-10 at degree 8 / 12 / 16 / 24 (were 6.9e-5 / 1.9e-5
+  / 3.3e-6 / 9.9e-7).  Its per-order `err` column is not affected by this
+  fix (old and new rule agree to 1e-4 on that fixture).
+
+### Tests -- the slanted-grating closure test
+
+- `test_w7_fc_slanted_grating_on_an_absorbing_substrate_is_sane` now bars
+  the lossless closure at 5e-6 (4x the degree-8 residual; every
+  configuration of the old rule exceeded it, the closest at 9.9e-6; the bar
+  was 1e-3) and the lossy closure at 1e-3 (was 2e-3; measured 6.13e-4 on
+  every configuration).  It still fails the defect it was written for (T
+  identically 0 when the substrate gauge is undone).
+- New: `test_w7_fc_covariant_far_field_is_independent_of_the_mode_basis`
+  (`[stack]`, `[single_layer]`) rescales every region's eigenvector columns
+  and requires R and T to stay put to 1e-10.  The old rule fails both arms
+  on any machine.  `test_w7_fc_covariant_closure_converges_with_degree` and
+  `test_w7_fc_lossy_closure_deficit_is_the_truncated_orders` pin the two
+  measurements above.
 
 ### Fixed -- the deterministic-refinement test compared two residuals at the round-off floor
 

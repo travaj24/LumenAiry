@@ -986,10 +986,114 @@ def test_w7_fc_slanted_grating_on_an_absorbing_substrate_is_sane():
         _o, R, T, _J = st.solve()
         tot = R.sum(1) + T.sum(1)
         assert np.all(T.sum(1) > 0.5), T.sum(1)
-        # a lossless slanted grating still closes (the convection/covariant
-        # union-grid floor is ~1e-4 here, the documented slant floor)
-        bar = 1e-3 if lossless else 2e-3
+        # Lossless: closure is the discretization residual, -1.28e-6 /
+        # -4.1e-11 (Ex / Ey) at degree 8, converging with degree (-3.4e-7,
+        # -1.2e-7, -3.8e-10 at 10 / 12 / 32) and identical to 1e-13 on 48
+        # (NumPy build, OpenBLAS kernel, thread) configurations; 4x headroom.
+        # Before the incident field was chosen by its FIELD norm the Ex
+        # total was a basis-dependent draw: -7.6e-4 .. +1.2e-3 by machine
+        # (the 1.0011752 a CI runner failed on), never below 9.9e-6.
+        # Lossy: -6.13e-4 / -7.8e-8, equally machine-independent; the Ex
+        # deficit is the flux the absorbing substrate takes in Rayleigh
+        # orders beyond the projected set (see
+        # test_w7_fc_lossy_closure_deficit_is_the_truncated_orders).
+        bar = 5e-6 if lossless else 1e-3
         assert np.all(np.abs(tot - 1.0) < bar), tot
+
+
+def _rescaled_cov_modes(mod, monkeypatch, seed):
+    """Wrap ``mod._cov_layer_4n`` so every region's eigenvector columns are
+    multiplied by seeded random complex factors -- a change of basis, so an
+    exact-arithmetic no-op for any correct downstream use."""
+    orig = mod._cov_layer_4n
+    rng = np.random.default_rng(seed)
+
+    def scaled(*a, **k):
+        W, V, kz, fwd = orig(*a, **k)
+        d = np.exp(rng.uniform(-1.0, 1.0, W.shape[1])
+                   + 1j * rng.uniform(-3.0, 3.0, W.shape[1]))
+        return W * d, V * d, kz, fwd
+    monkeypatch.setattr(mod, "_cov_layer_4n", scaled)
+
+
+def _cov_grating_stack():
+    st = P.PMMStack(PER, n_substrate=1.5, n_superstrate=1.0, degree=8,
+                    far_field_orders=5)
+    st.add_layer(DEPTH, segments=[(0.5, 3.61 * I3), (0.5, 1.0 * I3)],
+                 slant_angle=0.3)
+    st.set_source(WL, angle=0.25)
+    _o, R, T, _J = st.solve()
+    return R, T
+
+
+def _cov_grating_single():
+    _o, R, T, _J = P.pmm_jones_1d_slanted(
+        PER, 3.61 * I3, 1.0 * I3, 1.5, 1.0, DEPTH, 0.5, WL, 0.3, angle=0.25,
+        degree=8, far_field_orders=5, stabilize=False,
+        factorization="covariant")
+    return R, T
+
+
+@pytest.mark.parametrize("which", ["stack", "single_layer"])
+def test_w7_fc_covariant_far_field_is_independent_of_the_mode_basis(
+        which, monkeypatch):
+    """The covariant half-space eig puts the order-0 plane wave in ONE
+    degenerate eigenspace with the spurious null mode of the Galerkin first
+    derivative (orders 0, +-4, +-6, +-8), and the Rayleigh projection has
+    fewer rows than forward modes.  A minimum-COEFFICIENT-norm incident draw
+    then depends on the basis LAPACK returns for that eigenspace, and the
+    lossless Ex closure moved -7.6e-4 .. +1.2e-3 between BLAS builds.
+    Rescaling the eigenvector columns is the same change of basis made on
+    purpose: pre-fix it moved the Ex R+T by up to 1e-3 here; the field-norm
+    selection depends only on the forward span, measured 1e-13."""
+    import lumenairy.elements.pmm._core as PC
+    import lumenairy.elements.pmm.stack as PS
+    run = _cov_grating_stack if which == "stack" else _cov_grating_single
+    mod = PS if which == "stack" else PC
+    R0, T0 = run()
+    for seed in range(3):
+        with monkeypatch.context() as m:
+            _rescaled_cov_modes(mod, m, seed)
+            R1, T1 = run()
+        assert float(np.max(np.abs(R1 - R0))) < 1e-10, (seed, R1 - R0)
+        assert float(np.max(np.abs(T1 - T0))) < 1e-10, (seed, T1 - T0)
+
+
+def test_w7_fc_covariant_closure_converges_with_degree():
+    """With the incident field fixed, the lossless closure of the slanted
+    grating is a discretization residual and shrinks with ``degree`` (it
+    sat at a ~1e-4 .. 1e-3 basis-dependent level before, non-monotone)."""
+    res = []
+    for deg in (8, 12, 16):
+        st = P.PMMStack(PER, n_substrate=1.5, n_superstrate=1.0, degree=deg,
+                        far_field_orders=5)
+        st.add_layer(DEPTH, segments=[(0.5, 3.61 * I3), (0.5, 1.0 * I3)],
+                     slant_angle=0.3)
+        st.set_source(WL, angle=0.25)
+        _o, R, T, _J = st.solve()
+        res.append(float(np.max(np.abs(R.sum(1) + T.sum(1) - 1.0))))
+    # measured 1.28e-6, 1.18e-7, 2.19e-8
+    assert res[0] < 5e-6 and res[1] < res[0] / 4 and res[2] < res[1] / 2, res
+
+
+def test_w7_fc_lossy_closure_deficit_is_the_truncated_orders():
+    """On an ABSORBING substrate every evanescent Rayleigh order carries flux
+    into it, so R+T over the projected orders falls short by what the
+    orders beyond the set absorb.  The Ex deficit therefore shrinks as the
+    set grows (measured at degree 16: -6.27e-4 / -1.83e-4 / -5.82e-5 at 7 /
+    15 / 31 orders), and is NOT a solver residual: it is the same at degree
+    8 and 24 for a fixed set (-6.13e-4 / -6.28e-4 at 7 orders)."""
+    defs = []
+    for ffo in (5, 15, 31):
+        st = P.PMMStack(PER, n_substrate=1.5 + 0.3j, n_superstrate=1.0,
+                        degree=16, far_field_orders=ffo)
+        st.add_layer(DEPTH, segments=[(0.5, 3.61 * I3), (0.5, 1.0 * I3)],
+                     slant_angle=0.3)
+        st.set_source(WL, angle=0.25)
+        _o, R, T, _J = st.solve()
+        defs.append(float(R.sum(1)[0] + T.sum(1)[0] - 1.0))
+    assert all(d < 0.0 for d in defs), defs
+    assert -defs[1] < 0.5 * -defs[0] and -defs[2] < 0.5 * -defs[1], defs
 
 
 # ===========================================================================
