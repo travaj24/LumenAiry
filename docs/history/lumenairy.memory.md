@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/memory.py
-ast_sha256: 0138cd6b9a0845661279ebb51483c9a6a2eb9cecd48b4fe4604ae60f12e83304
-token_sha256: 4345743d294ecf1de4fa888e5b31b86510ad43d92a1f6a16577f5f31a466ca9c
+ast_sha256: 2653c394146757318170438a03f6bc2f93bdbca5a48388dce9fdcfe3a2d650b0
+token_sha256: 76cf482f35a5f21814456eb4e6a984e1b5301db4a2e562c52f004b6d8c2a8c75
 pre_relocation_lines: 1332
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- _ASM_FIRST_CALL_FIXED_BYTES 40 -> 53 MiB: the first-use scipy.fft import (13.06 MiB) now lands inside the measured first call; cold fixed term re-measured at 49.61 MiB
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-09-15 -- 5.47.1: the low-memory macro first-enable stash is registered as the knob low_memory_prior so _knobs.restore() undoes set_low_memory(True) completely (release run 34939783790 shard 6/8 read 8 == 16 from a stale stash)
+re_recorded: 2026-11-17 -- default byte caps of the grid-sized caches scale with total RAM (memory._ram_scaled_cap)
 -->
 
 # Version history -- `lumenairy/memory.py`

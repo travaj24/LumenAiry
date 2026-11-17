@@ -37,6 +37,7 @@ __all__ = [
 # Canonical backend helper; the underscore-prefixed alias preserves this
 # module's existing in-module references without touching call sites.
 from ..backend import array_namespace as _xp_of  # noqa: E402
+from ..memory import _ram_scaled_cap  # noqa: E402
 
 # ISO 11146-1:2005 clause 9 recommends the second-moment integration
 # aperture be about three times the beam width (D4sigma).  Exposed as the
@@ -80,7 +81,11 @@ _MESHGRID_LOCK = threading.Lock()
 # at grid sizes three orders under the cap -- 2 x 1024^2 float64 is 16.8 MB.
 # The cap binds at ``Ny * Nx >= 1.25e8``, i.e. N >= 11181 square.
 _MESHGRID_CACHE_MAX_BYTES_PER_ENTRY = 2 * 1024 * 1024 * 1024   # 2 GB
-_MESHGRID_CACHE_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024       # 8 GB
+# The total cap is 8 GB on a machine with 64 GB of RAM or more and 1/8 of total
+# RAM below that (``memory._ram_scaled_cap``, the same rule as
+# ``fft_infra._H_CACHE_MAX_TOTAL_BYTES``).
+_MESHGRID_CACHE_MAX_TOTAL_BYTES = _ram_scaled_cap(8 * 1024 * 1024 * 1024,
+                                                 1.0 / 8)
 
 
 def _meshgrid_entry_bytes(entry) -> int:

@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/analysis/zernike.py
-ast_sha256: 658f5e715e0433f5467c4879f54f207d5a38434ed66b3543df2f7a7de61a3db9
-token_sha256: d332be98206165bdf08c9ff3588f52476d37e584c6c49f98e04d754ce7546d8a
+ast_sha256: 74c0837a469857f856a2516aaff4d5c6f1e2af9d00ea03783f152ee910cf958f
+token_sha256: 6f9797b9498cebd236e0fdea52f6b656bce65147935615c09cd9f6558bdd44d7
 pre_relocation_lines: 876
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B8 (audit A6.3): the basis build shares one rho**k memo and one hoisted pupil mask across the modes (1.58-3.57x, bit-identical), and _zernike_radial hands orders n >= 22 to the Kintner recurrence, which is where the factorial sum's relative error against an exact rational oracle first exceeds 1e-9
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-11-17 -- default byte caps of the grid-sized caches scale with total RAM (memory._ram_scaled_cap)
 -->
 
 # Version history -- `lumenairy/analysis/zernike.py`

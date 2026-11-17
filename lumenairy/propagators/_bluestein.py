@@ -71,6 +71,8 @@ from collections import OrderedDict
 import numpy as np
 from scipy.fft import next_fast_len
 
+from ..memory import _ram_scaled_cap
+
 # Chirp-kernel FFT cache: H_FFT = fft2(h_2d) depends only on
 # (alpha_x, alpha_y, Nx_in, Ny_in, N_out_x, N_out_y, sign, dtype) -- not
 # on the input field -- and costs one of the three FFTs per call.
@@ -107,7 +109,10 @@ _H_FFT_CACHE_HITS = 0
 # library already sets, not inventing a new policy.  A cache is a cache -- no
 # accuracy consequence either way, the entry is recomputed on the next miss.
 _H_FFT_CACHE_MAX_BYTES_PER_ENTRY = 2 * 1024 * 1024 * 1024   # 2 GB
-_H_FFT_CACHE_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024       # 8 GB
+# The total cap is 8 GB on a machine with 64 GB of RAM or more and 1/8 of total
+# RAM below that (``memory._ram_scaled_cap``, the same rule as
+# ``fft_infra._H_CACHE_MAX_TOTAL_BYTES``).
+_H_FFT_CACHE_MAX_TOTAL_BYTES = _ram_scaled_cap(8 * 1024 * 1024 * 1024, 1.0 / 8)
 
 
 def _clear_h_fft_cache() -> None:

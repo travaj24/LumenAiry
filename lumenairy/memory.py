@@ -177,6 +177,39 @@ def total_memory_bytes() -> int:
     return _DEFAULT_TOTAL_BYTES
 
 
+def _ram_scaled_cap(nominal_bytes: int, fraction: float) -> int:
+    """``min(nominal_bytes, fraction * total physical RAM)``, as an int.
+
+    The default byte cap of a process-global array cache.  The grid-sized
+    caches (``fft_infra._H_CACHE``, the pyFFTW plan workspaces,
+    ``_bluestein._H_FFT_CACHE``, ``beam_stats._MESHGRID_CACHE``,
+    ``zernike._ZERNIKE_BASIS_CACHE``) used to carry fixed caps sized on a
+    large workstation: 8 GiB per cache, 2 GB per plan workspace.  On a 16 GB
+    machine one of those caches may then keep half of RAM for the rest of the
+    process.  MEASURED on two N = 8192 ASM runs (Linux, Python 3.12,
+    psutil's view of RAM set to 15.6 GiB, i.e. a 16 GB machine): the ASM
+    transfer-function cache kept 4 GiB and the pyFFTW plans 4 GiB after the
+    runs returned, the second run peaked at 15.4 GiB of RSS with those 8 GiB
+    resident, and ``clear_asm_caches()`` brought the process back to 78 MiB.
+    With the caps below: 1 GiB + 2 GiB kept, an 11.1 GiB peak, the same
+    results.
+
+    Scaling by TOTAL rather than available memory keeps the cap a property of
+    the machine, fixed for the life of the process: it does not move with
+    what else happens to be allocated, so two runs of one program on one
+    machine cache the same things.  On a machine with ``nominal_bytes /
+    fraction`` of RAM or more (64 GB for the 8 GiB caches at 1/8) the
+    nominal cap is returned unchanged.  These are caches: a smaller cap
+    changes which entries are kept and how often they are rebuilt, never a
+    value.  The modules' setters still override the default.
+    """
+    try:
+        scaled = int(float(fraction) * float(total_memory_bytes()))
+    except (TypeError, ValueError, OverflowError):
+        return int(nominal_bytes)
+    return int(min(int(nominal_bytes), max(scaled, 0)))
+
+
 def memory_info() -> Dict[str, Any]:
     """
     Return a dictionary with current memory statistics.

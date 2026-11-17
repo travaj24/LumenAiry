@@ -178,6 +178,8 @@ def __getattr__(name):
 
 # Affinity-aware CPU count -- respects cgroups / taskset / Python 3.13+
 # process_cpu_count so we don't oversubscribe a restricted machine.
+# ``_ram_scaled_cap``: the RAM-scaled default byte caps of the caches below.
+from ..memory import _ram_scaled_cap
 from ..memory import available_cpus as _available_cpus
 
 # Every process-global knob below is registered with the central registry:
@@ -1015,7 +1017,15 @@ _PYFFTW_DOUBLE_BUFFER = True
 #     fwd+inv @ 16384   17.18 GB -> 8.59 GB   (capped, single workspace)
 #     fwd+inv @  9216    5.44 GB -> 0.00 GB   (never planned -- separable)
 #     fwd     @  8192    2.15 GB -> 2.15 GB   (under the cap, ping-pong kept)
-_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER = 2_000_000_000   # 2 GB
+#
+# The 2 GB is the cap on a machine with 32 GB of RAM or more.  Below that the
+# default is 1/16 of total RAM (``memory._ram_scaled_cap``): on a 16 GB
+# machine 1.0e9, which puts 8192^2 complex128 (1.07e9 per workspace) on a
+# single workspace and halves its resident plan bytes, 4.3 GB -> 2.15 GB for
+# a forward + inverse pair.  The 1.65x per-transform copy cost above is what
+# that machine pays at N = 8192 instead of keeping a quarter of its RAM in
+# plan workspaces.
+_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER = _ram_scaled_cap(2_000_000_000, 1.0 / 16)
 
 
 def _plan_entry_n_bufs(shape_t, dt) -> int:
@@ -1038,7 +1048,8 @@ def _plan_entry_n_bufs(shape_t, dt) -> int:
 
 
 def set_fft_plan_max_bytes_per_buffer(nbytes) -> None:
-    """Set the byte cap on ONE resident pyFFTW workspace (default 2 GB).
+    """Set the byte cap on ONE resident pyFFTW workspace (default 2 GB, or
+    1/16 of total RAM when that is smaller).
 
     A plan key whose workspace exceeds this is built with a SINGLE workspace
     instead of the two-buffer ping-pong, halving its resident cost in exchange
@@ -1064,7 +1075,8 @@ _register_knob(
     'fft_plan_max_bytes_per_buffer',
     getter=get_fft_plan_max_bytes_per_buffer,
     setter=set_fft_plan_max_bytes_per_buffer,
-    doc="Byte cap on ONE resident pyFFTW workspace (2 GB shipped); a plan "
+    doc="Byte cap on ONE resident pyFFTW workspace (2 GB shipped, 1/16 of "
+        "total RAM below 32 GB of RAM); a plan "
         "key above it drops to a single buffer.  Changing it clears the "
         "plan cache.")
 
@@ -1565,7 +1577,10 @@ _H_CACHE_MAX_BYTES_PER_ENTRY = 2 * 1024 * 1024 * 1024   # 2 GB
 # Set generous enough that typical N <= 4k workflows fill up the
 # count limit before the bytes limit; at larger N the bytes limit
 # kicks in first.
-_H_CACHE_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024       # 8 GB
+# 8 GB on a machine with 64 GB of RAM or more, 1/8 of total RAM below that
+# (``memory._ram_scaled_cap``): a fixed 8 GB let this one cache keep half of
+# a 16 GB machine after an N = 8192 run.
+_H_CACHE_MAX_TOTAL_BYTES = _ram_scaled_cap(8 * 1024 * 1024 * 1024, 1.0 / 8)
 
 _ASM_CACHE_LOCK = threading.Lock()
 
@@ -1710,7 +1725,8 @@ def set_asm_cache_size(
         is 16 GB so the cache transparently skips storage.
     h_max_total_bytes : int, optional
         Total bytes budget across all H entries.  Oldest entries
-        are evicted until total bytes fit.  Default 8 GB.
+        are evicted until total bytes fit.  Default 8 GB, or 1/8 of
+        total RAM when that is smaller.
     """
     global _H_CACHE_SIZE, _FREQ_GRID_CACHE_SIZE, _BANDLIMIT_CACHE_SIZE
     global _H_CACHE_MAX_BYTES_PER_ENTRY, _H_CACHE_MAX_TOTAL_BYTES

@@ -6,7 +6,8 @@ All notable changes to the core library are documented here.
 
 ## [5.51.2] — 2026-11-17
 
-One solver fix and four test-correctness fixes.  The covariant (uniform-
+One solver fix, one memory fix, four test-correctness fixes and stall
+diagnostics for the slow CI lanes.  The covariant (uniform-
 slant) 1-D PMM far field picked its incident field by a rule that depended
 on the eigenvector basis LAPACK returns, so a lossless slanted grating closed
 R+T only to ~1e-3 and moved by that much between machines; it now closes to
@@ -14,7 +15,10 @@ the discretization residual on every build.  Only covariant slanted results
 change (below); every other returned array is bit-identical to 5.51.1.  One
 slow test asserted a comparison that floating point cannot decide, and
 failed once in the release lane for 5.51.1.  Another asserted the position
-of a focal spot that its own fail-before switch had destroyed.
+of a focal spot that its own fail-before switch had destroyed.  Five
+grid-sized caches now scale their default byte caps with total RAM, so a
+16 GB machine no longer keeps up to half of its memory in them; on 64 GB or
+more nothing changes, and no value depends on a cap.
 
 ### Fixed -- the covariant slanted far field chose its incident field by the mode basis
 
@@ -175,6 +179,78 @@ exact skew ray trace by more than 0.6 um.  Its `[no tilt ramp]` arm read
   With each replacement made a pass-through, so that the "broken" run is the
   shipped path, all three arms fail.  The docstrings' measured numbers are
   re-measured.
+
+### Fixed -- the grid-sized caches could keep half of a 16 GB machine
+
+Five process-global array caches had fixed default byte caps sized on a
+large workstation: the ASM transfer-function cache (`fft_infra._H_CACHE`,
+8 GiB total), the pyFFTW plan workspaces (2 GB per workspace, two per key),
+the Bluestein chirp-kernel cache, the centred-grid cache in `beam_stats` and
+the Zernike basis cache (8 GiB total each).  On a 16 GB machine one N = 8192
+run leaves gigabytes in them for the rest of the process.
+
+- **Measured** (Linux, Python 3.12, BLAS on one thread, 4 CPUs, psutil's
+  view of RAM set to 15.6 GiB, i.e. a 16 GB machine): after the two
+  N = 8192 tests in `tests/unit/test_hammer_h2_displaced_projection.py`
+  the H cache held 4 GiB and the plan cache 4 GiB; the second test peaked
+  at 15.4 GiB of RSS, and `clear_asm_caches()` + `gc` brought the process
+  back to 78 MiB.  Slow-lane shard 3 of this release (119 tests, collected
+  without jax as CI collects it) reached a 15.0 GiB high-water mark in the
+  second of those tests, with 8.0 GiB still resident after it.
+- **Fix.** `memory._ram_scaled_cap(nominal, fraction)` returns
+  `min(nominal, fraction * total RAM)`, and the five defaults go through
+  it: 1/8 of total RAM for the 8 GiB totals, 1/16 for the 2 GB plan
+  workspace.  With 64 GB of RAM or more (32 GB for the plan workspace)
+  every cap is unchanged.  On 16 GB an N = 8192 plan keeps one workspace
+  per key (the byte-identical `set_fft_double_buffer(False)` trade) and the
+  H cache keeps one 1 GiB entry.  The setters still override.
+  `estimate_asm_memory` reads the plan-workspace cap, so below 32 GB of RAM
+  it now prices an N = 8192 complex128 key at one workspace, which is what
+  is allocated.  The test that pins its N = 8192 value
+  (`test_verify_perf_fixes_2026_08_10.py`) sets the 2 GB cap for the
+  duration of the pin, since it checks the estimator's arithmetic, not the
+  machine.
+- **After the fix**, same setup: shard 3's high-water mark is 12.1 GiB
+  (all 116 of its non-skipped tests pass, 24.6 min against 24.5), and with
+  the leaner readout helpers below the two tests peak at 10.7 and 10.6 GiB
+  and leave 3.6 GiB resident.  Their wall times did not change measurably
+  (103-114 s and 72-86 s against 118 s and 74 s).  Results are unchanged: an apply-real-lens + ASM sequence at
+  N = 2048 run with an H budget of one entry and single-workspace plans is
+  bit-identical to the run with the shipped caps.
+- `tests/unit/test_fix_ram_scaled_cache_caps.py` pins both machine sizes
+  in a child interpreter (the caps are set at import).  On the pre-fix tree
+  the 16 GB arm fails with an 8 GiB H cap.
+- The two N = 8192 tests' readout helpers build the radius from broadcast
+  1-D offsets instead of two meshgrids and drop each field once it is
+  reduced.  Every element and every masked sum is formed in the same order
+  as before (checked bit for bit at three grid sizes).
+
+### CI -- a stalled slow shard now leaves a diagnosis
+
+Slow-lane shards ran to the 50-minute job limit repeatedly between
+2026-11-14 and 2026-11-17 (among them shards 4/8, 2/8, 3/8 and 3/8).  Every
+time the 45-minute step timeout did not fire, the log-upload step did not
+run, and no job log was kept, which is what a runner that has stopped
+answering looks like.  Both shard-3 stalls ran the test behind the
+15.0 GiB peak above.  The slow lanes in
+`unit-tests.yml` and `publish.yml` now:
+
+- run `scripts/ci_resource_watch.sh` beside pytest.  Every 60 s it prints
+  `free -m`, the five largest processes and the running test to the
+  streamed log and to `resource_watch.txt`.  If MemAvailable stays under
+  600 MB for 6 s it sends SIGABRT to pytest, whose faulthandler prints every
+  thread's stack before the process exits, so the step fails while the
+  runner can still report it;
+- pass `-o faulthandler_timeout=900`, which dumps every thread's stack when
+  one test runs past 15 minutes (the longest on the runner is about 10) and
+  does not stop the test;
+- wrap pytest in `timeout --signal=ABRT 42m`, three minutes inside the step
+  cap, and disable core files for that step;
+- upload `slow_test_output.txt` and `resource_watch.txt` on failure or
+  cancellation (`publish.yml` had no upload, and now runs `-v` so the log
+  names the running test);
+- allow the job 55 minutes instead of 50, so the upload can run after the
+  45-minute step cap.  Test time is unchanged.
 
 ### Documentation
 
@@ -8690,7 +8766,7 @@ re-ran `np.power(rho, k)` -- a libm `pow` per pixel -- for every term.  The
 first 21 modes ask for 34 such calls over 6 distinct exponents.  The build now
 shares one `{k: rho ** k}` memo and one hoisted `rho <= 1` mask across the
 modes, and accumulates each radial sum through one reused buffer
-(`lumenairy/analysis/zernike.py:105`, `:240`, `:435`).
+(`lumenairy/analysis/zernike.py:107`, `:242`, `:441`).
 
 | N | modes | before | after | |
 |---|---|---|---|---|
@@ -8732,7 +8808,7 @@ at all -- the worst relative error over every `(n, m)`:
 
 `_zernike_radial` now hands orders `n >= 22` to the Kintner (*Opt. Acta* **23**
 (1976) 679) recurrence in `n` at fixed `m`
-(`lumenairy/analysis/zernike.py:123`).  22 is where the sum first passes 1e-9,
+(`lumenairy/analysis/zernike.py:125`).  22 is where the sum first passes 1e-9,
 i.e. where it stops answering the question; `_ZERNIKE_RECURRENCE_MIN_N`
 carries that table.  **Below it nothing moves** -- every mode any shipped
 table (this module names modes to n = 8), any docstring, or any realistic
@@ -8965,7 +9041,7 @@ since `|R_n^m| <= 1` on the unit disc: **3.907e-15** on `k/128` for n <= 32 *and
 257 random `rho` in [0, 1], and **2.70e-14** on `rho = 1 - 10^-j` (j = 1..15), the hardest grid tried. The
 block now quotes all three and calls it **3e-14 out to n = 40**. It also records that the same sweep runs
 out to **n = 64 at <= 5.8e-14**, which closes WP-B8's deferred item 4 and is why the constant carries no
-upper limit. `lumenairy/analysis/zernike.py:92`. Nothing the module computes changes -- the edit is
+upper limit. `lumenairy/analysis/zernike.py:94`. Nothing the module computes changes -- the edit is
 comment-only, and `record_history_fingerprints.py --check` reports
 `lumenairy.analysis.zernike.md` unchanged, which is what that gate is for. The test bar (1e-13) already
 had four decades of room and is unmoved.

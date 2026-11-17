@@ -91,6 +91,24 @@ _PCX_ZIMG = {True: 48.372e-3, False: 51.669e-3}
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+# The converged tests below run at N = 8192, where one float64 grid is 0.5 GiB
+# and one complex128 field 1 GiB, on a 16 GB CI runner.  The readout helpers
+# therefore build the radius from two broadcast 1-D offsets instead of two
+# meshgrids, and reduce over the window's pixels instead of the whole grid.
+# Every element is formed by the same operations as before and the masked
+# reductions visit the same elements in the same order, so the numbers are
+# unchanged; the transient falls from ~4 GiB to ~1.5 GiB per call.
+def _radius_from_peak(I, dx):
+    """``sqrt(X**2 + Y**2)`` about the brightest pixel, built from broadcast
+    offsets (one full-size array, not three)."""
+    N = I.shape[0]
+    x = (np.arange(N) - N / 2) * dx
+    j, i = np.unravel_index(np.argmax(I), I.shape)
+    r = (x - x[i])[None, :] ** 2 + (x - x[j])[:, None] ** 2
+    np.sqrt(r, out=r)
+    return r
+
+
 def _gauss(N, dx, w0):
     x = (np.arange(N) - N / 2) * dx
     X, Y = np.meshgrid(x, x)
@@ -101,23 +119,18 @@ def _r2m(E_exit, dx, z_img, win=500e-6):
     """fga_f5-style windowed second-moment radius [m] at the image plane."""
     E = la.angular_spectrum_propagate(E_exit, z_img, _WL, dx)
     I = np.abs(E) ** 2
-    N = I.shape[0]
-    x = (np.arange(N) - N / 2) * dx
-    j, i = np.unravel_index(np.argmax(I), I.shape)
-    X, Y = np.meshgrid(x - x[i], x - x[j])
-    r = np.sqrt(X ** 2 + Y ** 2)
+    del E
+    r = _radius_from_peak(I, dx)
     m = r <= win
-    return float(np.sqrt((I * r ** 2)[m].sum() / I[m].sum()))
+    Im, rm = I[m], r[m]
+    return float(np.sqrt((Im * rm ** 2).sum() / Im.sum()))
 
 
 def _ee(E_exit, dx, z_img, frac, win=500e-6):
     E = la.angular_spectrum_propagate(E_exit, z_img, _WL, dx)
     I = np.abs(E) ** 2
-    N = I.shape[0]
-    x = (np.arange(N) - N / 2) * dx
-    j, i = np.unravel_index(np.argmax(I), I.shape)
-    X, Y = np.meshgrid(x - x[i], x - x[j])
-    r = np.sqrt(X ** 2 + Y ** 2)
+    del E
+    r = _radius_from_peak(I, dx)
     rb = np.linspace(0, win, 251)
     cum = np.array([I[r <= rr].sum() for rr in rb]) / I.sum()
     return float(np.interp(frac, cum, rb))
@@ -289,6 +302,7 @@ def test_displaced_matches_dual_oracle_pcx_split_converged():
         E_exit = la.apply_real_lens(E0, prescription=p, wavelength=_WL, dx=dx,
                                     surface_model='displaced')
         r[g] = _r2m(E_exit, dx, _PCX_ZIMG[g])
+        del E_exit       # not alive across the next orientation's lens call
     assert 36e-6 < r[True] < 50e-6, f"PCX good r2m={r[True]*1e6:.2f} vs 43.2"
     assert 110e-6 < r[False] < 145e-6, f"PCX bad r2m={r[False]*1e6:.2f} vs 127.6"
     ratio = r[True] / r[False]
