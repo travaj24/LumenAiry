@@ -7,13 +7,13 @@ large workstation: 8 GiB per cache, 2 GB per plan workspace.  On a 16 GB
 machine -- the hosted CI runner class -- one cache may then hold half of RAM
 for the rest of the process.
 
-MEASURED (Linux, Python 3.12, psutil's view of RAM set to 15.6 GiB, N = 8192
-ASM runs from the slow lane): after two runs the H cache held 4 entries
-(4 GiB) and the plan cache two double-buffered keys (4 GiB); the second run
-peaked at 15.4 GiB of RSS with those 8 GiB resident, and
-``clear_asm_caches()`` + ``gc`` brought the process back to 78 MiB.  The slow
-shard that runs one of those tests reached a 15.0 GiB high-water mark, i.e.
-the RAM of a 16 GB runner.
+MEASURED (Linux, Python 3.12, psutil's view of RAM set to 15.6 GiB, i.e. a
+16 GB machine): after ``test_hammer_h2_displaced_projection.py``, whose last
+two tests run ASM at N = 8192, the H cache held 4.2 GiB and the plan cache
+4.3 GiB; the last test peaked at 15.8 GiB of RSS, and ``clear_asm_caches()``
+brought the process back to 0.2 GiB.  Two slow-lane shards that stalled on
+CI reach 15.0 and 17.7 GiB high-water marks in that measurement -- the RAM
+of a 16 GB runner and more.
 
 WHAT CHANGED.  ``memory._ram_scaled_cap(nominal, fraction)`` is
 ``min(nominal, fraction * total RAM)`` and every one of those defaults goes

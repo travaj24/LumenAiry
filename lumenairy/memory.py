@@ -186,13 +186,13 @@ def _ram_scaled_cap(nominal_bytes: int, fraction: float) -> int:
     ``zernike._ZERNIKE_BASIS_CACHE``) used to carry fixed caps sized on a
     large workstation: 8 GiB per cache, 2 GB per plan workspace.  On a 16 GB
     machine one of those caches may then keep half of RAM for the rest of the
-    process.  MEASURED on two N = 8192 ASM runs (Linux, Python 3.12,
-    psutil's view of RAM set to 15.6 GiB, i.e. a 16 GB machine): the ASM
-    transfer-function cache kept 4 GiB and the pyFFTW plans 4 GiB after the
-    runs returned, the second run peaked at 15.4 GiB of RSS with those 8 GiB
-    resident, and ``clear_asm_caches()`` brought the process back to 78 MiB.
-    With the caps below: 1 GiB + 2 GiB kept, an 11.1 GiB peak, the same
-    results.
+    process.  MEASURED on a test module ending in two N = 8192 ASM tests
+    (Linux, Python 3.12, psutil's view of RAM set to 15.6 GiB, i.e. a 16 GB
+    machine): afterwards the ASM transfer-function cache held 4.2 GiB and the
+    pyFFTW plans 4.3 GiB, the second test peaked at 15.8 GiB of RSS, and
+    ``clear_asm_caches()`` brought the process back to 0.2 GiB.  With the
+    caps below the two tests peak at 10.7 and 10.6 GiB and 3.6 GiB stays
+    resident, with the same results.
 
     Scaling by TOTAL rather than available memory keeps the cap a property of
     the machine, fixed for the life of the process: it does not move with

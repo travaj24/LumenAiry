@@ -190,13 +190,22 @@ the Zernike basis cache (8 GiB total each).  On a 16 GB machine one N = 8192
 run leaves gigabytes in them for the rest of the process.
 
 - **Measured** (Linux, Python 3.12, BLAS on one thread, 4 CPUs, psutil's
-  view of RAM set to 15.6 GiB, i.e. a 16 GB machine): after the two
-  N = 8192 tests in `tests/unit/test_hammer_h2_displaced_projection.py`
-  the H cache held 4 GiB and the plan cache 4 GiB; the second test peaked
-  at 15.4 GiB of RSS, and `clear_asm_caches()` + `gc` brought the process
-  back to 78 MiB.  Slow-lane shard 3 of this release (119 tests, collected
-  without jax as CI collects it) reached a 15.0 GiB high-water mark in the
-  second of those tests, with 8.0 GiB still resident after it.
+  view of RAM set to 15.6 GiB, i.e. a 16 GB machine; each test file or
+  shard in one process, as CI runs it):
+  - `tests/unit/test_hammer_h2_displaced_projection.py`, whose last two
+    tests run ASM at N = 8192: afterwards the H cache held 4.2 GiB and the
+    plan cache 4.3 GiB, the last test peaked at 15.8 GiB of RSS, and
+    `clear_asm_caches()` + `gc` brought the process back to 0.2 GiB.
+  - Slow-lane shard 3 of this release (119 tests, collected without jax as
+    CI collects it): a 15.0 GiB high-water mark, in the second of those
+    tests, with 8.0 GiB still resident after it.
+  - Slow-lane shard 4 as collected for 5.50.2: a 17.7 GiB high-water mark
+    in `test_niche_p6_astigmatic_aperture.py::
+    test_astig_matches_fine_asm_at_line_foci_and_lc` (N = 8192 ASM to three
+    planes), which started with 4.1 GiB left by earlier tests.  Slow-lane
+    shard 2 as collected for 5.51.0: a 14.1 GiB high-water mark in the same
+    file's `test_aperture_converging_leg_matches_fine_asm`.  Run as a file
+    in a fresh process, those two tests peak at 12.0 and 11.8 GiB.
 - **Fix.** `memory._ram_scaled_cap(nominal, fraction)` returns
   `min(nominal, fraction * total RAM)`, and the five defaults go through
   it: 1/8 of total RAM for the 8 GiB totals, 1/16 for the 2 GB plan
@@ -211,10 +220,15 @@ run leaves gigabytes in them for the rest of the process.
   duration of the pin, since it checks the estimator's arithmetic, not the
   machine.
 - **After the fix**, same setup: shard 3's high-water mark is 12.1 GiB
-  (all 116 of its non-skipped tests pass, 24.6 min against 24.5), and with
-  the leaner readout helpers below the two tests peak at 10.7 and 10.6 GiB
-  and leave 3.6 GiB resident.  Their wall times did not change measurably
-  (103-114 s and 72-86 s against 118 s and 74 s).  Results are unchanged: an apply-real-lens + ASM sequence at
+  (all 116 of its non-skipped tests pass, 24.6 min against 24.5).  The
+  test ids of the shard-4 and shard-2 stalls, replayed in order on this
+  tree, reach 10.8 and 10.2 GiB (all pass, 22.1 and 21.8 min).  The two
+  astigmatic tests peak at 8.0 and 8.8 GiB (12.0 and 11.8 before); and
+  with the leaner readout helpers below the two N = 8192 hammer tests peak
+  at 10.7 and 10.6 GiB and leave 3.6 GiB resident (12.4 and 15.8 GiB, and
+  8.8 GiB, before).  Wall times did not change measurably (hammer: 114 and
+  86 s against 129 and 80 s; astigmatic: 72 and 47 s against 72 and
+  47 s).  Results are unchanged: an apply-real-lens + ASM sequence at
   N = 2048 run with an H budget of one entry and single-workspace plans is
   bit-identical to the run with the shipped caps.
 - `tests/unit/test_fix_ram_scaled_cache_caps.py` pins both machine sizes
@@ -228,11 +242,16 @@ run leaves gigabytes in them for the rest of the process.
 ### CI -- a stalled slow shard now leaves a diagnosis
 
 Slow-lane shards ran to the 50-minute job limit repeatedly between
-2026-11-14 and 2026-11-17 (among them shards 4/8, 2/8, 3/8 and 3/8).  Every
-time the 45-minute step timeout did not fire, the log-upload step did not
-run, and no job log was kept, which is what a runner that has stopped
-answering looks like.  Both shard-3 stalls ran the test behind the
-15.0 GiB peak above.  The slow lanes in
+2026-11-14 and 2026-11-17 (among them shards 4/8, 2/8, 3/8 and 3/8).  In
+two the pytest step ended 15-16 minutes in, every later step was skipped
+and the job never completed; in the other two the pytest step never ended
+and its 45-minute timeout never fired.  No log-upload step ran and no job
+log was kept, which is what a runner that has stopped answering looks
+like.  Each of those four shards runs one of the N = 8192
+tests above, and in a local replay of the shard under a 16 GB view of RAM
+that test holds the shard's high-water mark (15.0, 17.7 and 14.1 GiB).  For
+shards 4 and 2, whose steps stopped 15.2 and 16.3 minutes in, the replay
+reaches that test 16-17 minutes in.  The slow lanes in
 `unit-tests.yml` and `publish.yml` now:
 
 - run `scripts/ci_resource_watch.sh` beside pytest.  Every 60 s it prints
