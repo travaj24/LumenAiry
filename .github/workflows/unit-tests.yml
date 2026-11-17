@@ -707,7 +707,10 @@ jobs:
         timeout-minutes: 45
 
       - name: Upload slow-test log on failure
-        if: failure()
+        # A step that hits ``timeout-minutes`` ends as CANCELLED, not FAILED,
+        # and GitHub then serves no log for the job: without ``cancelled()``
+        # here a timed-out shard left nothing to diagnose it with.
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: slow-test-output-shard${{ matrix.shard }}
