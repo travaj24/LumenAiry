@@ -3381,7 +3381,10 @@ Canonical source: `pyproject.toml` `[project.dependencies]` and
 `[project.optional-dependencies]`.
 
 ### Required
-- `numpy` — core numerics
+- `numpy>=2.1` — core numerics.  2.1 is the first NumPy whose bundled
+  LAPACK fallback (used by source builds without an external BLAS) is safe
+  to call from several threads at once; the threaded solver sweeps need it.
+  Importing with an older NumPy warns.
 - `scipy` — Zernike decomposition (Householder QR), `design_optimize`,
   multi-threaded FFTs (`USE_SCIPY_FFT = True`)
 - `matplotlib` — all plotting utilities

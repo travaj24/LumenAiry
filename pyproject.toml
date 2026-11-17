@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "5.51.0"
+version = "5.51.1"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -67,15 +67,33 @@ classifiers = [
 #   violated.  Under 1.x value-based casting that reasoning does not describe
 #   the arithmetic being performed.
 #
+# v5.51.1 -- 2.0 -> 2.1, for THREAD SAFETY of numpy.linalg.  A NumPy built
+# from source without an external BLAS/LAPACK silently falls back to the
+# bundled f2c ``lapack_lite`` (meson ``allow-noblas`` defaults to true), whose
+# locals are all ``static``; numpy.linalg releases the GIL around it, so two
+# threads in ``inv``/``solve``/``eig`` corrupt each other's state.  NumPy
+# 2.1.0 added a global lock around every lapack_lite call; 1.x and 2.0.x have
+# none.  MEASURED on Windows: 4 threads of ``numpy.linalg.inv`` on private
+# matrices crash a BLAS-less build every time below 2.1 and never on a
+# BLAS-less 2.1.3 build; official OpenBLAS wheels are clean at every version
+# tried.  The threaded RCWA sweep hits exactly this (measured); the PMM sweeps
+# thread the same numpy.linalg calls.  The cause is in the
+# NumPy source, not the OS, so the floor is not platform-conditional.
+# ``lumenairy/_numpy_floor.py`` carries the same floor as a runtime check (a
+# source checkout on PYTHONPATH bypasses this metadata), and
+# ``tests/unit/test_v5_51_1_numpy_floor_threaded_linalg.py`` pins the two
+# together with ``requirements.txt``.  numpy 2.1 ships wheels for Python
+# 3.10-3.13, so ``requires-python = ">=3.10"`` is unaffected.
+#
 # scipy>=1.13 is the matching floor, adjudicated rather than guessed: 1.13.0
 # is the first SciPy line built against the numpy 2.0 ABI (earlier lines are
 # compiled against the 1.x C-API and abort at import under numpy 2), so any
 # scipy < 1.13 is un-installable with this numpy floor.  1.13 supports
 # Python >= 3.9 and numpy 2.0 supports >= 3.9, so the pair is consistent with
 # ``requires-python = ">=3.10"`` (on 3.10 the resolver lands on the numpy
-# 2.0-2.2 lines, which still ship 3.10 wheels).
+# 2.1-2.2 lines, which still ship 3.10 wheels).
 dependencies = [
-    "numpy>=2.0",
+    "numpy>=2.1",
     "scipy>=1.13",
     "matplotlib>=3.5",
     "psutil>=5.0",

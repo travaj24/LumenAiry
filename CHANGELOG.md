@@ -4,6 +4,55 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.51.1] — 2026-11-16
+
+A dependency release.  The NumPy floor rises from 2.0 to 2.1, and the package
+warns at import when it finds an older NumPy.  No solver code changes and no
+results change.
+
+### Changed -- `numpy>=2.1` (was `numpy>=2.0`)
+
+Threaded solves could kill the process (Windows access violation or heap
+corruption, `0xc0000374`) inside `numpy.linalg`.  This was measured for
+`RCWAStack.solve_vs_wavelength` and for `RCWAStack.solve` calls on the
+caller's own thread pool.  The PMM sweeps thread the same `numpy.linalg`
+calls and are exposed in the same way.
+
+- **Cause: NumPy, not this library.** A NumPy built from source without an
+  external BLAS/LAPACK silently falls back to its bundled `lapack_lite`.
+  That code keeps its working variables in process-global `static` storage.
+  NumPy releases the GIL around it, so two threads inside `inv`, `solve` or
+  `eig` at once overwrite each other's loop indices and write out of bounds.
+  NumPy 2.1.0 added a lock that serialises every `lapack_lite` call; 1.x and
+  2.0.x have none.
+- **Measured** (Windows, 4 threads of `numpy.linalg.inv` on thread-private
+  matrices, no lumenairy involved): a BLAS-less build crashed 20 of 20 runs
+  at 1.26.4 and 10 of 10 at 2.0.2, and 0 of 30 at 2.1.3.  Official NumPy
+  wheels link OpenBLAS and were clean at every version tried (1.24.4, 1.26.4,
+  2.0.2, 2.1.3, 2.2.6, 2.4.4, 2.5.5).  A threaded
+  `solve_vs_wavelength(max_workers=4)` crashed 10 of 10 runs on the BLAS-less
+  1.26.4 build.
+- **The RCWA threaded path was audited and is race-free.** Each worker
+  solves a private clone of the stack, and the only shared cache is
+  lock-guarded and read-only.  Neither the RCWA nor the PMM package calls
+  native code other than NumPy/SciPy, so neither can corrupt the heap by
+  itself.
+- **Why there is no platform marker:** the defect is in NumPy's source, not
+  in an OS-specific binary.
+- **Who is affected:** only environments with a source-built, BLAS-less
+  NumPy older than 2.1.  `pip install lumenairy` from wheels already got a
+  safe NumPy.
+
+### Added -- import-time NumPy floor check
+
+Importing `lumenairy` with NumPy older than the floor now issues a
+`RuntimeWarning` that names the floor and the threading hazard.  This catches
+installs that bypass the installer, such as a source checkout on `PYTHONPATH`
+or `pip install --no-deps`.  The floor lives in one constant
+(`lumenairy/_numpy_floor.py`).  A test pins it to `pyproject.toml` and
+`requirements.txt`, and runs a threaded RCWA sweep in a subprocess as an
+environment canary.
+
 ## [5.51.0] — 2026-11-14
 
 A minor release for the RCWA and PMM stack solvers.  One default changes:

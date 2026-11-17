@@ -13,7 +13,10 @@
 # every tested build is 2.x); scipy>=1.13 is the first line built against the
 # numpy 2.0 ABI.  See the comment above [project.dependencies] in
 # pyproject.toml for the adjudication.
-numpy>=2.0
+# v5.51.1: 2.0 -> 2.1 -- the first NumPy whose bundled lapack_lite fallback
+# (used by source builds without an external BLAS) is serialised by a lock;
+# below it, threaded numpy.linalg calls on such a build crash the process.
+numpy>=2.1
 scipy>=1.13               # resample_field (Fresnel grid resampling), optimization
 matplotlib>=3.5           # plotting (spot_diagram, ray_fan_plot, plot_field, etc.)
 # v4.16.3 (audit P3-NEW-F1-5): psutil is a hard dep in pyproject.toml
