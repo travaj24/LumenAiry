@@ -4,6 +4,73 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.51.2] — 2026-11-17
+
+A test-correctness release.  No solver code changes and no results change:
+every returned array is bit-identical to 5.51.1.  One slow test asserted a
+comparison that floating point cannot decide, and failed once in the release
+lane for 5.51.1.
+
+### Fixed -- the deterministic-refinement test compared two residuals at the round-off floor
+
+`test_the_refined_step_down_fits_at_least_as_well_as_the_qr_it_replaces`
+(`tests/unit/test_niche_d15_deterministic_traced_fit.py`) checks that the
+deterministic iterative refinement fits the data at least as well as the QR
+solve it replaces on the traced chain's ill-conditioned fits.  It asserted
+`r_det <= (1 + 1e-6) * r_qr` with both residuals `||b - A x||` evaluated in
+float64.  The release lane read `r_det` = 1.049979e-13 against `r_qr` =
+1.048554e-13 on a 120-term fit and failed.
+
+- **Cause: the comparison, not the solver.** The 120-term fits reproduce
+  their data to round-off (`r* / ||b||` ~ 1e-15).  There, the float64
+  evaluation of `||b - A x||` carries an error of order
+  `eps * || |b| + |A| |x| ||`, which is 30-65 % of the residual.  The value
+  reads 3-6 % high and moves by up to ~1e-2 between BLAS kernels for the
+  same `x`.  A 1e-6 margin on that ratio is a coin toss.  Below that floor
+  even the exact order of two answers is set by rounding: in 12 of the 72
+  configurations below, QR lands closer than the refined answer, by up to
+  1.7e-03 in exact arithmetic.  Both answers are then an order of magnitude
+  inside what float64 coefficients can resolve.
+- **Measured** on 72 configurations: Windows NumPy 2.4.4, Linux NumPy
+  2.2.6 / 2.4.6 / 2.5.4, six OpenBLAS core types, 1 / 2 / 4 threads, each
+  capturing its own fit matrices.  The old bar failed on 16 of them (worst
+  +5.6e-03).  One reproduced the release lane's 1.049979e-13 to all seven
+  printed digits.  The refined answer was never measurably worse.
+- **New assertion.** Both answers are scored by their distance from the
+  least-squares optimum, `e = ||A (x - x*)|| = ||Q^T (b - A x)||`.  The
+  residual is evaluated with a compensated (Ogita-Rump-Oishi) dot product,
+  which is BLAS-free.  The test asserts `e_det <= max(e_qr, floor)` with
+  `floor = eps * || |b| + |A| |x| ||`: no farther from the optimum than QR,
+  except where both answers are inside the float64 representation floor.  It
+  holds on all 72 configurations with a 7x margin.  The instrument checks
+  itself: both candidates must expose the same optimal residual.
+- **The new bar still catches a worse solver.**
+  `test_the_optimum_gap_bar_has_teeth` requires three mutants to fail on
+  every screened fit: no refinement step (23-15 000x over the bar), and the
+  refined answer perturbed by 1e-6 and by 1e-12 relative.  The old bar
+  passed the first and the last on the 28-term fits.
+- **New test** `test_the_compensated_residual_is_exact_to_its_bound` checks
+  the compensated residual row by row against a correctly rounded
+  `math.fsum` reference.  It also checks that a plain float64 residual is
+  measurably wrong in the same regime.
+
+### Documentation
+
+- The comment on `_LSTSQ_RESID_MARGIN` in `lumenairy/elements/_lens_traced.py`
+  claimed `||b - A x||` is computed to ~1e-13 relative on the fits it
+  arbitrates.  That holds only where the residual sits orders above the
+  round-off floor.  The comment now states the condition and the
+  measurement.  The C13 step-down's choice on the traced path was the same
+  in all 72 configurations, so the margin decides nothing by noise there.
+  With `DETERMINISTIC_TRACED_FIT` on, the comparison is never reached.  With
+  it off, the gaps on the 120-term fits are 3e3-2e5x, and the 28-term fits
+  are ties at up to 0.63 of the margin against evaluation noise of at most
+  1.3e-9.
+- The measurement notes on `_DET_REFINE_STEPS`, `_det_refine` and
+  `_solve_lstsq_thread_safe` now quote the optimum-gap figures.  The audit
+  record `docs/audits/BUILD_DETERMINISTIC_TRACED_FIT_2026_08_23.md` carries a
+  correction note on its float64 table.
+
 ## [5.51.1] — 2026-11-16
 
 A dependency release.  The NumPy floor rises from 2.0 to 2.1, and the package
