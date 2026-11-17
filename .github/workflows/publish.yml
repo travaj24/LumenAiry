@@ -222,7 +222,9 @@ jobs:
     # publish run therefore never reached the build/upload jobs.  ``shard:``
     # and ``--splits`` below MUST stay equal (pytest-split never runs the
     # trailing groups of a matrix shorter than ``--splits``).
-    timeout-minutes: 50
+    # 5.51.2: 50 -> 55, as in unit-tests.yml: room for the log upload after
+    # the 45-min step cap, not more test time.
+    timeout-minutes: 55
     strategy:
       fail-fast: true
       matrix:
@@ -254,13 +256,41 @@ jobs:
           MKL_NUM_THREADS: '1'
           NUMEXPR_NUM_THREADS: '1'
           VECLIB_MAXIMUM_THREADS: '1'
+        # bash explicitly (``-eo pipefail``): a failing pytest fails the
+        # pipeline through ``tee``; the EXIT trap stops the watch either way.
+        shell: bash
+        # Same stall diagnostics as unit-tests.yml's slow job (see the note
+        # there): a resource watch that prints memory and the running test
+        # every 60 s and aborts pytest with a stack dump before the runner
+        # runs out of RAM; a per-test faulthandler dump past 15 min; and an
+        # in-script ``timeout`` three minutes inside the step cap, so a hung
+        # shard fails with stacks in the log and the upload step runs.
+        # ``-v`` so the log (and the watch) can name the running test.
         run: |
-          python -m pytest tests/unit -m "slow and not integration" --tb=short \
-            -p no:cacheprovider --maxfail=10 \
+          ulimit -c 0   # an aborted multi-GB pytest must not write a core file
+          bash scripts/ci_resource_watch.sh slow_test_output.txt resource_watch.txt 60 &
+          watch_pid=$!
+          trap 'kill "$watch_pid" 2>/dev/null' EXIT
+          timeout --signal=ABRT --kill-after=60 42m \
+            python -m pytest tests/unit -m "slow and not integration" --tb=short \
+            -p no:cacheprovider --maxfail=10 -v -o faulthandler_timeout=900 \
             --splits 8 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
-            --durations-path .test_durations
+            --durations-path .test_durations 2>&1 \
+            | tee slow_test_output.txt
+          exit ${PIPESTATUS[0]}
         timeout-minutes: 45
+
+      - name: Upload slow-test log on failure
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-slow-output-shard${{ matrix.shard }}
+          path: |
+            slow_test_output.txt
+            resource_watch.txt
+          if-no-files-found: warn
+          retention-days: 7
 
   build:
     name: Build sdist + wheel
