@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/fft_infra.py
-ast_sha256: bc951ef955f8585abf0f2c48d6ad5e45c486e7aad04c2fccd7e20d39409bf110
-token_sha256: 21c35567c9de7d6f666b1aafb118ca525ee730e64d7a5fcbe1c28bba51505b9b
+ast_sha256: 83247efb1ad3b4153dbbde97bc218cea09f5fd3900243a69a519d5eab4a154af
+token_sha256: 6e2294f7ed7ee1948d5c6d654d2d0e01d10dfb0233b61a65b45dab98d021f872
 pre_relocation_lines: 2678
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- scipy.fft deferred behind find_spec + a first-use accessor; no behaviour change (WP-A22 item 9)
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-09-15 -- WAVE5-E: set_fft_double_buffer's byte-identity claim scoped to the transform's values; the module note gains the temp_elide mechanism and the measured cost of privatising the dispatchers
+re_recorded: 2026-11-17 -- default byte caps of the grid-sized caches scale with total RAM (memory._ram_scaled_cap)
 -->
 
 # Version history -- `lumenairy/propagators/fft_infra.py`

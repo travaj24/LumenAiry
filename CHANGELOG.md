@@ -4,6 +4,296 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.51.2] — 2026-11-17
+
+One solver fix, one memory fix, four test-correctness fixes and stall
+diagnostics for the slow CI lanes.  The covariant (uniform-
+slant) 1-D PMM far field picked its incident field by a rule that depended
+on the eigenvector basis LAPACK returns, so a lossless slanted grating closed
+R+T only to ~1e-3 and moved by that much between machines; it now closes to
+the discretization residual on every build.  Only covariant slanted results
+change (below); every other returned array is bit-identical to 5.51.1.  One
+slow test asserted a comparison that floating point cannot decide, and
+failed once in the release lane for 5.51.1.  Another asserted the position
+of a focal spot that its own fail-before switch had destroyed.  Five
+grid-sized caches now scale their default byte caps with total RAM, so a
+16 GB machine no longer keeps up to half of its memory in them; on 64 GB or
+more nothing changes, and no value depends on a cap.
+
+### Fixed -- the covariant slanted far field chose its incident field by the mode basis
+
+`PMMStack.solve` on a uniform-slant in-plane stack (the covariant route that
+`factorization='auto'` takes) and `pmm_jones_1d_slanted` /
+`pmm_jones_1d_slanted_segments` with `factorization='covariant'` (or `'auto'`
+in-plane) decompose the incident plane wave on the superstrate's forward
+modes by solving `Hsup c = e0`, where `Hsup` projects the modes onto the
+Rayleigh orders.  `Hsup` has fewer rows (2 x orders) than forward modes
+(2 x nodes), so the system has a null space and `lstsq` returned its
+minimum-`||c||` member.
+
+- **Cause.** `||c||` is a norm on eigenvector coefficients, so the choice
+  depended on how each eigenvector was scaled and, inside a degenerate
+  eigenspace, on which basis LAPACK returned.  The covariant half-space
+  generator is built from the Galerkin first derivative `S0^-1 C`, which on
+  a periodic GLL grid has a two-dimensional null space: the constant and a
+  spurious mode with content at orders 0, +-4, +-6 and +-8.  The order-0
+  plane wave therefore shares one eigenvalue (gap 1e-15) with that spurious
+  mode, and rounding decided the mixture.  The selected "incident" field
+  carried 0.23 rms of content beyond the projected orders (mostly +-6),
+  which scattered off the grating.
+  The vertical and convection routes build their half-spaces from the
+  stiffness operator (no spurious null mode, one clean basis per
+  polarization) and were unaffected: rescaling their eigenvectors moves
+  nothing above 1e-13.
+- **Measured** on the slanted grating of
+  `test_w7_fc_slanted_grating_on_an_absorbing_substrate_is_sane` (lossless
+  substrate, degree 8), over 54 configurations (Windows NumPy 2.4.4 and
+  Linux NumPy 2.2.6 / 2.4.6 / 2.5.4, six OpenBLAS core types, 1 to 4
+  threads): the Ex-channel `R+T-1` ranged from -7.6e-4 to +1.0e-3, the Ey
+  channel from -2.3e-5 to +5.2e-6.  A CI runner read +1.18e-3 and failed
+  the test's 1e-3 bar.  Rescaling the eigenvector columns by random factors,
+  a change of basis that cannot change a correct answer, spread the Ex
+  `R+T-1` over -1.3e-3 .. +1.7e-4 on one machine, and a 1e-15 relative
+  perturbation of the generator over -4.9e-4 .. +1.6e-3.  The
+  documented "~1e-4 slant closure floor" of this route was this draw, not
+  the discretization.
+- **Fix.** The incident field is now the transverse field of least L2 norm
+  (nodal mass `S0`) whose Rayleigh projection is the unit order-0 wave,
+  decomposed on the forward modes (`_incident_field_decomposer` in
+  `elements/pmm/_core.py`, passed by both covariant callers through the new
+  `incident_fields` argument of `_assemble_jones_farfield`).  That depends
+  only on the forward span, so it is basis-free; the selected field has
+  1e-12 content outside the projected orders.  The Rayleigh solve keeps the
+  rank-and-residual guard.
+- **After the fix**, on 48 configurations: Ex `R+T-1` = -1.2803e-6 and Ey
+  -4.15e-11 on every one (spread 6e-14).  The closure now converges with
+  degree: Ex -7.4e-6, -1.3e-6, -3.4e-7, -1.2e-7, -2.2e-8, -2.0e-9, -3.8e-10
+  at degree 6 / 8 / 10 / 12 / 16 / 24 / 32, where the old rule read between
+  -2.8e-4 and +8.9e-5 with no trend.  The Ex transmission converges to
+  0.96170744 (degree 32); at degree 8 the old rule returned 0.9613881 on
+  this machine (-3.2e-4 from the converged value) and the new one 0.9617196
+  (+1.2e-5).  **Values move** for every covariant slanted solve, by the size
+  of the old draw: here 5e-5 in R and 3.3e-4 in T for Ex, 7e-6 in R for Ey.
+  No pinned value in the test suite moved outside its tolerance.
+- **On an absorbing substrate** the Ex total stays short of 1 by -6.13e-4 at
+  degree 8 (machine-independent now; it was -1.44e-3 .. +5.9e-4).  That is
+  physical bookkeeping, not a solver residual: every evanescent order
+  carries flux into an absorbing medium, and the orders beyond the projected
+  set are not counted.  The deficit falls to -1.8e-4 and -5.8e-5 at 15 and 31
+  orders and does not change with degree.
+- **Docs.** The `R+T - 1` column of the `PMMStack.add_sheared_grating`
+  budget table and the closure sentence below it are re-measured: 8.3e-6 /
+  1.9e-8 / 3.1e-9 / 2.5e-10 at degree 8 / 12 / 16 / 24 (were 6.9e-5 / 1.9e-5
+  / 3.3e-6 / 9.9e-7).  Its per-order `err` column is not affected by this
+  fix (old and new rule agree to 1e-4 on that fixture).
+
+### Tests -- the slanted-grating closure test
+
+- `test_w7_fc_slanted_grating_on_an_absorbing_substrate_is_sane` now bars
+  the lossless closure at 5e-6 (4x the degree-8 residual; every
+  configuration of the old rule exceeded it, the closest at 9.9e-6; the bar
+  was 1e-3) and the lossy closure at 1e-3 (was 2e-3; measured 6.13e-4 on
+  every configuration).  It still fails the defect it was written for (T
+  identically 0 when the substrate gauge is undone).
+- New: `test_w7_fc_covariant_far_field_is_independent_of_the_mode_basis`
+  (`[stack]`, `[single_layer]`) rescales every region's eigenvector columns
+  and requires R and T to stay put to 1e-10.  The old rule fails both arms
+  on any machine.  `test_w7_fc_covariant_closure_converges_with_degree` and
+  `test_w7_fc_lossy_closure_deficit_is_the_truncated_orders` pin the two
+  measurements above.
+
+### Fixed -- the deterministic-refinement test compared two residuals at the round-off floor
+
+`test_the_refined_step_down_fits_at_least_as_well_as_the_qr_it_replaces`
+(`tests/unit/test_niche_d15_deterministic_traced_fit.py`) checks that the
+deterministic iterative refinement fits the data at least as well as the QR
+solve it replaces on the traced chain's ill-conditioned fits.  It asserted
+`r_det <= (1 + 1e-6) * r_qr` with both residuals `||b - A x||` evaluated in
+float64.  The release lane read `r_det` = 1.049979e-13 against `r_qr` =
+1.048554e-13 on a 120-term fit and failed.
+
+- **Cause: the comparison, not the solver.** The 120-term fits reproduce
+  their data to round-off (`r* / ||b||` ~ 1e-15).  There, the float64
+  evaluation of `||b - A x||` carries an error of order
+  `eps * || |b| + |A| |x| ||`, which is 30-65 % of the residual.  The value
+  reads 3-6 % high and moves by up to ~1e-2 between BLAS kernels for the
+  same `x`.  A 1e-6 margin on that ratio is a coin toss.  Below that floor
+  even the exact order of two answers is set by rounding: in 12 of the 72
+  configurations below, QR lands closer than the refined answer, by up to
+  1.7e-03 in exact arithmetic.  Both answers are then an order of magnitude
+  inside what float64 coefficients can resolve.
+- **Measured** on 72 configurations: Windows NumPy 2.4.4, Linux NumPy
+  2.2.6 / 2.4.6 / 2.5.4, six OpenBLAS core types, 1 / 2 / 4 threads, each
+  capturing its own fit matrices.  The old bar failed on 16 of them (worst
+  +5.6e-03).  One reproduced the release lane's 1.049979e-13 to all seven
+  printed digits.  The refined answer was never measurably worse.
+- **New assertion.** Both answers are scored by their distance from the
+  least-squares optimum, `e = ||A (x - x*)|| = ||Q^T (b - A x)||`.  The
+  residual is evaluated with a compensated (Ogita-Rump-Oishi) dot product,
+  which is BLAS-free.  The test asserts `e_det <= max(e_qr, floor)` with
+  `floor = eps * || |b| + |A| |x| ||`: no farther from the optimum than QR,
+  except where both answers are inside the float64 representation floor.  It
+  holds on all 72 configurations with a 7x margin.  The instrument checks
+  itself: both candidates must expose the same optimal residual.
+- **The new bar still catches a worse solver.**
+  `test_the_optimum_gap_bar_has_teeth` requires three mutants to fail on
+  every screened fit: no refinement step (23-15 000x over the bar), and the
+  refined answer perturbed by 1e-6 and by 1e-12 relative.  The old bar
+  passed the first and the last on the 28-term fits.
+- **New test** `test_the_compensated_residual_is_exact_to_its_bound` checks
+  the compensated residual row by row against a correctly rounded
+  `math.fsum` reference.  It also checks that a plain float64 residual is
+  measurably wrong in the same regime.
+
+### Fixed -- a fail-before arm scored the position of a spot it had destroyed
+
+`test_breaking_the_tilted_path_moves_the_skew_spot_off_the_oracle`
+(`tests/unit/test_niche_c1_consolidation.py`) disables one mechanism of the
+tilted-carrier chain at a time and requires the skew focal spot to miss the
+exact skew ray trace by more than 0.6 um.  Its `[no tilt ramp]` arm read
+0.51 um on one CI runner and failed.
+
+- **Cause: the arm's position is not a measurement.** Without the tilt ramp
+  the spot is destroyed: the peak falls to 2.0e-8 .. 1.5e-7 of the shipped
+  path's and the readout window holds ~1e-7 of the beam's power.  The
+  element's ray fits on a field missing its tilt differ between BLAS builds
+  (the arm's intermediate beam radius moves by 2e-5 relative, the shipped
+  path's by 1e-13), so the centroid of the residue moves with the build:
+  0.17 .. 10.4 um on 34 configurations (Windows NumPy 2.4.4, Linux NumPy
+  2.2.6 / 2.4.6 / 2.5.4, six OpenBLAS core types, 1 to 4 threads), 12.7 um
+  when the test was written.  The old bar failed on 6 of the 34; one
+  reproduced the runner's 0.51 um to all printed digits.
+- **The shipped path is not build-dependent.** Its centroid sits 0.133 um
+  from the chief ray on all 34 configurations (spread 1e-11 um), and stays
+  there with a finer ray fit, a finer input grid and the wider readout the
+  broken arms use.  The test's docstring quoted 0.004 um, measured before
+  the tilted reference started carrying the relay's coma (the tree just
+  before that change reads 0.015 um, the tree with it 0.132 um).  An exact
+  trace of the Gaussian-weighted bundle puts the geometric centroid 0.310 um
+  off the chief ray in the same direction, so the modelled 0.133 um is coma.
+  The model carries 43 % of the geometric shift; that gap is open.
+- **New assertion for that arm.** The collapse itself: peak and power within
+  20 um of the oracle both below 1e-3 of the shipped path's (measured at
+  most 1.5e-7 and 6.0e-8).  The other two arms leave a real spot and keep
+  the position bar (1.089 and 1.183 um, identical on every configuration).
+  With each replacement made a pass-through, so that the "broken" run is the
+  shipped path, all three arms fail.  The docstrings' measured numbers are
+  re-measured.
+
+### Fixed -- the grid-sized caches could keep half of a 16 GB machine
+
+Five process-global array caches had fixed default byte caps sized on a
+large workstation: the ASM transfer-function cache (`fft_infra._H_CACHE`,
+8 GiB total), the pyFFTW plan workspaces (2 GB per workspace, two per key),
+the Bluestein chirp-kernel cache, the centred-grid cache in `beam_stats` and
+the Zernike basis cache (8 GiB total each).  On a 16 GB machine one N = 8192
+run leaves gigabytes in them for the rest of the process.
+
+- **Measured** (Linux, Python 3.12, BLAS on one thread, 4 CPUs, psutil's
+  view of RAM set to 15.6 GiB, i.e. a 16 GB machine; each test file or
+  shard in one process, as CI runs it):
+  - `tests/unit/test_hammer_h2_displaced_projection.py`, whose last two
+    tests run ASM at N = 8192: afterwards the H cache held 4.2 GiB and the
+    plan cache 4.3 GiB, the last test peaked at 15.8 GiB of RSS, and
+    `clear_asm_caches()` + `gc` brought the process back to 0.2 GiB.
+  - Slow-lane shard 3 of this release (119 tests, collected without jax as
+    CI collects it): a 15.0 GiB high-water mark, in the second of those
+    tests, with 8.0 GiB still resident after it.
+  - Slow-lane shard 4 as collected for 5.50.2: a 17.7 GiB high-water mark
+    in `test_niche_p6_astigmatic_aperture.py::
+    test_astig_matches_fine_asm_at_line_foci_and_lc` (N = 8192 ASM to three
+    planes), which started with 4.1 GiB left by earlier tests.  Slow-lane
+    shard 2 as collected for 5.51.0: a 14.1 GiB high-water mark in the same
+    file's `test_aperture_converging_leg_matches_fine_asm`.  Run as a file
+    in a fresh process, those two tests peak at 12.0 and 11.8 GiB.
+- **Fix.** `memory._ram_scaled_cap(nominal, fraction)` returns
+  `min(nominal, fraction * total RAM)`, and the five defaults go through
+  it: 1/8 of total RAM for the 8 GiB totals, 1/16 for the 2 GB plan
+  workspace.  With 64 GB of RAM or more (32 GB for the plan workspace)
+  every cap is unchanged.  On 16 GB an N = 8192 plan keeps one workspace
+  per key (the byte-identical `set_fft_double_buffer(False)` trade) and the
+  H cache keeps one 1 GiB entry.  The setters still override.
+  `estimate_asm_memory` reads the plan-workspace cap, so below 32 GB of RAM
+  it now prices an N = 8192 complex128 key at one workspace, which is what
+  is allocated.  The test that pins its N = 8192 value
+  (`test_verify_perf_fixes_2026_08_10.py`) sets the 2 GB cap for the
+  duration of the pin, since it checks the estimator's arithmetic, not the
+  machine.
+- **After the fix**, same setup: shard 3's high-water mark is 12.1 GiB
+  (all 116 of its non-skipped tests pass, 24.6 min against 24.5).  The
+  test ids of the shard-4 and shard-2 stalls, replayed in order on this
+  tree, reach 10.8 and 10.2 GiB (all pass, 22.1 and 21.8 min).  The two
+  astigmatic tests peak at 8.0 and 8.8 GiB (12.0 and 11.8 before); and
+  with the leaner readout helpers below the two N = 8192 hammer tests peak
+  at 10.7 and 10.6 GiB and leave 3.6 GiB resident (12.4 and 15.8 GiB, and
+  8.8 GiB, before).  Wall times did not change measurably (hammer: 114 and
+  86 s against 129 and 80 s; astigmatic: 72 and 47 s against 72 and
+  47 s).  Results are unchanged: an apply-real-lens + ASM sequence at
+  N = 2048 run with an H budget of one entry and single-workspace plans is
+  bit-identical to the run with the shipped caps.
+- `tests/unit/test_fix_ram_scaled_cache_caps.py` pins both machine sizes
+  in a child interpreter (the caps are set at import).  On the pre-fix tree
+  the 16 GB arm fails with an 8 GiB H cap.
+- The two N = 8192 tests' readout helpers build the radius from broadcast
+  1-D offsets instead of two meshgrids and drop each field once it is
+  reduced.  Every element and every masked sum is formed in the same order
+  as before (checked bit for bit at three grid sizes).
+
+### CI -- a stalled slow shard now leaves a diagnosis
+
+Slow-lane shards ran to the 50-minute job limit repeatedly between
+2026-11-14 and 2026-11-17 (among them shards 4/8, 2/8, 3/8 and 3/8).  In
+two the pytest step ended 15-16 minutes in, every later step was skipped
+and the job never completed; in the other two the pytest step never ended
+and its 45-minute timeout never fired.  No log-upload step ran and no job
+log was kept, which is what a runner that has stopped answering looks
+like.  Each of those four shards runs one of the N = 8192
+tests above, and in a local replay of the shard under a 16 GB view of RAM
+that test holds the shard's high-water mark (15.0, 17.7 and 14.1 GiB).  For
+shards 4 and 2, whose steps stopped 15.2 and 16.3 minutes in, the replay
+reaches that test 16-17 minutes in.  The slow lanes in
+`unit-tests.yml` and `publish.yml` now:
+
+- run `scripts/ci_resource_watch.sh` beside pytest.  Every 60 s it prints
+  `free -m`, the five largest processes and the running test to the
+  streamed log and to `resource_watch.txt`.  If MemAvailable stays under
+  600 MB for 6 s it sends SIGABRT to pytest, whose faulthandler prints every
+  thread's stack before the process exits, so the step fails while the
+  runner can still report it;
+- pass `-o faulthandler_timeout=900`, which dumps every thread's stack when
+  one test runs past 15 minutes (the longest on the runner is about 10) and
+  does not stop the test;
+- wrap pytest in `timeout --signal=ABRT 42m`, three minutes inside the step
+  cap, and disable core files for that step;
+- upload `slow_test_output.txt` and `resource_watch.txt` on failure or
+  cancellation (`publish.yml` had no upload, and now runs `-v` so the log
+  names the running test);
+- allow the job 55 minutes instead of 50, so the upload can run after the
+  45-minute step cap.  Test time is unchanged.
+
+### Documentation
+
+- The comment on `_LSTSQ_RESID_MARGIN` in `lumenairy/elements/_lens_traced.py`
+  claimed `||b - A x||` is computed to ~1e-13 relative on the fits it
+  arbitrates.  That holds only where the residual sits orders above the
+  round-off floor.  The comment now states the condition and the
+  measurement.  The C13 step-down's choice on the traced path was the same
+  in all 72 configurations, so the margin decides nothing by noise there.
+  With `DETERMINISTIC_TRACED_FIT` on, the comparison is never reached.  With
+  it off, the gaps on the 120-term fits are 3e3-2e5x, and the 28-term fits
+  are ties at up to 0.63 of the margin against evaluation noise of at most
+  1.3e-9.
+- The measurement notes on `_DET_REFINE_STEPS`, `_det_refine` and
+  `_solve_lstsq_thread_safe` now quote the optimum-gap figures.  The audit
+  record `docs/audits/BUILD_DETERMINISTIC_TRACED_FIT_2026_08_23.md` carries a
+  correction note on its float64 table.
+- Two even-parity tests in `tests/unit/test_v5_14_2_backlog_batch.py` showed
+  that the fold ran by requiring the folded and full answers to differ in
+  their last bits.  The two agree to round-off and came out bit-identical on
+  one CI runner, failing the test.  They now count the solves the fold
+  actually served (0 with `symmetry=False`, at least 1 with `symmetry=True`);
+  with the fold switched off both fail.
+
 ## [5.51.1] — 2026-11-16
 
 A dependency release.  The NumPy floor rises from 2.0 to 2.1, and the package
@@ -5788,7 +6078,7 @@ branch, concentric otherwise), at the same total degree.
 **What it changes is the conditioning of the solve, and nothing else.**  The
 Zernike set of total degree `<= order` and the tensor-Chebyshev total-degree
 set are two bases of the SAME space -- `(order+1)(order+2)/2` terms either way,
-verified by rank and by projection (`_lens_traced.py:4130`) -- so the same
+verified by rank and by projection (`_lens_traced.py:4160`) -- so the same
 samples with the same weights minimise the same residual over the same space
 and return the same polynomial.  Measured end to end on niche D7's `K = -n^2`
 Fermat singlet against its analytic decentre-invariant oracle, the decentred
@@ -5909,7 +6199,7 @@ it by 2.2e-12 -- a change of basis, not a change of answer.
 
 That is fix D5 / `FIX_G8_PROBE`'s finding for the fit's ORDER, restated for its
 BASIS, and it is now stated on the parameter itself
-(`lumenairy/elements/_lens_traced.py:8908`).  Documentation only: no behaviour
+(`lumenairy/elements/_lens_traced.py:8938`).  Documentation only: no behaviour
 moves, and `scripts/record_history_fingerprints.py --check` is OK without a
 re-record, because both fingerprints drop docstrings.
 
@@ -8495,7 +8785,7 @@ re-ran `np.power(rho, k)` -- a libm `pow` per pixel -- for every term.  The
 first 21 modes ask for 34 such calls over 6 distinct exponents.  The build now
 shares one `{k: rho ** k}` memo and one hoisted `rho <= 1` mask across the
 modes, and accumulates each radial sum through one reused buffer
-(`lumenairy/analysis/zernike.py:105`, `:240`, `:435`).
+(`lumenairy/analysis/zernike.py:107`, `:242`, `:441`).
 
 | N | modes | before | after | |
 |---|---|---|---|---|
@@ -8537,7 +8827,7 @@ at all -- the worst relative error over every `(n, m)`:
 
 `_zernike_radial` now hands orders `n >= 22` to the Kintner (*Opt. Acta* **23**
 (1976) 679) recurrence in `n` at fixed `m`
-(`lumenairy/analysis/zernike.py:123`).  22 is where the sum first passes 1e-9,
+(`lumenairy/analysis/zernike.py:125`).  22 is where the sum first passes 1e-9,
 i.e. where it stops answering the question; `_ZERNIKE_RECURRENCE_MIN_N`
 carries that table.  **Below it nothing moves** -- every mode any shipped
 table (this module names modes to n = 8), any docstring, or any realistic
@@ -8770,7 +9060,7 @@ since `|R_n^m| <= 1` on the unit disc: **3.907e-15** on `k/128` for n <= 32 *and
 257 random `rho` in [0, 1], and **2.70e-14** on `rho = 1 - 10^-j` (j = 1..15), the hardest grid tried. The
 block now quotes all three and calls it **3e-14 out to n = 40**. It also records that the same sweep runs
 out to **n = 64 at <= 5.8e-14**, which closes WP-B8's deferred item 4 and is why the constant carries no
-upper limit. `lumenairy/analysis/zernike.py:92`. Nothing the module computes changes -- the edit is
+upper limit. `lumenairy/analysis/zernike.py:94`. Nothing the module computes changes -- the edit is
 comment-only, and `record_history_fingerprints.py --check` reports
 `lumenairy.analysis.zernike.md` unchanged, which is what that gate is for. The test bar (1e-13) already
 had four decades of room and is unmoved.

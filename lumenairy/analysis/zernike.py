@@ -43,6 +43,8 @@ from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
+from ..memory import _ram_scaled_cap
+
 __all__ = [
     'zernike_index_to_nm',
     'zernike_nm_to_index',
@@ -335,7 +337,11 @@ _KEY_DIAG_SAMPLES = 16
 # The cap binds at ``n_modes * Npix >= 2.5e8`` (36 modes on a 2634^2 pupil);
 # every pin in the suite is orders under it.
 _ZERNIKE_BASIS_CACHE_MAX_BYTES_PER_ENTRY = 2 * 1024 * 1024 * 1024   # 2 GB
-_ZERNIKE_BASIS_CACHE_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024       # 8 GB
+# The total cap is 8 GB on a machine with 64 GB of RAM or more and 1/8 of total
+# RAM below that (``memory._ram_scaled_cap``, the same rule as
+# ``fft_infra._H_CACHE_MAX_TOTAL_BYTES``).
+_ZERNIKE_BASIS_CACHE_MAX_TOTAL_BYTES = _ram_scaled_cap(8 * 1024 * 1024 * 1024,
+                                                      1.0 / 8)
 
 # v4.14.2 (P1-NEW-2 / Agent C): thread-safety lock for
 # ``_ZERNIKE_BASIS_CACHE``.  Without this two threads racing through

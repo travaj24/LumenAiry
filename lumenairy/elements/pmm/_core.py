@@ -2548,9 +2548,58 @@ def _kz_forward(eps, kx):
 
 
 
+def _incident_field_decomposer(Tp, S0, Wf, site):
+    """Forward-mode amplitudes of the incident field, chosen by the FIELD and
+    not by the mode basis: ``rhs -> c`` with ``Wf c = E`` and ``E`` the
+    transverse field of least L2 norm (nodal mass ``S0``, per component) whose
+    Rayleigh projection ``blockdiag(Tp, Tp) E`` is ``rhs``.
+
+    WHY.  The projection ``Hsup = blockdiag(Tp, Tp) Wf`` has fewer rows
+    (``2N`` Rayleigh orders) than forward modes (``2 n_glob``), so
+    ``Hsup c = rhs`` has a null space and a plain ``lstsq`` returns the
+    minimum-``||c||`` draw from it.  ``||c||`` is a norm on the eigenvector
+    COEFFICIENTS, so the draw depends on how each eigenvector happens to be
+    scaled and, inside a degenerate eigenspace, on which basis of it LAPACK
+    returns.  The covariant half-spaces have such an eigenspace exactly at the
+    incident order: the Galerkin first derivative ``S0^-1 C`` on a periodic
+    GLL grid has a two-dimensional null space (the constant AND a spurious
+    mode with orders 0, +-4, +-6, +-8 content), so the order-0 plane wave and
+    that spurious mode share one eigenvalue (gap ~1e-15) and the returned
+    basis mixes them by rounding.  The minimum-``||c||`` draw then carried
+    ~0.2 rms of content beyond the projected orders (mostly +-6) into the
+    "incident" field, and R+T of a lossless slanted grating moved by ~1e-3
+    with the BLAS build (measured -7.6e-4 .. +1.2e-3 across kernels; a
+    random rescale of the eigenvector columns, an exact-arithmetic no-op,
+    moved it the same way).  The minimum
+    FIELD norm depends only on the forward span, so it is basis-free: the
+    selected incident field has 1e-12 content outside the projected orders
+    and the closure converges with ``degree`` instead of sitting on a draw.
+
+    ``Wf`` is the ``(2 n, 2 n)`` forward ``[Ex; Ey]`` block (square: a
+    homogeneous half-space's forward modes span the transverse field).  The
+    Rayleigh solve keeps the residual-and-rank guard of
+    :func:`_guarded_lstsq`; it is now posed on ``Tp L^-H`` (``S0 = L L^H``),
+    whose null space is the field's, not the basis's.
+    """
+    S0 = np.asarray(S0, dtype=_C)
+    n = S0.shape[0]
+    L = np.linalg.cholesky(S0)
+    TL = np.linalg.solve(L, np.asarray(Tp, dtype=_C).conj().T).conj().T
+    Z = np.zeros_like(TL)
+    A = np.block([[TL, Z], [Z, TL]])
+    LH = L.conj().T
+
+    def decompose(rhs):
+        y = _guarded_lstsq(A, rhs, site)
+        E = np.concatenate([np.linalg.solve(LH, y[:n]),
+                            np.linalg.solve(LH, y[n:])])
+        return np.linalg.solve(Wf, E)
+    return decompose
+
+
 def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
                              kz_sup, kz_sub, kz_inc, kx0n, N,
-                             return_modal=False):
+                             return_modal=False, incident_fields=None):
     """Rayleigh far-field bookkeeping for a 2x2 Jones grating solve.
 
     Given the Rayleigh-projection operators ``Hsup``/``Hsub`` (each a
@@ -2582,7 +2631,20 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     ``tx``/``ty`` each ``(2, N)``, rows keyed to incident lab ``E_x``/``E_y``,
     in the CALLER's gauge -- public for the classical ``PMMStack`` caller) --
     the data this helper already computes and squares into the efficiencies.
+
+    ``incident_fields=(Tp, S0, Wf)`` (the Rayleigh projector, the nodal mass
+    and the forward ``[Ex; Ey]`` superstrate modes, ``Hsup ==
+    blockdiag(Tp, Tp) @ Wf``) selects the incident field by its least L2
+    norm instead of its least coefficient norm -- see
+    :func:`_incident_field_decomposer`.  Callers whose half-space modes come
+    from a raw eig with degenerate eigenspaces (the covariant 4n cascades)
+    MUST pass it; the clean per-block ``_sem_modes_uniform`` bases leave it
+    ``None`` (measured: their answer is invariant to a column rescale to
+    1e-13, so the two selections coincide there).
     """
+    decompose = (None if incident_fields is None
+                 else _incident_field_decomposer(
+                     *incident_fields, "pmm far-field Rayleigh projection"))
     safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
     safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
     # TWO-SIDED + non-finite-aware (audit M3 2026-07-25): an
@@ -2610,8 +2672,9 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     for col in range(2):                        # 0 = incident Ex, 1 = incident Ey
         rhs = np.zeros(2 * N, dtype=_C)
         rhs[(col * N) + m0] = 1.0               # order-0 unit Ex (col 0) / Ey (col 1)
-        cinc = _guarded_lstsq(Hsup, rhs,
-                              "pmm far-field Rayleigh projection")
+        cinc = (_guarded_lstsq(Hsup, rhs,
+                               "pmm far-field Rayleigh projection")
+                if decompose is None else decompose(rhs))
         r_ord = Hsup @ (S11 @ cinc)
         t_ord = Hsub @ (S21 @ cinc)
         rx, ry = r_ord[:N], r_ord[N:]
@@ -8219,8 +8282,11 @@ def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
     kz_inc = float(np.real(kzo_s[m0]))
     Hsup = np.vstack([Tp @ Ws[:n, fs], Tp @ Ws[n:, fs]])
     Hsub = np.vstack([Tp @ Wb[:n, fb], Tp @ Wb[n:, fb]])
+    # incident field by least FIELD norm: the covariant half-space eig mixes
+    # the order-0 wave with the derivative's spurious null mode (degenerate)
     R, T, jones = _assemble_jones_farfield(
-        Hsup, Hsub, S11, S21, orders, kx, kzo_s, kzo_b, kz_inc, kx0 / k0, N)
+        Hsup, Hsub, S11, S21, orders, kx, kzo_s, kzo_b, kz_inc, kx0 / k0, N,
+        incident_fields=(Tp, mats_s["S0"], Ws[:, fs]))
     return orders, R, T, jones, n
 
 

@@ -109,6 +109,38 @@ def test_pmm_solvers_unchanged_through_shared_eig():
 # A1 -- even-parity scope
 # =========================================================================== #
 
+def _count_even_sector_solves(fn):
+    """Run ``fn`` and count the solves the even-parity fold actually served.
+
+    The two fold entry points return ``None`` when they decline (the caller
+    then does the full solve), so a non-``None`` return IS the fast path.
+    Asserted directly: the full and folded answers agree to round-off and can
+    come out bit-identical on a given build, so "the bits differ" says nothing
+    about which path ran."""
+    from lumenairy.elements.rcwa import twod
+    served = []
+    originals = {}
+
+    def _spy(name):
+        orig = getattr(twod, name)
+        originals[name] = orig
+
+        def wrapper(*a, **k):
+            out = orig(*a, **k)
+            served.append(out is not None)
+            return out
+        setattr(twod, name, wrapper)
+
+    for name in ("_symmetric_solve_rt", "_symmetric_cascade_rt"):
+        _spy(name)
+    try:
+        result = fn()
+    finally:
+        for name, orig in originals.items():
+            setattr(twod, name, orig)
+    return result, sum(served)
+
+
 def _pillar(S, hw=0.22, hi=-3.0 + 4.0j, lo=2.1):
     x = (np.arange(S) + 0.5) / S - 0.5
     X, Y = np.meshgrid(x, x, indexing="ij")
@@ -122,15 +154,17 @@ def test_li_even_sector_matches_full(pol):
     """The sequential-rule 'li' regains the even-parity fast path (it was
     gated out when 'li' moved to the tensor eigensolver in v5.14.1)."""
     cell = _pillar(64)
-    a = rcwa_efficiency_2d(_P, _P, cell, 1.5, 1.0, 0.2e-6, _WL,
-                           polarization=pol, n_orders_x=6, n_orders_y=6,
-                           formulation="li", symmetry=False)
-    b = rcwa_efficiency_2d(_P, _P, cell, 1.5, 1.0, 0.2e-6, _WL,
-                           polarization=pol, n_orders_x=6, n_orders_y=6,
-                           formulation="li", symmetry=True)
+    a, n_full = _count_even_sector_solves(lambda: rcwa_efficiency_2d(
+        _P, _P, cell, 1.5, 1.0, 0.2e-6, _WL,
+        polarization=pol, n_orders_x=6, n_orders_y=6,
+        formulation="li", symmetry=False))
+    b, n_even = _count_even_sector_solves(lambda: rcwa_efficiency_2d(
+        _P, _P, cell, 1.5, 1.0, 0.2e-6, _WL,
+        polarization=pol, n_orders_x=6, n_orders_y=6,
+        formulation="li", symmetry=True))
     assert np.max(np.abs(a[1] - b[1])) < 1e-11
     assert np.max(np.abs(a[2] - b[2])) < 1e-11
-    assert not np.array_equal(a[1], b[1])      # genuinely the fast path
+    assert n_full == 0 and n_even >= 1          # genuinely the fast path
 
 
 def test_li_even_prepared_matches_direct():
@@ -161,13 +195,15 @@ def test_jones_2d_even_sector_matches_full():
     # explicit symmetry=False forces the full 2N solve (the even-parity fold is
     # ON by default since the v5.20.5 "auto" default -- so the comparison must
     # request the full path explicitly to stay a full-vs-even test).
-    a = rcwa_jones_2d(_P, _P, tc, 1.5, 1.0, 0.2e-6, _WL, n_orders_x=5,
-                      n_orders_y=5, symmetry=False)
-    b = rcwa_jones_2d(_P, _P, tc, 1.5, 1.0, 0.2e-6, _WL, n_orders_x=5,
-                      n_orders_y=5, symmetry=True)
+    a, n_full = _count_even_sector_solves(lambda: rcwa_jones_2d(
+        _P, _P, tc, 1.5, 1.0, 0.2e-6, _WL, n_orders_x=5,
+        n_orders_y=5, symmetry=False))
+    b, n_even = _count_even_sector_solves(lambda: rcwa_jones_2d(
+        _P, _P, tc, 1.5, 1.0, 0.2e-6, _WL, n_orders_x=5,
+        n_orders_y=5, symmetry=True))
     assert np.max(np.abs(a[1] - b[1])) < 1e-8
     assert np.max(np.abs(a[3] - b[3])) < 1e-8
-    assert not np.array_equal(a[1], b[1])
+    assert n_full == 0 and n_even >= 1
 
 
 def _mixed_stack(shapes_center):

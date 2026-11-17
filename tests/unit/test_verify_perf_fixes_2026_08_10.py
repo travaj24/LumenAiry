@@ -95,13 +95,25 @@ def test_estimate_asm_memory_pins_the_8192_complex128_value():
     22.648 -> 22.631.  The plan-buffer term these two pins exist to guard is
     untouched, and the assertion below re-derives it from the constant so the
     next re-calibration moves the pin with it instead of reddening this file.
+
+    5.51.2: the plan-workspace cap is pinned to its 2 GB nominal value here.
+    Its DEFAULT is now ``min(2 GB, RAM / 16)``, so on a machine under 32 GB of
+    RAM (the CI runners) an 8192^2 complex128 key holds one workspace and the
+    estimate is correctly one workspace per key smaller.  These pins are about
+    the estimator's arithmetic at the two-workspace cap, not about the RAM of
+    the machine running them.
     """
     fixed_gb = M._ASM_FIRST_CALL_FIXED_BYTES / 1e9
-    got = M.estimate_asm_memory(8192, 'complex128', plan_cache_keys=8)
+    old = FI.get_fft_plan_max_bytes_per_buffer()
+    try:
+        FI.set_fft_plan_max_bytes_per_buffer(2_000_000_000)
+        got = M.estimate_asm_memory(8192, 'complex128', plan_cache_keys=8)
+        # ...and the same shape at complex64, which is where Windows lost it.
+        got64 = M.estimate_asm_memory(12288, 'complex64', plan_cache_keys=8)
+    finally:
+        FI.set_fft_plan_max_bytes_per_buffer(old)
     assert abs(got / 1e9 - (19.7031 + fixed_gb)) < 0.001, (
         f"{got / 1e9:.3f} GB; the pre-fix Linux value was 11.172 GB")
-    # ...and the same shape at complex64, which is where Windows lost it.
-    got64 = M.estimate_asm_memory(12288, 'complex64', plan_cache_keys=8)
     assert abs(got64 / 1e9 - (22.5889 + fixed_gb)) < 0.001, (
         f"{got64 / 1e9:.3f} GB; the pre-fix value was 12.984 GB")
 

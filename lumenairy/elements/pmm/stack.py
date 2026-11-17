@@ -2895,10 +2895,10 @@ class PMMStack:
             add_tapered_grating ns=8    | 6.93e-03  |  2.27 s | 3e-11
             add_tapered_grating ns=12   | 2.63e-03  |  7.53 s | 4e-11
             add_tapered_grating ns=16   | 9.01e-04  | 23.04 s | 5e-11
-            add_sheared_grating deg=8   | 3.16e-03  |  0.03 s | 6.9e-05
-            add_sheared_grating deg=12  | 2.93e-03  |  0.05 s | 1.9e-05
-            add_sheared_grating deg=16  | 2.91e-03  |  0.13 s | 3.3e-06
-            add_sheared_grating deg=24  | 2.93e-03  |  0.24 s | 9.9e-07
+            add_sheared_grating deg=8   | 3.16e-03  |  0.03 s | 8.3e-06
+            add_sheared_grating deg=12  | 2.93e-03  |  0.05 s | 1.9e-08
+            add_sheared_grating deg=16  | 2.91e-03  |  0.13 s | 3.1e-09
+            add_sheared_grating deg=24  | 2.93e-03  |  0.24 s | 2.5e-10
 
         READ THIS TABLE BOTH WAYS.  At a matched budget the exact layer WINS
         BIG -- 2.93e-03 in 0.05 s against the staircase's 2.59e-02 in 0.25 s
@@ -2923,8 +2923,8 @@ class PMMStack:
         so use this method for design SWEEPS and for accuracy targets at or
         above its plateau for your tilt (~2e-03 at 50 deg, ~1e-02 at 70 deg),
         and switch to the staircase below that.  Energy closure is this path's
-        own too: MEASURED ``|R+T-1|`` 6.9e-05 (degree 8) falling to ~1e-06
-        (degree 20-24), against the staircase's ~5e-11.
+        own too: MEASURED ``|R+T-1|`` 8.3e-06 (degree 8) falling to 2.5e-10
+        (degree 24) since 5.51.2 (incident field by least field norm).
 
         RESTRICTIONS inherited from the slant path: a slanted layer promotes
         the whole stack to the generalized forward/backward S-matrix, and
@@ -5832,9 +5832,12 @@ class PMMStack:
             _kz_forward(np.conj(eps_sup), np.array([kx0 / k0]))[0]))
         Hsup = np.vstack([Tp @ Ws[:n_glob, fs], Tp @ Ws[n_glob:, fs]])
         Hsub = np.vstack([Tp @ Wb[:n_glob, fb], Tp @ Wb[n_glob:, fb]])
+        # incident field by least FIELD norm (the covariant half-space eig
+        # mixes the order-0 wave with the derivative's spurious null mode;
+        # see _incident_field_decomposer)
         R, T, jones = _assemble_jones_farfield(
             Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
-            kx0 / k0, N)
+            kx0 / k0, N, incident_fields=(Tp, mats_s["S0"], Ws[:, fs]))
         _warn_stack_energy(R, T, stack=self)
         return orders, R, T, np.conj(jones)        # conj: bridge +iwt -> public
 

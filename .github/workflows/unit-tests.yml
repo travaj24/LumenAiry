@@ -653,7 +653,11 @@ jobs:
     # v5.24.3: 25 -> 35 (matches the raised 30min slow step cap + buffer).
     # 2026-09-14: 35 -> 50, tracking the step cap 30 -> 45 with the same
     # ~5 min of checkout/install/upload overhead outside the pytest step.
-    timeout-minutes: 50
+    # 5.51.2: 50 -> 55.  Not more test time -- the pytest step still ends at
+    # 42 min (its in-script ``timeout``) or 45 (the step cap) -- but room
+    # for the log-upload step to run after the step cap has fired, which
+    # 50 left only ~4 min for.
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
         with:
@@ -694,8 +698,30 @@ jobs:
           # runs its subset serially.  KEEP --splits EQUAL TO THE LENGTH OF THE
           # matrix `shard:` LIST ABOVE -- a shorter matrix drops the trailing
           # groups without any error.
-          python -m pytest tests/unit -m "slow and not integration" --tb=short \
-            -p no:cacheprovider -v \
+          #
+          # STALL DIAGNOSTICS (5.51.2).  Five shards in four days ran to the
+          # 50-min JOB limit with every step result missing, the 45-min step
+          # timeout never firing and no job log (BlobNotFound): the runner
+          # agent itself had stopped answering, so nothing it enforces or
+          # uploads can be relied on in that state.  Three layers that do not
+          # depend on the agent, all writing into this step's streamed log:
+          #   * scripts/ci_resource_watch.sh prints free -m, the largest
+          #     processes and the running test every 60 s, and SIGABRTs pytest
+          #     (faulthandler stack dump, then a normal step failure) if
+          #     MemAvailable stays under 600 MB;
+          #   * -o faulthandler_timeout=900 dumps every thread's stack if one
+          #     test runs past 15 min (the longest measured on the runner is
+          #     ~10 min), without stopping it;
+          #   * ``timeout --signal=ABRT 42m`` ends a hung shard with a stack
+          #     dump three minutes before the agent's own 45-min step timeout,
+          #     so the upload step below runs even when that timeout would not.
+          ulimit -c 0   # an aborted multi-GB pytest must not write a core file
+          bash scripts/ci_resource_watch.sh slow_test_output.txt resource_watch.txt 60 &
+          watch_pid=$!
+          trap 'kill "$watch_pid" 2>/dev/null' EXIT
+          timeout --signal=ABRT --kill-after=60 42m \
+            python -m pytest tests/unit -m "slow and not integration" --tb=short \
+            -p no:cacheprovider -v -o faulthandler_timeout=900 \
             --splits 8 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations 2>&1 \
@@ -714,6 +740,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: slow-test-output-shard${{ matrix.shard }}
-          path: slow_test_output.txt
+          path: |
+            slow_test_output.txt
+            resource_watch.txt
           if-no-files-found: warn
           retention-days: 7

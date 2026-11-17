@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: 9f3ff018086f15243389a376a18f9d8417457995ae276804db8e89d798bd8470
-token_sha256: 2ae341d94685b1d175a8e654693eb3317d12a8e40a81ece608f05850831432ba
+ast_sha256: 438715d3d5da2e785af52c6c897867bb954703cef9ef0f37117c489349c79b5c
+token_sha256: 2a0eb6916ef4adcc1da5d3f9876e4e73e2378fc11c74dd5edca86d4419820b82
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -18,6 +18,7 @@ re_recorded: 2026-11-14 -- 2026-11-14 -- classical solve applies the shared Wood
 re_recorded: 2026-11-14 -- 2026-11-14 -- import order (ruff isort) after adding _wood_safe_wl_1d; no behaviour change
 re_recorded: 2026-11-14 -- 2026-11-14 -- one Rayleigh-anomaly nudge helper (_wood_nudged) for solve, solve_vs_wavelength and the prepared solve
 re_recorded: 2026-11-15 -- 2026-11-15 -- gain substrate refused (_refuse_gain_substrate); prepared-solve keys carry the half-space indices and kx0, layout signature carries the layers' lateral content; JAX dispatch applies the Rayleigh-anomaly nudge on concrete media (_wood_nudged concrete_only); Chebyshev/uniform small-element bar re-derived (refuse < 1e-6, warn < 2e-6 x wavelength; _refused_element)
+re_recorded: 2026-11-17 -- 5.51.2: covariant far field selects the incident field by its field norm (basis-independent); stack passes incident_fields
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
