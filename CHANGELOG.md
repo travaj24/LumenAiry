@@ -70,6 +70,12 @@ float64.  The release lane read `r_det` = 1.049979e-13 against `r_qr` =
   `_solve_lstsq_thread_safe` now quote the optimum-gap figures.  The audit
   record `docs/audits/BUILD_DETERMINISTIC_TRACED_FIT_2026_08_23.md` carries a
   correction note on its float64 table.
+- Two even-parity tests in `tests/unit/test_v5_14_2_backlog_batch.py` showed
+  that the fold ran by requiring the folded and full answers to differ in
+  their last bits.  The two agree to round-off and came out bit-identical on
+  one CI runner, failing the test.  They now count the solves the fold
+  actually served (0 with `symmetry=False`, at least 1 with `symmetry=True`);
+  with the fold switched off both fail.
 
 ## [5.51.1] — 2026-11-16
 
