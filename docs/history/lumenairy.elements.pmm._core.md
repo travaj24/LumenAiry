@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 7da6e5d5b4bafcbc5a04a03f789180d8dce1125595c12b32759e72fc874a5601
-token_sha256: 14450af483f7f06abcd88daddb0c5f16370fe2341e9e784e87e2fe1f4a3be19c
+ast_sha256: 9ef8ccb37f6d76e721e66a5f0df2016372ef94ddb6b3e97b3d4ea8e37d4e51e1
+token_sha256: b16743a04be5adb0f2e5feb16d7d40bbcd94e00098f53b58a874e1dcfa60b81b
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -23,6 +23,7 @@ re_recorded: 2026-11-14 -- 2026-11-14 -- follow-up fixes: deferred default floor
 re_recorded: 2026-11-14 -- 2026-11-14 -- _sem_modes_uniform and _select_forward_modes parametrized over the array namespace (xp): the JAX twin of PMMStack runs the same kernels
 re_recorded: 2026-11-14 -- 2026-11-14 -- 5.51.0 integration: _segment_walls refuses a NaN / infinite width fraction itself (both of its comparisons are False for a NaN), so RCWAStack.add_layer(segments=) drops its duplicate finiteness pre-check
 re_recorded: 2026-11-15 -- 2026-11-15 -- gain-medium sector rule in _forward_growth_flip (_PMM_GAIN_SECTOR: a non-passive mode takes the flux rule only when |Re q| > |Im q|); _safe_q2 (q^2 consistent with the lam clamp at an exact grid cut-off) in _sem_modes_uniform
+re_recorded: 2026-11-17 -- 5.51.2: covariant far field selects the incident field by its field norm (basis-independent); stack passes incident_fields
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`
