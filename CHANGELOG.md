@@ -6,14 +6,15 @@ All notable changes to the core library are documented here.
 
 ## [5.51.2] — 2026-11-17
 
-One solver fix and three test-correctness fixes.  The covariant (uniform-
+One solver fix and four test-correctness fixes.  The covariant (uniform-
 slant) 1-D PMM far field picked its incident field by a rule that depended
 on the eigenvector basis LAPACK returns, so a lossless slanted grating closed
 R+T only to ~1e-3 and moved by that much between machines; it now closes to
 the discretization residual on every build.  Only covariant slanted results
 change (below); every other returned array is bit-identical to 5.51.1.  One
 slow test asserted a comparison that floating point cannot decide, and
-failed once in the release lane for 5.51.1.
+failed once in the release lane for 5.51.1.  Another asserted the position
+of a focal spot that its own fail-before switch had destroyed.
 
 ### Fixed -- the covariant slanted far field chose its incident field by the mode basis
 
@@ -139,6 +140,41 @@ float64.  The release lane read `r_det` = 1.049979e-13 against `r_qr` =
   the compensated residual row by row against a correctly rounded
   `math.fsum` reference.  It also checks that a plain float64 residual is
   measurably wrong in the same regime.
+
+### Fixed -- a fail-before arm scored the position of a spot it had destroyed
+
+`test_breaking_the_tilted_path_moves_the_skew_spot_off_the_oracle`
+(`tests/unit/test_niche_c1_consolidation.py`) disables one mechanism of the
+tilted-carrier chain at a time and requires the skew focal spot to miss the
+exact skew ray trace by more than 0.6 um.  Its `[no tilt ramp]` arm read
+0.51 um on one CI runner and failed.
+
+- **Cause: the arm's position is not a measurement.** Without the tilt ramp
+  the spot is destroyed: the peak falls to 2.0e-8 .. 1.5e-7 of the shipped
+  path's and the readout window holds ~1e-7 of the beam's power.  The
+  element's ray fits on a field missing its tilt differ between BLAS builds
+  (the arm's intermediate beam radius moves by 2e-5 relative, the shipped
+  path's by 1e-13), so the centroid of the residue moves with the build:
+  0.17 .. 10.4 um on 34 configurations (Windows NumPy 2.4.4, Linux NumPy
+  2.2.6 / 2.4.6 / 2.5.4, six OpenBLAS core types, 1 to 4 threads), 12.7 um
+  when the test was written.  The old bar failed on 6 of the 34; one
+  reproduced the runner's 0.51 um to all printed digits.
+- **The shipped path is not build-dependent.** Its centroid sits 0.133 um
+  from the chief ray on all 34 configurations (spread 1e-11 um), and stays
+  there with a finer ray fit, a finer input grid and the wider readout the
+  broken arms use.  The test's docstring quoted 0.004 um, measured before
+  the tilted reference started carrying the relay's coma (the tree just
+  before that change reads 0.015 um, the tree with it 0.132 um).  An exact
+  trace of the Gaussian-weighted bundle puts the geometric centroid 0.310 um
+  off the chief ray in the same direction, so the modelled 0.133 um is coma.
+  The model carries 43 % of the geometric shift; that gap is open.
+- **New assertion for that arm.** The collapse itself: peak and power within
+  20 um of the oracle both below 1e-3 of the shipped path's (measured at
+  most 1.5e-7 and 6.0e-8).  The other two arms leave a real spot and keep
+  the position bar (1.089 and 1.183 um, identical on every configuration).
+  With each replacement made a pass-through, so that the "broken" run is the
+  shipped path, all three arms fail.  The docstrings' measured numbers are
+  re-measured.
 
 ### Documentation
 

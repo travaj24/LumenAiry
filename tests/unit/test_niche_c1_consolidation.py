@@ -343,6 +343,8 @@ _S_L, _S_M = 0.044, 0.026          # SKEW: both components, hypot 0.0511 rad,
 _S_GAP = 25e-3                     # each inside lambda/(2 dx) = 0.0546
 _S_DXO, _S_NOUT = 0.05e-6, 1024
 _S_TOL = 0.30e-6                   # 1.6 % of the measured 19.1 um spot FWHM
+_S_NEAR_R = 20e-6                  # ~1 spot FWHM; inside the 51 um window
+_S_COLLAPSE = 1.0e-3               # "destroyed": < 1/1000 of the shipped spot
 _S_gA = _singlet(60e-3, -60e-3, 3.0e-3, 'N-BK7', 10e-3, 'gA')
 _S_gB = _singlet(60e-3, -60e-3, 3.0e-3, 'N-BK7', 10e-3, 'gB')
 _S_GROUPS = [{'prescription': _S_gA, 'gap_before': 0.0},
@@ -404,6 +406,18 @@ def _spot(F, dxo, cx, cy, ee_r=6e-6):
     rr = np.hypot(ax[None, :] - gx, ax[:, None] - gy)
     return dict(x=cx + gx, y=cy + gy, fwhm=fwhm, peak=float(I.max()),
                 ee=float(I[rr <= ee_r].sum() / tot), power=tot * dxo * dxo)
+
+
+def _power_near_oracle(F, dxo, r=_S_NEAR_R):
+    """Power within ``r`` of the readout grid's centre.  Every readout here is
+    centred ON the exact skew ray landing (``centre_out=(xe, ye)``), so this
+    is the power delivered near the oracle point, independent of the window
+    size as long as the disc fits inside it."""
+    I = np.abs(np.asarray(F)) ** 2
+    n = I.shape[-1]
+    ax = (np.arange(n) - n / 2) * dxo
+    rr = np.hypot(ax[None, :], ax[:, None])
+    return float(I[rr <= r].sum() * dxo * dxo)
 
 
 def _run_skew(r_in, cx, cy, nout=_S_NOUT, broken=False):
@@ -473,10 +487,25 @@ def test_a_skew_tilted_congruence_lands_on_the_exact_skew_ray_trace(
     own chief ray, in BOTH transverse axes.
 
     Measured on this fixture: exact trace (+1705.888, +1008.025) um, wave
-    centroid **0.004 um** away, the chain's own analytic predictor 0.167 um
+    centroid **0.133 um** away, the chain's own analytic predictor 0.167 um
     away, and the fully-PARAXIAL advance (``L z`` instead of
     ``z L / cos(theta)``) **1.053 um** away -- 3.5x the 0.30 um tolerance, so
-    the test can see the obliquity term at all."""
+    the test can see the obliquity term at all.
+
+    RE-MEASURED 2026-11-17.  The wave centroid read 0.004 um when this test
+    was written.  The library tree just before niche C5 still reads 0.015
+    um and the niche C5 tree 0.132 um: C5 made the tilted reference a real
+    eikonal, which stopped suppressing the relay's coma (see the FWHM note in
+    the next test).  Coma moves the intensity centroid off the chief ray, so
+    the 0.133 um is modelled physics, not noise: it is the same to 1e-11 um on 34
+    BLAS builds (NumPy 2.2-2.5, six OpenBLAS core types, 1-4 threads), the
+    same with ``ray_subsample`` 8 / 4 / 2 and a 6 um input grid (0.132 um),
+    and the same through the wider Sziklas readout the fail-before arms use
+    (0.130 um).  An exact skew trace of the Gaussian-weighted bundle puts the
+    GEOMETRIC centroid 0.310 um from the chief ray in the same direction
+    (30.6 vs 30.4 degrees), so the modelled field carries 43 % of the
+    geometric coma shift.  That gap is not explained here, and a bar on the
+    chief ray cannot resolve it."""
     r = _skew_runs
     d_wave = float(np.hypot(r['spot']['x'] - r['xe'], r['spot']['y'] - r['ye']))
     d_pred = float(np.hypot(_SK['x'] - r['xe'], _SK['y'] - r['ye']))
@@ -544,16 +573,38 @@ _BREAKS = [
 def test_breaking_the_tilted_path_moves_the_skew_spot_off_the_oracle(
         _skew_runs, label, attr, repl):
     """FAIL-BEFORE, demonstrated rather than asserted.  Each switch disables
-    one mechanism of the tilted branch and the spot must then MISS the exact
-    skew ray trace by more than the tolerance the passing test uses.
+    one mechanism of the tilted branch, and the broken run must then fail the
+    claim the passing test makes: that a spot lands on the exact skew ray.
 
-    Measured misses (against 0.004 um for the shipped path and a 0.30 um
-    tolerance): the exact free-leg obliquity ``z L / cos(theta)`` -> 1.204 um;
-    the tilt ramp -> 12.731 um AND the peak intensity collapses to 3e-6 of the
-    shipped path's; the band-limited chief-ray shift into the element's axis
-    frame -> 2.342 um (peak 0.976).  Peak intensity is used for the second
-    clause rather than an encircled fraction because it is window-independent
-    and the broken arms need a wider readout window to stay on the grid."""
+    Two of the switches leave a real spot behind and MOVE it, so they are
+    scored by position, against twice the passing test's 0.30 um tolerance
+    (the shipped path's centroid sits 0.133 um from the chief ray, see
+    ``test_a_skew_tilted_congruence_lands_on_the_exact_skew_ray_trace``).
+    Measured, identical to 4 digits on every build listed below: the exact
+    free-leg obliquity ``z L / cos(theta)`` -> 1.089 um (peak 0.9999 of the
+    shipped path's); the band-limited chief-ray shift into the element's
+    axis frame -> 1.183 um (peak 0.953).
+
+    The third, the tilt ramp, does not move the spot: it DESTROYS it.  The
+    peak falls to 2.0e-8 .. 1.5e-7 of the shipped path's and the power
+    within 20 um of the oracle to 1.7e-8 .. 6.0e-8, so it is scored by that
+    collapse, against a 1e-3 bar (more than 6000x below it on every build).
+    Its POSITION is not asserted: what is left in the window carries
+    ~1e-7 of the beam's power, and the element's ray fits on a field missing
+    its tilt differ between BLAS builds (the broken arm's own intermediate
+    beam radius moves by 2e-5 relative between builds, the shipped path's by
+    1e-13).  The centroid of that residue lay 0.17 ..
+    10.4 um from the oracle across 34 builds, 0.51 um on one CI runner and
+    12.7 um when this test was written, so a position bar on it passed or
+    failed by chance (it failed on 6 of the 34).
+
+    Peak intensity and near-oracle power are used rather than an encircled
+    fraction because both are window-independent and the broken arms need a
+    wider readout window to stay on the grid.  Builds measured: NumPy 2.4.4
+    (Windows) and 2.2.6 / 2.4.6 / 2.5.4 (Linux), OpenBLAS core types
+    Haswell, Zen, Sandybridge, Nehalem, Prescott and Atom, 1 to 4 threads.
+    With each replacement made a pass-through (the "broken" run is then the
+    shipped path), all three arms fail."""
     _ram_guard()
     orig = getattr(_c, attr)
     try:
@@ -563,21 +614,29 @@ def test_breaking_the_tilted_path_moves_the_skew_spot_off_the_oracle(
                            broken=True)
     finally:
         setattr(_c, attr, orig)
+    ship = _skew_runs['spot']
     sb = _spot(broken.field, _S_DXO, _skew_runs['xe'], _skew_runs['ye'])
+    if attr == '_tilt_ramp':
+        # dropping the ramp does not merely displace the spot -- it destroys
+        # it, at the oracle point as well as at the peak
+        near_b = _power_near_oracle(broken.field, _S_DXO)
+        near_s = _power_near_oracle(_skew_runs['tilted'].field, _S_DXO)
+        assert sb['peak'] < _S_COLLAPSE * ship['peak'], (
+            f"the {label} fail-before switch stopped failing: peak "
+            f"{sb['peak'] / ship['peak']:.3g} of the shipped path's")
+        assert near_b < _S_COLLAPSE * near_s, (
+            f"the {label} fail-before switch stopped failing: "
+            f"{near_b / near_s:.3g} of the shipped power within "
+            f"{_S_NEAR_R * 1e6:.0f} um of the oracle")
+        return
     d = float(np.hypot(sb['x'] - _skew_runs['xe'], sb['y'] - _skew_runs['ye']))
     assert d > 2.0 * _S_TOL, (
         f"the {label} fail-before switch stopped failing: {d * 1e6:.4f} um "
         f"against the passing arm's "
-        f"{np.hypot(_skew_runs['spot']['x'] - _skew_runs['xe'], _skew_runs['spot']['y'] - _skew_runs['ye']) * 1e6:.4f} um")
-    if attr == '_tilt_ramp':
-        # dropping the ramp does not merely displace the spot -- it destroys it
-        assert sb['peak'] < 0.1 * _skew_runs['spot']['peak'], (
-            sb['peak'], _skew_runs['spot']['peak'])
-    else:
-        # the other two break the POSITION while leaving a real spot behind,
-        # which is what makes them the subtle regressions worth pinning
-        assert sb['peak'] > 0.9 * _skew_runs['spot']['peak'], (
-            sb['peak'], _skew_runs['spot']['peak'])
+        f"{np.hypot(ship['x'] - _skew_runs['xe'], ship['y'] - _skew_runs['ye']) * 1e6:.4f} um")
+    # these two break the POSITION while leaving a real spot behind, which
+    # is what makes them the subtle regressions worth pinning
+    assert sb['peak'] > 0.9 * ship['peak'], (sb['peak'], ship['peak'])
 
 
 # ===========================================================================
